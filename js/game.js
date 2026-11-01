@@ -15,13 +15,13 @@
   const canvas = $("game"), ctx = canvas.getContext("2d"), stage = $("stage");
   const ui = {
     wave: $("wave"), lives: $("lives"), livesLabel: $("livesLabel"), money: $("money"), score: $("score"), diff: $("diffTag"),
-    waveBtn: $("waveBtn"), speedBtn: $("speedBtn"), menuBtn: $("menuBtn"), autoBtn: $("autoBtn"), odBtn: $("odBtn"),
+    waveBtn: $("waveBtn"), speedBtn: $("speedBtn"), menuBtn: $("menuBtn"), autoBtn: $("autoBtn"), odBtn: $("odBtn"), adBtn: $("adBtn"),
     shop: $("shop"), info: $("info"), overlay: $("overlay"), toast: $("toast"), preview: $("preview"),
   };
-  const store = {
-    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
-  };
+  const P = OD.platform;
+  // Saves go through the platform layer (localStorage, or cloud saves on portals that offer them).
+  const store = { get: k => P.save.get(k), set: (k, v) => P.save.set(k, v), remove: k => P.save.remove(k) };
+  let adPause = false; // true while an ad is playing
 
   // ---------- board: the map's bodies, turret rings and slots ----------
   let W = 1000, H = 700, CX = 500, CY = 350, SPAWN_R = 640, scale = 1;
@@ -222,7 +222,7 @@
     S.stats.killed++; S.stats.earnedKills += reward;
     const big = e.def.boss;
     burst(e.x, e.y, e.def.color, big ? 60 : 12, big ? 240 : 130, big ? 1.4 : 0.7);
-    if (big) { S.stats.bosses++; burst(e.x, e.y, "#ffffff", 30, 300, 1); ringFx(e.x, e.y, e.def.size * 4, e.def.color, 0.8); S.shake = 12; sfx("nova"); }
+    if (big) { S.stats.bosses++; unlock("first_boss"); burst(e.x, e.y, "#ffffff", 30, 300, 1); ringFx(e.x, e.y, e.def.size * 4, e.def.color, 0.8); S.shake = 12; sfx("nova"); }
     else sfx(e.type === "asteroid" ? "crunch" : "pop");
     if (e.def.split) for (let i = 0; i < e.def.split.n; i++) spawnEnemy(e.def.split.type, e.hpScale, e);
   }
@@ -346,8 +346,11 @@
       const bonus = Math.round((25 + S.wave * 4) * S.diff.reward);
       S.money += bonus; S.stats.earnedBonus += bonus;
       sfx("clear");
+      unlock("first_wave");
       if (S.wave === OD.WIN_WAVE && !S.won) return victory();
       toast(`Wave ${S.wave} cleared! +${bonus} credits`);
+      saveRun();
+      updateUI(true);
       if (S.auto) setTimeout(() => S && !S.paused && startWave(), 1200);
     }
   }
@@ -405,6 +408,7 @@
       if (t.timer >= st.every) {
         t.timer = 0; t.flash = 1;
         S.money += st.income; t.earned = (t.earned || 0) + st.income; S.stats.earnedMining += st.income;
+        if (S.stats.earnedMining >= 2000) unlock("tycoon");
         floater(t.x, t.y - 14, `+${st.income}`, "#ffd166");
         sfx("coin");
       }
@@ -615,10 +619,93 @@
     return { rec, newBest: S.score > (old.score || 0) };
   }
 
+  // ---------- saved game (resume) ----------
+  // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
+  const RUN_KEY = "od_run";
+  const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
+    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold });
+  function saveRun() {
+    if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
+    store.set(RUN_KEY, JSON.stringify({
+      v: 1, map: S.mapKey, diff: S.diffKey, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
+      stats: S.stats, realTime: S.realTime, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave,
+      towers: S.towers.map(packTower), retired: S.retired.map(packTower),
+      board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
+    }));
+  }
+  function loadRun() {
+    try { const r = JSON.parse(store.get(RUN_KEY) || "null"); if (r && r.v === 1 && MAPS[r.map] && DIFFICULTY[r.diff]) return r; } catch { /* corrupt save */ }
+    return null;
+  }
+  const clearRun = () => store.remove(RUN_KEY);
+  function resumeRun(r) {
+    MAP_KEY = r.map; DIFF_KEY = r.diff;
+    begin(r.map, r.diff, true);
+    Object.assign(S, { wave: r.wave, lives: r.lives, money: r.money, score: r.score, realTime: r.realTime || 0,
+      won: !!r.won, freeplay: !!r.freeplay, revived: !!r.revived, adWave: r.adWave });
+    Object.assign(S.stats, r.stats || {});
+    B.time = r.board.time || 0;
+    r.board.rings.forEach((a, i) => { if (B.rings[i]) B.rings[i].angle = a; });
+    r.board.bodies.forEach((a, i) => { if (B.bodies[i] && !B.bodies[i].root) B.bodies[i].angle = a; });
+    positionBodies();
+    S.towers = r.towers.filter(t => B.slots[t.slot] && TOWERS[t.type]).map(t => {
+      const p = slotPos(t.slot);
+      return Object.assign({ id: nextId++, cd: 0, aim: p.a, x: p.x, y: p.y, ringA: p.a }, t);
+    });
+    S.retired = (r.retired || []).filter(t => TOWERS[t.type]).map(t => Object.assign({ id: nextId++ }, t));
+    lastPreview = -1;
+    updateUI(true);
+    toast(`Welcome back! ${MAP.name}, wave ${S.wave} cleared`, 2500);
+  }
+
+  // ---------- achievements ----------
+  const ACHIEVEMENTS = [
+    { id: "first_wave", name: "First Contact", desc: "Clear your first wave." },
+    { id: "first_boss", name: "Giant Slayer", desc: "Destroy a Mothership or the Dreadnought." },
+    { id: "tier5", name: "Fully Armed", desc: "Upgrade a satellite to tier 5." },
+    { id: "armada", name: "Orbital Armada", desc: "Have 20 satellites in orbit at once." },
+    { id: "tycoon", name: "Space Tycoon", desc: "Mine 2,000 credits in one game." },
+    { id: "first_win", name: "Defender", desc: "Win any map." },
+    { id: "perfect", name: "Untouchable", desc: "Win a map without a single leak." },
+    { id: "win_hard", name: "Hardened", desc: "Win any map on Hard." },
+    { id: "grand_tour", name: "Grand Tour", desc: "Win on all eight planets." },
+    { id: "win_sol", name: "Guardian of the Sun", desc: "Win the Solar System map." },
+  ];
+  function getAch() { try { return JSON.parse(store.get("od_ach") || "{}"); } catch { return {}; } }
+  function unlock(id) {
+    const got = getAch();
+    if (got[id]) return;
+    const a = ACHIEVEMENTS.find(x => x.id === id);
+    if (!a) return;
+    got[id] = Date.now();
+    store.set("od_ach", JSON.stringify(got));
+    P.achievement(id);
+    setTimeout(() => toast(`🏆 Achievement unlocked: ${a.name}`, 2600), 900);
+  }
+
+  // ---------- rewarded ads ----------
+  const adReward = () => Math.round((60 + S.wave * 12) * S.diff.reward);
+  function watchAdForCredits() {
+    if (!S || S.waveActive || S.adWave === S.wave || !P.ads.rewardedAvailable()) return;
+    const amount = adReward();
+    ui.adBtn.disabled = true;
+    P.ads.rewarded().then(ok => {
+      ui.adBtn.disabled = false;
+      if (!ok || !S) return;
+      S.money += amount; S.adWave = S.wave; S.stats.adCredits = (S.stats.adCredits || 0) + amount;
+      toast(`+${amount} credits. Thanks for watching!`); sfx("coin");
+      saveRun(); updateUI(true);
+    });
+  }
+  P.onAdStart = () => { adPause = true; audio.setMuted(true); };
+  P.onAdEnd = () => { adPause = false; audio.setMuted(false); };
+
   // ---------- end states + stats screen ----------
   function gameOver() {
     S.over = true; S.lives = 0;
     audio.setIntensity(0);
+    P.gameplayStop();
+    clearRun();
     const { rec, newBest } = saveRec();
     sfx("lose");
     showStats("over", rec, newBest);
@@ -627,8 +714,15 @@
 
   function victory() {
     S.won = true; S.paused = true;
+    P.gameplayStop(); P.happy();
+    clearRun();
     const { rec, newBest } = saveRec();
     sfx("win");
+    unlock("first_win");
+    if (!S.stats.leaked) unlock("perfect");
+    if (S.diffKey === "hard") unlock("win_hard");
+    if (MAP.final) unlock("win_sol");
+    if (MAP_ORDER.filter(k => !MAPS[k].final).every(k => Object.keys(DIFFICULTY).some(d => (getRec(k, d) || {}).won))) unlock("grand_tour");
     showStats("won", rec, newBest);
   }
 
@@ -662,7 +756,7 @@
     const btns = mode === "won"
       ? `<button class="primary" data-act="freeplay">Freeplay ▶</button>${nextKey ? `<button class="primary" data-act="next">Next: ${MAPS[nextKey].name} →</button>` : ""}<button data-act="menu">Main Menu</button>`
       : mode === "over"
-        ? `<button class="primary" data-act="retry">Try Again</button><button data-act="menu">Main Menu</button>`
+        ? `${!S.revived && P.ads.rewardedAvailable() ? `<button class="primary ad" data-act="revive">📺 Watch ad: revive with 5 HP</button>` : ""}<button class="primary" data-act="retry">Try Again</button><button data-act="menu">Main Menu</button>`
         : `<button class="primary" data-act="pause">← Back</button>`;
     showOverlay(`
       ${head}
@@ -1012,6 +1106,8 @@
     ringFx(p.x, p.y, 30, "#ffd166", 0.4);
     sfx(nextLevel === 3 ? "path" : "upgrade");
     if (nextLevel >= 3) toast(`${tier.name}!`);
+    if (nextLevel === 4) unlock("tier5");
+    if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
 
@@ -1024,6 +1120,7 @@
     burst(t.x, t.y, "#ffd166", 10, 80);
     sfx("sell");
     S.selectedTower = null;
+    if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
 
@@ -1038,6 +1135,8 @@
     burst(p.x, p.y, def.color, 12, 90);
     sfx("place");
     if (S.money < cost) S.selectedType = null;
+    if (S.towers.length >= 20) unlock("armada");
+    if (!S.waveActive) saveRun();
     updateUI(true);
   }
 
@@ -1061,6 +1160,9 @@
     ui.autoBtn.classList.toggle("on", S.auto);
     ui.odBtn.disabled = S.overdriveCd > 0 || S.over;
     ui.odBtn.classList.toggle("on", S.overdrive > 0);
+    const adOk = P.ads.rewardedAvailable() && !S.waveActive && !S.over && S.wave >= 1 && S.adWave !== S.wave;
+    ui.adBtn.classList.toggle("hidden", !adOk);
+    if (adOk) ui.adBtn.textContent = `📺 +${adReward()}`;
     ui.odBtn.innerHTML = S.overdrive > 0 ? "⚡ Overdrive!" : S.overdriveCd > 0 ? `⚡ ${Math.ceil(S.overdriveCd)}s` : "⚡ Overdrive";
     for (const b of ui.shop.children) {
       const def = TOWERS[b.dataset.type];
@@ -1068,8 +1170,9 @@
       b.classList.toggle("poor", S.money < def.tiers[0].cost);
     }
     const pv = S.waveActive ? S.wave : S.wave + 1;
-    if (pv !== lastPreview) {
-      lastPreview = pv;
+    const pvKey = `${pv}|${S.waveActive}`;
+    if (pvKey !== lastPreview) {
+      lastPreview = pvKey;
       ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${previewText(pv)}`;
     }
     if (S.selectedTower) {
@@ -1125,16 +1228,20 @@
   }
 
   function mainMenu() {
+    if (S && !S.over) saveRun();
     S = null;
+    P.gameplayStop();
     audio.setIntensity(0);
     ui.info.classList.remove("open");
     ui.preview.innerHTML = "";
     document.body.classList.add("in-menu");
     if (!B || B.key !== MAP_KEY) { buildBoard(MAP_KEY); B.key = MAP_KEY; }
-    const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY);
+    const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun();
+    const got = getAch();
     showOverlay(`
       <h1>ORBITAL DEFENSE</h1>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
+      ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
         <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
@@ -1155,14 +1262,20 @@
           <li><b>⚡ Overdrive</b> spins the rings 5× faster and boosts fire rate for a few seconds.</li>
           <li>Mining Sats earn credits during waves. Shields regenerate; railguns break them fastest.</li>
           <li>Keys: <b>1–7</b> satellites · <b>Space</b> wave · <b>Q</b> overdrive · <b>F</b> speed · <b>P</b> pause · <b>Esc</b> cancel</li>
+          <li>Your game saves automatically between waves; use <b>Continue</b> to pick up where you left off.</li>
         </ul>
-      </details>`, true);
+      </details>
+      <details><summary>🏆 Achievements (${ACHIEVEMENTS.filter(a => got[a.id]).length}/${ACHIEVEMENTS.length})</summary>
+        <ul class="ach">${ACHIEVEMENTS.map(a => `<li class="${got[a.id] ? "got" : ""}"><b>${got[a.id] ? "🏆" : "🔒"} ${a.name}</b> <span>${a.desc}</span></li>`).join("")}</ul>
+      </details>
+      <p class="muted small version">v${P.version}${P.name !== "web" ? ` · ${P.name}` : ""}</p>`, true);
     ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
   }
 
   function pauseMenu() {
     if (!S || S.over) return;
     S.paused = true;
+    P.gameplayStop();
     showOverlay(`
       <h1>PAUSED</h1>
       <p class="muted">${MAP.name} · Wave ${S.wave} · <span style="color:${S.diff.color}">${S.diff.name}</span></p>
@@ -1181,29 +1294,52 @@
     const a = ev.target.closest("[data-act]");
     if (!a) return;
     sfx("click");
-    switch (a.dataset.act) {
+    const act = a.dataset.act;
+    // A short ad at natural breaks only: leaving an end-of-game screen.
+    if (S && (S.over || (S.won && !S.freeplay)) && ["retry", "menu", "next"].includes(act) && !a.dataset.adDone) {
+      a.dataset.adDone = "1";
+      ui.overlay.querySelectorAll("button").forEach(b => (b.disabled = true));
+      P.ads.midgame().then(() => { a.disabled = false; a.click(); });
+      return;
+    }
+    switch (act) {
       case "start": begin(MAP_KEY, DIFF_KEY); break;
-      case "resume": S.paused = false; hideOverlay(); updateUI(true); break;
+      case "continue": { const r = loadRun(); if (r) resumeRun(r); break; }
+      case "discard": clearRun(); mainMenu(); break;
+      case "revive":
+        a.disabled = true;
+        P.ads.rewarded().then(ok => {
+          if (!ok) { a.textContent = "Ad unavailable"; return; }
+          S.over = false; S.revived = true; S.lives = Math.min(5, S.diff.lives);
+          S.enemies = []; S.shots = [];
+          hideOverlay(); P.gameplayStart(); saveRun();
+          toast("Revived! The planet holds on with 5 HP"); updateUI(true);
+        });
+        break;
+      case "resume": S.paused = false; hideOverlay(); P.gameplayStart(); updateUI(true); break;
       case "pause": pauseMenu(); break;
       case "stats": showStats("pause"); break;
       case "retry": begin(S.mapKey, S.diffKey); break;
       case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, S.diffKey); break; }
       case "menu": mainMenu(); break;
-      case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); updateUI(true); break;
+      case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
     }
   });
 
-  function begin(mapKey, diffKey) {
+  function begin(mapKey, diffKey, resuming) {
     audio.init();
     buildBoard(mapKey); B.key = mapKey;
     S = newState(diffKey);
+    P.gameplayStart();
     document.body.classList.remove("in-menu");
     lastUI = ""; lastPreview = -1;
     hideOverlay();
     renderInfo();
     updateUI(true);
+    if (resuming) return;
+    clearRun(); saveRun();
     toast(`${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
   }
@@ -1246,7 +1382,7 @@
     if (!S || (S.won && !S.freeplay) || S.over) return;
     if (k === "escape") {
       if (S.selectedType || S.selectedTower) { S.selectedType = null; S.selectedTower = null; renderInfo(); updateUI(true); }
-      else if (S.paused) { S.paused = false; hideOverlay(); updateUI(true); }
+      else if (S.paused) { S.paused = false; hideOverlay(); P.gameplayStart(); updateUI(true); }
       else pauseMenu();
       return;
     }
@@ -1269,6 +1405,7 @@
   ui.speedBtn.onclick = toggleSpeed;
   ui.menuBtn.onclick = pauseMenu;
   ui.odBtn.onclick = activateOverdrive;
+  ui.adBtn.onclick = watchAdForCredits;
   ui.autoBtn.onclick = () => {
     if (!S) return;
     S.auto = !S.auto; sfx("click");
@@ -1293,6 +1430,7 @@
     makeStars();
   }
   window.addEventListener("resize", resize);
+  document.addEventListener("visibilitychange", () => { if (document.hidden && S && !S.waveActive) saveRun(); });
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
   // ---------- loop ----------
@@ -1300,7 +1438,7 @@
   function frame(now) {
     const raw = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (S && !S.paused && !S.over) {
+    if (S && !S.paused && !S.over && !adPause) {
       S.realTime += raw;
       for (let i = 0; i < S.speed && !S.over; i++) update(raw);
       uiTimer += raw;
@@ -1312,12 +1450,18 @@
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, slotPos, towerAt, TOWERS, upgradeTower, mainMenu,
+    state: () => S, board: () => B, begin, startWave, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 
   buildBoard(MAP_KEY); B.key = MAP_KEY;
   buildShop();
-  mainMenu();
   requestAnimationFrame(frame);
+  // Load platform SDKs / cloud saves, then show the menu with the saved preferences.
+  P.init().finally(() => {
+    if (MAP_ORDER.includes(store.get("od_map"))) MAP_KEY = store.get("od_map");
+    if (DIFFICULTY[store.get("od_diff")]) DIFF_KEY = store.get("od_diff");
+    mainMenu();
+    P.loadingDone();
+  });
 })(window.OD);

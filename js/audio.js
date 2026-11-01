@@ -49,6 +49,8 @@ window.OD = window.OD || {};
     return A.sfx;
   };
   A.setIntensity = v => { A.intensity = v; };
+  // Silence everything (used while an ad is playing).
+  A.setMuted = m => { if (master) master.gain.setTargetAtTime(m ? 0 : 0.8, A.ctx.currentTime, 0.05); };
 
   // ---------- building blocks ----------
   function tone({ f, f2, dur, type = "sine", vol = 0.3, attack = 0.005, when = 0, dest }) {

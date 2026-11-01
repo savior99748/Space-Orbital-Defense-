@@ -7,6 +7,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Orbital Defense</title>
+<meta name="description" content="A space tower defense game across our Solar System. Build satellites on rotating orbit rings around planets and moons.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icons/icon-180.png">
 <style>
   :root {
     --bg: #05060f;
@@ -117,6 +121,17 @@
   details li { margin: 4px 0; }
   .hidden { display: none !important; }
   body.in-menu #hud, body.in-menu #shop { display: none; }
+  button.ad { border-color: #3fbf7f; color: #9dffc9; }
+  .fake-ad { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.92); display: flex; align-items: center; justify-content: center; }
+  .fake-ad div { display: flex; flex-direction: column; gap: 6px; align-items: center; border: 2px dashed #3fbf7f; padding: 30px 40px; border-radius: 12px; }
+  .fake-ad b { font-size: 22px; color: #9dffc9; }
+  .fake-ad span { color: var(--muted); }
+  .resume { display: flex; gap: 6px; margin: 12px 0 4px; }
+  .resume button.primary { flex: 1; font-size: 15px; padding: 10px; }
+  .ach { list-style: none; padding: 0; }
+  .ach li { opacity: .55; }
+  .ach li.got { opacity: 1; }
+  .ach li span { color: var(--muted); }
   #overlay .card.wide { max-width: 760px; }
   .small { font-size: 12px; }
 
@@ -213,6 +228,7 @@
       <div class="stat"><b id="diffTag"></b></div>
     </div>
     <div class="controls">
+      <button id="adBtn" class="ad hidden" title="Watch a short ad for bonus credits">📺</button>
       <button id="odBtn" title="Overdrive (Q)">⚡ Overdrive</button>
       <button id="autoBtn" title="Auto-start next wave">Auto</button>
       <button id="speedBtn" title="Game speed (F)">1×</button>
@@ -229,9 +245,11 @@
   </div>
   <div id="shop"></div>
 </div>
+<!-- PLATFORM: the build script injects platform settings / SDK tags here -->
 <script src="js/data.js"></script>
 <script src="js/maps.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/platform.js"></script>
 <script src="js/draw.js"></script>
 <script src="js/bodies.js"></script>
 <script src="js/game.js"></script>
