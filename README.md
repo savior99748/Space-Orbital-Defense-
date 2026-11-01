@@ -4,7 +4,7 @@ A space tower defense game set across our Solar System. Hostile drones, comets, 
 
 **Play:** https://savior99748.github.io/Space-Orbital-Defense-/
 
-It's plain HTML, CSS and JavaScript, with no build step and no dependencies. It works on desktop and phones, and all sound and music are generated in the browser.
+It's plain HTML, CSS and JavaScript: open `index.html` to play, no install needed. It's also an installable web app that works offline. It works on desktop and phones, and all sound and music are generated in the browser.
 
 ## Maps
 
@@ -70,6 +70,20 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 | Speed 1× / 2× / 3× | speed button | `F` |
 | Pause / settings | ❚❚ | `P` / `Esc` |
 
+## Saving, ads and achievements
+
+- The game **saves automatically between waves**; use **Continue** on the main menu to pick up where you left off.
+- **10 achievements** (see the menu). On Steam they unlock real Steam achievements.
+- On ad-supported platforms (CrazyGames now, mobile later), you can watch an optional ad for bonus credits between waves, or for one revive after losing. A short ad may play when you leave an end-of-game screen. The GitHub Pages version has no ads.
+
+## Publishing
+
+The same code builds for the web, itch.io, CrazyGames, Steam/desktop and iOS/Android. See **[PUBLISHING.md](PUBLISHING.md)**.
+
+```bash
+npm run build   # → dist/ zips, platforms/electron/app, platforms/mobile/www
+```
+
 ## Files
 
 - `index.html`: page layout and styles
@@ -78,7 +92,10 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 - `js/data.js`: difficulties, satellite stats and upgrade paths, enemies, waves (tweak balance here)
 - `js/draw.js`: art for every satellite tier, fighters and enemies
 - `js/audio.js`: synthesized sound effects and music
+- `js/platform.js`: per-platform saves, ads, achievements (web, CrazyGames, desktop, mobile)
 - `js/game.js`: game logic, rendering, UI and input
+- `tools/build.mjs`: builds every platform; `tools/make-icons.mjs`: renders the app icon
+- `platforms/electron/`: desktop/Steam wrapper; `platforms/mobile/`: iOS/Android (Capacitor)
 
 ## Deploy
 

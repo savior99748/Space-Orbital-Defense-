@@ -1,0 +1,57 @@
+{
+  "name": "orbital-defense-desktop",
+  "productName": "Orbital Defense",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Orbital Defense desktop build (Steam, Windows, macOS, Linux).",
+  "main": "main.js",
+  "scripts": {
+    "prestart": "node ../../tools/build.mjs electron",
+    "start": "electron .",
+    "predist": "node ../../tools/build.mjs electron",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "optionalDependencies": {
+    "steamworks.js": "^0.4.0"
+  },
+  "build": {
+    "appId": "io.github.savior99748.orbitaldefense",
+    "productName": "Orbital Defense",
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "asarUnpack": [
+      "node_modules/steamworks.js/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.strategy-games"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Game"
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/savior99748/Space-Orbital-Defense-.git"
+  },
+  "author": "savior99748"
+}

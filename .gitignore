@@ -1,0 +1,9 @@
+# build output
+dist/
+node_modules/
+platforms/electron/app/
+platforms/electron/release/
+platforms/electron/build/icon.png
+platforms/mobile/www/
+platforms/mobile/resources/icon.png
+.DS_Store
