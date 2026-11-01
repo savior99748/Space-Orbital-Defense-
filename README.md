@@ -1,10 +1,28 @@
 # Orbital Defense
 
-A space tower defense game. Hostile drones, comets, asteroids, shield cruisers and motherships spiral in toward your homeworld. You build satellites on three **rotating orbit rings**, and because the rings turn, your defenses sweep around the planet over time. Survive **30 waves** and destroy the Dreadnought, then keep going in Freeplay.
+A space tower defense game set across our Solar System. Hostile drones, comets, asteroids, shield cruisers and motherships spiral in toward the planet you're defending. You build satellites on **rotating orbit rings** around the planet and its moons, and because the rings turn, your defenses sweep around over time. Survive **30 waves** and destroy the Dreadnought, then keep going in Freeplay.
 
 **Play:** https://savior99748.github.io/Space-Orbital-Defense-/
 
 It's plain HTML, CSS and JavaScript, with no build step and no dependencies. It works on desktop and phones, and all sound and music are generated in the browser.
+
+## Maps
+
+Pick a world on the main menu. Each planet has its real moons; every moon orbits with **its own turret ring** and pulls passing invaders toward it with gravity.
+
+| Map | Moons | Feature |
+| --- | --- | --- |
+| Mercury | none | Three full rings: the best place to learn |
+| Venus | none | Retrograde: all rings turn the same way |
+| Earth | Moon | A moon ring and gravity well that lures invaders |
+| Mars | Phobos, Deimos | Phobos whips around between the rings |
+| Jupiter | Io, Europa, Ganymede, Callisto | Giant planet, four strong-gravity moons |
+| Saturn | Titan, Enceladus | Icy rings slow invaders by 35% |
+| Uranus | Titania, Oberon, Miranda | Rings spin much faster |
+| Neptune | Triton | Winds speed invaders up 12%; Triton orbits backwards |
+| **Solar System** | all 8 planets | Final map: defend the Sun. Every planet orbits at its own speed with its own turret ring |
+
+After each game, a **stats screen** shows your totals (destroyed, leaked, credits earned and spent, time) and a damage and kills report for every satellite, with an MVP. You can also open it from the pause menu.
 
 ## Difficulty
 
@@ -55,6 +73,8 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 ## Files
 
 - `index.html`: page layout and styles
+- `js/maps.js`: planets, moons and the Solar System map
+- `js/bodies.js`: planet, moon and Sun art
 - `js/data.js`: difficulties, satellite stats and upgrade paths, enemies, waves (tweak balance here)
 - `js/draw.js`: art for every satellite tier, fighters and enemies
 - `js/audio.js`: synthesized sound effects and music
