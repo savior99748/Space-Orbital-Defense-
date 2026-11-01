@@ -55,7 +55,7 @@
   .chip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
   #toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(14,17,36,.94);
     border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; font-size: 14px; pointer-events: none;
-    opacity: 0; transition: opacity .3s; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
+    opacity: 0; transition: opacity .3s; max-width: min(520px, calc(100% - 24px)); text-align: center; line-height: 1.35; }
 
   /* ---------- tower info / upgrades ---------- */
   #info { position: absolute; right: 10px; top: 10px; width: 300px; max-height: calc(100% - 20px); overflow-y: auto;
@@ -116,6 +116,51 @@
   summary { cursor: pointer; color: var(--accent); }
   details li { margin: 4px 0; }
   .hidden { display: none !important; }
+  body.in-menu #hud, body.in-menu #shop { display: none; }
+  #overlay .card.wide { max-width: 760px; }
+  .small { font-size: 12px; }
+
+  /* ---------- main menu ---------- */
+  .maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 14px 0 10px; }
+  .map-card { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px 7px; position: relative; }
+  .map-card canvas { width: 100%; max-width: 140px; aspect-ratio: 7 / 5; }
+  .map-card b { font-size: 14px; }
+  .map-card small { color: var(--muted); font-size: 11px; }
+  .map-card.selected { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset, 0 0 14px rgba(255,209,102,.3); }
+  .map-card.final { grid-column: span 2; border-color: #7a4a1a; background: linear-gradient(180deg, #2a1608, var(--panel-2)); }
+  .map-card.final.selected { border-color: var(--gold); }
+  .medals { display: flex; gap: 4px; margin-top: 3px; }
+  .medal { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--c); opacity: .5; }
+  .medal.won { background: var(--c); opacity: 1; box-shadow: 0 0 6px var(--c); }
+  .map-detail { text-align: left; background: rgba(255,255,255,.03); border: 1px solid #222750; border-radius: 10px; padding: 10px 14px; }
+  .map-detail h2 { margin: 0 0 4px; font-size: 18px; }
+  .map-detail p { margin: 4px 0 !important; font-size: 14px; }
+  .map-detail .feature { color: var(--gold) !important; }
+  .stars { color: var(--gold); font-size: 13px; letter-spacing: 1px; white-space: nowrap; }
+  .diff-row { display: flex; gap: 8px; margin-top: 12px; }
+  .diff-btn { flex: 1; display: flex; flex-direction: column; align-items: center; border-color: #2c3270; }
+  .diff-btn b { color: var(--c); }
+  .diff-btn small { color: var(--muted); font-size: 11px; }
+  .diff-btn.selected { border-color: var(--c); box-shadow: 0 0 0 1px var(--c) inset, 0 0 12px color-mix(in srgb, var(--c) 35%, transparent); }
+  button.big { font-size: 17px; padding: 11px 28px; }
+
+  /* ---------- stats screen ---------- */
+  .newbest { color: var(--gold) !important; font-weight: 700; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0; }
+  .tile { background: rgba(255,255,255,.04); border: 1px solid #222750; border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column; }
+  .tile b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .tile span { color: var(--muted); font-size: 11px; }
+  .rep-title { margin: 14px 0 6px; text-align: left; font-size: 15px; }
+  .report { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+  .rep-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; align-items: center;
+    background: rgba(255,255,255,.03); border-radius: 8px; padding: 3px 8px 3px 3px; }
+  .rep-row canvas { width: 34px; height: 34px; }
+  .rep-name { display: flex; flex-direction: column; min-width: 0; }
+  .rep-name b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rep-name small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rep-bar { position: relative; height: 22px; background: rgba(0,0,0,.35); border-radius: 6px; overflow: hidden; }
+  .rep-bar i { position: absolute; left: 0; top: 0; bottom: 0; opacity: .45; border-radius: 6px; }
+  .rep-bar span { position: relative; font-size: 11.5px; line-height: 22px; padding-left: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
   /* ---------- phones ---------- */
   @media (max-width: 720px) {
@@ -144,6 +189,16 @@
     #toast { top: 40px; font-size: 13px; }
     #overlay .card { padding: 18px; }
     #overlay h1 { font-size: 22px; }
+    .maps { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .map-card { padding: 4px 2px 5px; }
+    .map-card b { font-size: 12px; }
+    .map-card small { font-size: 10px; }
+    .map-card.final { grid-column: span 3; }
+    .map-card.final canvas { max-width: 120px; }
+    .tiles { gap: 4px; }
+    .tile b { font-size: 15px; }
+    .rep-row { grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+    .rep-row canvas { width: 30px; height: 30px; }
   }
 </style>
 </head>
@@ -152,7 +207,7 @@
   <div id="hud">
     <div class="stats-row">
       <div class="stat"><span>Wave</span><b id="wave">0</b></div>
-      <div class="stat"><span>Planet</span><b id="lives">0</b></div>
+      <div class="stat"><span id="livesLabel">Planet</span><b id="lives">0</b></div>
       <div class="stat"><span>Credits</span><b id="money" style="color:var(--gold)">0</b></div>
       <div class="stat score"><span>Score</span><b id="score">0</b></div>
       <div class="stat"><b id="diffTag"></b></div>
@@ -175,8 +230,10 @@
   <div id="shop"></div>
 </div>
 <script src="js/data.js"></script>
+<script src="js/maps.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/draw.js"></script>
+<script src="js/bodies.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

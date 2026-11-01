@@ -212,7 +212,7 @@ window.OD = window.OD || {};
     rock:     { name: "Rock",           hp: 45,    speed: 40,  reward: 3,   size: 9,  color: "#8f7a64", dmg: 1,   spiral: 0.6 },
     cruiser:  { name: "Shield Cruiser", hp: 150,   shield: 130, speed: 36, reward: 16, size: 13, color: "#5c9dff", dmg: 3, spiral: 0.7 },
     mother:   { name: "Mothership",     hp: 1500,  speed: 20,  reward: 150, size: 30, color: "#ff3df2", dmg: 15,  spiral: 0.5, boss: true, spawn: { type: "drone", every: 4 } },
-    dread:    { name: "Dreadnought",    hp: 7000, shield: 2500, speed: 13, reward: 600, size: 44, color: "#ff2d55", dmg: 40, spiral: 0.45, boss: true, spawn: { type: "cruiser", every: 6 } },
+    dread:    { name: "Dreadnought",    hp: 6000, shield: 2200, speed: 13, reward: 600, size: 44, color: "#ff2d55", dmg: 20, spiral: 0.45, boss: true, spawn: { type: "cruiser", every: 6 } },
   };
 
   // Returns an ordered list of groups: { type, count, gap }.
