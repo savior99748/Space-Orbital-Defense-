@@ -21,6 +21,7 @@
     coach: $("coach"), coachText: $("coachText"), coachNext: $("coachNext"), coachStep: $("coachStep"), coachArrow: $("coachArrow"),
   };
   const P = OD.platform;
+  const stats = OD.analytics;
   // Saves go through the platform layer (localStorage, or cloud saves on portals that offer them).
   const store = { get: k => P.save.get(k), set: (k, v) => P.save.set(k, v), remove: k => P.save.remove(k) };
   let adPause = false; // true while an ad is playing
@@ -349,6 +350,7 @@
       S.money += bonus; S.stats.earnedBonus += bonus;
       sfx("clear");
       unlock("first_wave");
+      if ([1, 3, 5, 10, 15, 20, 25, 30].includes(S.wave) || (S.wave > 30 && S.wave % 10 === 0)) stats.track(`wave/${S.mapKey}/${S.wave}`);
       if (S.wave === OD.WIN_WAVE && !S.won) return victory();
       toast(`Wave ${S.wave} cleared! +${bonus} credits`);
       saveRun();
@@ -695,6 +697,7 @@
       ui.adBtn.disabled = false;
       if (!ok || !S) return;
       S.money += amount; S.adWave = S.wave; S.stats.adCredits = (S.stats.adCredits || 0) + amount;
+      stats.track("ad/credits");
       toast(`+${amount} credits. Thanks for watching!`); sfx("coin");
       saveRun(); updateUI(true);
     });
@@ -708,6 +711,7 @@
     audio.setIntensity(0);
     P.gameplayStop();
     clearRun();
+    stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
     const { rec, newBest } = saveRec();
     sfx("lose");
     showStats("over", rec, newBest);
@@ -718,6 +722,7 @@
     S.won = true; S.paused = true;
     P.gameplayStop(); P.happy();
     clearRun();
+    stats.track(`win/${S.mapKey}/${S.diffKey}`);
     const { rec, newBest } = saveRec();
     sfx("win");
     unlock("first_win");
@@ -1118,6 +1123,7 @@
     sfx(nextLevel === 3 ? "path" : "upgrade");
     if (nextLevel >= 3) toast(`${tier.name}!`);
     if (nextLevel === 4) unlock("tier5");
+    if (nextLevel === 3) stats.track(`path/${t.type}/${TOWERS[t.type].paths[usePath].name.toLowerCase().replace(/ /g, "-")}`);
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
@@ -1204,7 +1210,8 @@
   const hideOverlay = () => ui.overlay.classList.add("hidden");
 
   function soundButtons() {
-    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button></div>`;
+    const statBtn = stats.configured ? `<button data-act="stats-toggle" title="Anonymous gameplay stats, no personal data">${stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"}</button>` : "";
+    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button>${statBtn}</div>`;
   }
 
   function mapCard(key) {
@@ -1239,6 +1246,7 @@
   }
 
   function mainMenu() {
+    if (S && !S.over && !(S.won && !S.freeplay)) stats.track(`quit/${S.mapKey}/w${stats.bucket(Math.max(1, S.wave))}`);
     abandonTutorial();
     if (S && !S.over) saveRun();
     S = null;
@@ -1281,7 +1289,7 @@
       <details><summary>🏆 Achievements (${ACHIEVEMENTS.filter(a => got[a.id]).length}/${ACHIEVEMENTS.length})</summary>
         <ul class="ach">${ACHIEVEMENTS.map(a => `<li class="${got[a.id] ? "got" : ""}"><b>${got[a.id] ? "🏆" : "🔒"} ${a.name}</b> <span>${a.desc}</span></li>`).join("")}</ul>
       </details>
-      <p class="muted small version">v${P.version}${P.name !== "web" ? ` · ${P.name}` : ""}</p>`, true);
+      <p class="muted small version">v${P.version}${P.name !== "web" ? ` · ${P.name}` : ""} · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>`, true);
     ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
   }
 
@@ -1333,6 +1341,7 @@
         P.ads.rewarded().then(ok => {
           if (!ok) { a.textContent = "Ad unavailable"; return; }
           S.over = false; S.revived = true; S.lives = Math.min(5, S.diff.lives);
+          stats.track("ad/revive");
           S.enemies = []; S.shots = [];
           hideOverlay(); P.gameplayStart(); saveRun();
           toast("Revived! The planet holds on with 5 HP"); updateUI(true);
@@ -1347,6 +1356,7 @@
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
+      case "stats-toggle": stats.setEnabled(!stats.enabled); a.textContent = stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"; break;
     }
   });
 
@@ -1362,7 +1372,8 @@
     hideOverlay();
     renderInfo();
     updateUI(true);
-    if (resuming) return;
+    if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
+    stats.track(`game-start/${mapKey}/${diffKey}`);
     clearRun(); saveRun();
     toast(`${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
@@ -1411,6 +1422,7 @@
     MAP_KEY = "earth"; DIFF_KEY = "easy";
     begin("earth", "easy");
     tut = { i: -1 };
+    stats.track("tutorial/start");
     document.body.classList.add("tutorial");
     ui.coach.classList.remove("hidden");
     tutGo(0);
@@ -1419,6 +1431,7 @@
     document.querySelectorAll(".coach-glow").forEach(e => e.classList.remove("coach-glow"));
     if (i >= TUT_STEPS.length) return endTutorial(false);
     tut.i = i;
+    if (i > 0) stats.track(`tutorial/step-${i + 1}`);
     const step = TUT_STEPS[i];
     if (step.enter) step.enter();
     ui.coachText.innerHTML = step.text;
@@ -1429,6 +1442,7 @@
   }
   function endTutorial(skipped) {
     if (!tut) return;
+    stats.track(skipped ? `tutorial/skip-at-step-${tut.i + 1}` : "tutorial/done");
     tut = null;
     store.set(TUT_KEY, "1");
     document.querySelectorAll(".coach-glow").forEach(e => e.classList.remove("coach-glow"));
@@ -1682,7 +1696,8 @@
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
+    state: () => S, board: () => B, begin, startWave, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 
@@ -1695,5 +1710,6 @@
     if (DIFFICULTY[store.get("od_diff")]) DIFF_KEY = store.get("od_diff");
     mainMenu();
     P.loadingDone();
+    stats.sessionStart();
   });
 })(window.OD);

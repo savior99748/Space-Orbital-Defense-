@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbital Defense: Pitch</title>
+<style>
+  :root { --bg: #05060f; --panel: #0e1124; --line: #2c3270; --text: #e6e9ff; --muted: #8b90b8; --accent: #6cf0ff; --gold: #ffd166; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 860px; margin: 24px auto; padding: 28px 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .top { display: flex; gap: 18px; align-items: center; }
+  .top img { width: 84px; border-radius: 18px; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: .08em; color: var(--accent); }
+  .tag { margin: 2px 0 0; color: #c9cdee; font-size: 17px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--gold); margin: 20px 0 6px; }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+  .shots img { width: 100%; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .links a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .print { text-align: center; margin: 14px 0 30px; }
+  .print button { font: inherit; padding: 9px 18px; border-radius: 9px; border: 1px solid var(--accent); background: #1b3d5c; color: var(--text); cursor: pointer; }
+  @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } .page { padding: 20px 16px; margin: 0; border-radius: 0; } }
+  @media print {
+    body { background: #fff; color: #111; font-size: 12px; }
+    .page { margin: 0; border: none; background: #fff; padding: 0; max-width: none; }
+    h1 { color: #0a6b80; } h2 { color: #8a5a00; } .tag, .muted { color: #444; } .links a { color: #0a6b80; }
+    .print { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top">
+    <img src="media/icon-1024.png" alt="">
+    <div>
+      <h1>ORBITAL DEFENSE</h1>
+      <p class="tag">Tower defense on rotating orbit rings across our Solar System.</p>
+      <p class="muted">Working title · Independent developer · Playable now on web and mobile browsers</p>
+    </div>
+  </div>
+
+  <div class="shots">
+    <img src="media/screenshot-desktop-2-earth.png" alt="Earth defense">
+    <img src="media/screenshot-desktop-3-jupiter-boss.png" alt="Jupiter boss wave">
+    <img src="media/screenshot-desktop-5-solar-system.png" alt="Solar System map">
+  </div>
+
+  <h2>The hook</h2>
+  <p>Players build satellites on <b>rings that orbit the planet</b>. Because the rings rotate, defenses sweep across the sky, and timing placement matters as much as choosing it. Moons carry their own rings and pull invaders in with <b>gravity</b>, so players lure enemies into kill zones. It's familiar tower defense with a twist you can understand in one glance.</p>
+
+  <div class="cols">
+    <div>
+      <h2>What's built</h2>
+      <ul>
+        <li>9 worlds: all 8 planets with their real moons, plus a Solar System finale where every planet orbits the Sun</li>
+        <li>7 satellites × 2 specializations each; art evolves at every tier (49 designs)</li>
+        <li>Bosses, 30-wave campaign, endless Freeplay, 3 difficulties</li>
+        <li>Tutorial, stats screen, 10 achievements, auto-save, pinch-zoom</li>
+        <li>Generated sound effects and music</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Platforms &amp; tech</h2>
+      <ul>
+        <li>HTML5 / JavaScript, one codebase: web, installable phone app, iOS + Android (Capacitor), Steam (Electron)</li>
+        <li>Platform layer already handles ads, saves and achievements (CrazyGames SDK integrated)</li>
+        <li>Short sessions (2–20 min), works offline, portrait and landscape</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Business model</h2>
+      <ul>
+        <li>Free-to-play with optional rewarded ads (bonus credits, one revive per game). Hooks already in place</li>
+        <li>Planned: remove-ads purchase, map and satellite packs, cosmetic skins</li>
+        <li>Premium version for Steam</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Looking for</h2>
+      <ul>
+        <li>A publishing partner for mobile (user acquisition, store launch, monetization tuning) and/or web portals</li>
+        <li>Open to Steam publishing for an expanded version</li>
+        <li>Player metrics (retention, tutorial completion) are being collected and can be shared on request</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Links</h2>
+  <p class="links">
+    ▶ Play: <a href="https://savior99748.github.io/Space-Orbital-Defense-/">savior99748.github.io/Space-Orbital-Defense-</a><br>
+    🎬 Trailer, clips, GIFs, screenshots: <a href="https://savior99748.github.io/Space-Orbital-Defense-/presskit/">press kit</a><br>
+    ✉ Contact: <span class="muted">[your email here]</span>
+  </p>
+</div>
+<div class="print"><button onclick="window.print()">Save as PDF / Print</button></div>
+</body>
+</html>

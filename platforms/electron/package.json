@@ -1,7 +1,7 @@
 {
   "name": "orbital-defense-desktop",
   "productName": "Orbital Defense",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Orbital Defense desktop build (Steam, Windows, macOS, Linux).",
   "main": "main.js",
