@@ -120,7 +120,29 @@
   summary { cursor: pointer; color: var(--accent); }
   details li { margin: 4px 0; }
   .hidden { display: none !important; }
-  body.in-menu #hud, body.in-menu #shop { display: none; }
+  body.in-menu #hud, body.in-menu #shop, body.in-menu #zoomCtl { display: none; }
+
+  /* ---------- zoom controls ---------- */
+  #zoomCtl { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 4px; z-index: 2; }
+  #zoomCtl button { width: 42px; height: 42px; padding: 0; font-size: 22px; line-height: 1; background: rgba(22,26,54,.88); }
+  #zoomCtl #zoomLabel { font-size: 12px; height: 28px; }
+  #info.open ~ #zoomCtl { display: none; }
+
+  /* ---------- tutorial ---------- */
+  #coach { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: min(460px, calc(100% - 80px));
+    background: rgba(14,17,36,.97); border: 1px solid var(--gold); border-radius: 12px; padding: 12px 14px; z-index: 4;
+    box-shadow: 0 6px 30px rgba(0,0,0,.5), 0 0 18px rgba(255,209,102,.18); font-size: 14px; line-height: 1.45; }
+  #coachText b { color: var(--gold); }
+  .coach-btns { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .coach-btns .skip { background: transparent; border-color: transparent; color: var(--muted); padding: 4px 6px; font-size: 12px; text-decoration: underline; }
+  #coachStep { color: var(--muted); font-size: 12px; margin-left: auto; }
+  #coachArrow { position: fixed; z-index: 30; pointer-events: none; color: var(--gold); font-size: 26px; line-height: 1;
+    transform: translate(-50%, -100%); text-shadow: 0 0 10px rgba(255,209,102,.8); animation: coach-bob .8s ease-in-out infinite alternate; }
+  #coachArrow.up { transform: translate(-50%, 0) rotate(180deg); }
+  @keyframes coach-bob { from { margin-top: -6px; } to { margin-top: 4px; } }
+  .coach-glow { box-shadow: 0 0 0 2px var(--gold), 0 0 18px rgba(255,209,102,.7) !important; animation: coach-glow 1s ease-in-out infinite alternate; }
+  @keyframes coach-glow { from { filter: brightness(1); } to { filter: brightness(1.35); } }
+  body.tutorial #preview, body.tutorial #toast { display: none; }
   button.ad { border-color: #3fbf7f; color: #9dffc9; }
   .fake-ad { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.92); display: flex; align-items: center; justify-content: center; }
   .fake-ad div { display: flex; flex-direction: column; gap: 6px; align-items: center; border: 2px dashed #3fbf7f; padding: 30px 40px; border-radius: 12px; }
@@ -201,6 +223,9 @@
     .up-card canvas { width: 36px; height: 36px; }
     #preview { bottom: auto; top: 6px; font-size: 11px; }
     #info.open ~ #preview { display: none; }
+    #zoomCtl { right: 6px; }
+    #zoomCtl button { width: 40px; height: 40px; }
+    #coach { width: calc(100% - 64px); left: 8px; transform: none; font-size: 13px; padding: 10px 12px; }
     #toast { top: 40px; font-size: 13px; }
     #overlay .card { padding: 18px; }
     #overlay h1 { font-size: 22px; }
@@ -241,10 +266,24 @@
     <div id="info"></div>
     <div id="preview"></div>
     <div id="toast"></div>
+    <div id="zoomCtl" aria-label="Zoom">
+      <button id="zoomIn" title="Zoom in (+)">+</button>
+      <button id="zoomLabel" title="Reset zoom (0)">1×</button>
+      <button id="zoomOut" title="Zoom out (−)">−</button>
+    </div>
+    <div id="coach" class="hidden">
+      <div id="coachText"></div>
+      <div class="coach-btns">
+        <button class="small skip" data-tut="skip">Skip tutorial</button>
+        <span id="coachStep"></span>
+        <button id="coachNext" class="primary" data-tut="next">Next</button>
+      </div>
+    </div>
     <div id="overlay" class="hidden"></div>
   </div>
   <div id="shop"></div>
 </div>
+<div id="coachArrow" class="hidden">▼</div>
 <!-- PLATFORM: the build script injects platform settings / SDK tags here -->
 <script src="js/data.js"></script>
 <script src="js/maps.js"></script>

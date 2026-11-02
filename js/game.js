@@ -17,6 +17,8 @@
     wave: $("wave"), lives: $("lives"), livesLabel: $("livesLabel"), money: $("money"), score: $("score"), diff: $("diffTag"),
     waveBtn: $("waveBtn"), speedBtn: $("speedBtn"), menuBtn: $("menuBtn"), autoBtn: $("autoBtn"), odBtn: $("odBtn"), adBtn: $("adBtn"),
     shop: $("shop"), info: $("info"), overlay: $("overlay"), toast: $("toast"), preview: $("preview"),
+    zoomCtl: $("zoomCtl"), zoomIn: $("zoomIn"), zoomOut: $("zoomOut"), zoomLabel: $("zoomLabel"),
+    coach: $("coach"), coachText: $("coachText"), coachNext: $("coachNext"), coachStep: $("coachStep"), coachArrow: $("coachArrow"),
   };
   const P = OD.platform;
   // Saves go through the platform layer (localStorage, or cloud saves on portals that offer them).
@@ -788,8 +790,11 @@
   // ---------- render ----------
   function render() {
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#05060f";
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const k = scale * zoom * dpr;
+    ctx.setTransform(k, 0, 0, k, dpr * (cssW / 2 - camX * scale * zoom), dpr * (cssH / 2 - camY * scale * zoom));
     const time = B.time;
     if (S && S.shake) ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
 
@@ -903,6 +908,12 @@
       drawTowerAt(t, p, time);
     }
     for (const t of S.towers) if (t.crafts) for (const f of t.crafts) OD.drawCraft(ctx, f, t, time);
+    const tw = tutWorldTarget();
+    if (tw) {
+      const pulse = (performance.now() / 700) % 1;
+      ctx.strokeStyle = `rgba(255,209,102,${1 - pulse})`; ctx.lineWidth = 3 / zoom;
+      ctx.beginPath(); ctx.arc(tw.x, tw.y, (tw.r || 16) + 6 + pulse * 18, 0, TAU); ctx.stroke();
+    }
 
     if (S.selectedType && S.hover != null && !towerAt(S.hover)) {
       const p = slotPos(S.hover);
@@ -1228,6 +1239,7 @@
   }
 
   function mainMenu() {
+    abandonTutorial();
     if (S && !S.over) saveRun();
     S = null;
     P.gameplayStop();
@@ -1236,6 +1248,7 @@
     ui.preview.innerHTML = "";
     document.body.classList.add("in-menu");
     if (!B || B.key !== MAP_KEY) { buildBoard(MAP_KEY); B.key = MAP_KEY; }
+    resetCamera();
     const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun();
     const got = getAch();
     showOverlay(`
@@ -1252,7 +1265,7 @@
         ${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === DIFF_KEY ? " selected" : ""}" data-diff="${k}" style="--c:${d.color}"><b>${d.name}</b><small>${d.lives} HP</small></button>`).join("")}
       </div>
       <p class="muted small">${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>
-      <div class="btns"><button class="primary big" data-act="start">Launch Mission ▶</button></div>
+      <div class="btns"><button class="primary big" data-act="start">Launch Mission ▶</button><button data-act="tutorial">🎓 Tutorial</button></div>
       ${soundButtons()}
       <details><summary>How to play</summary>
         <ul>
@@ -1303,7 +1316,16 @@
       return;
     }
     switch (act) {
-      case "start": begin(MAP_KEY, DIFF_KEY); break;
+      case "start":
+        if (!tutDone()) {
+          showOverlay(`<h1>FIRST MISSION?</h1>
+            <p>Take a quick guided game on Earth to learn the basics. It takes about 2 minutes.</p>
+            <div class="btns"><button class="primary big" data-act="tutorial">🎓 Play tutorial</button></div>
+            <div class="btns"><button data-act="skiptut">Skip, I know how to play</button></div>`);
+        } else begin(MAP_KEY, DIFF_KEY);
+        break;
+      case "tutorial": startTutorial(); break;
+      case "skiptut": store.set(TUT_KEY, "1"); begin(MAP_KEY, DIFF_KEY); break;
       case "continue": { const r = loadRun(); if (r) resumeRun(r); break; }
       case "discard": clearRun(); mainMenu(); break;
       case "revive":
@@ -1330,7 +1352,9 @@
 
   function begin(mapKey, diffKey, resuming) {
     audio.init();
+    abandonTutorial();
     buildBoard(mapKey); B.key = mapKey;
+    resetCamera();
     S = newState(diffKey);
     P.gameplayStart();
     document.body.classList.remove("in-menu");
@@ -1344,25 +1368,170 @@
     sfx("wave");
   }
 
-  // ---------- input ----------
-  function canvasPoint(ev) {
-    const rect = canvas.getBoundingClientRect();
-    return { x: (ev.clientX - rect.left) / scale, y: (ev.clientY - rect.top) / scale };
-  }
+  // ---------- tutorial ----------
+  // A guided first game on Earth (Easy). Each step waits for the player to do something, points at
+  // it, then moves on. Players can skip at any time, and replay it from the main menu.
+  const TUT_KEY = "od_tut_done";
+  let tut = null; // { i: step index }
+  const tutDone = () => !!store.get(TUT_KEY);
 
-  canvas.addEventListener("pointermove", ev => {
-    if (!S || ev.pointerType === "touch") return;
-    const p = canvasPoint(ev);
-    S.hover = nearestSlot(p.x, p.y, 26);
-    canvas.style.cursor = S.hover != null ? "pointer" : "default";
+  // Suggest an empty inner-ring slot (the second suggestion goes opposite the first satellite).
+  function tutSlot() {
+    const inner = B.slots.filter(sl => sl.ring === 0 && !towerAt(sl.id));
+    if (!inner.length) return null;
+    const first = S.towers[0];
+    if (!first) return inner[0].id;
+    let best = inner[0], bd = -1;
+    for (const sl of inner) { const p = slotPos(sl.id), d = dist2(p.x, p.y, first.x, first.y); if (d > bd) { bd = d; best = sl; } }
+    return best.id;
+  }
+  const slotTarget = () => { const id = tutSlot(); if (id == null) return null; const p = slotPos(id); return { x: p.x, y: p.y, r: 10 }; };
+  const laserBtn = () => ui.shop.querySelector('[data-type="laser"]');
+
+  const TUT_STEPS = [
+    { text: "<b>Welcome, Commander!</b> Alien invaders are spiraling toward Earth. Let's set up your first defenses.", next: "Let's go" },
+    { text: "Tap the <b>Laser Sat</b> in the bar below.", el: laserBtn, done: () => S.selectedType === "laser" || S.towers.length > 0 },
+    { text: "Now tap a <b>glowing slot</b> on the ring to build it. The rings rotate, so satellites sweep around the planet.", world: slotTarget, done: () => S.towers.length > 0 },
+    { text: "Build a <b>second Laser Sat</b> on the other side of Earth. Follow the arrow.",
+      el: () => (S.selectedType === "laser" ? null : laserBtn()), world: () => (S.selectedType === "laser" ? slotTarget() : null), done: () => S.towers.length > 1 },
+    { text: "Press <b>Launch Wave</b> to bring in the first invaders.", el: () => ui.waveBtn, done: () => S.waveActive || S.wave > 0 },
+    { text: "Your satellites fire on their own. Hang tight until the wave is cleared.", done: () => S.wave >= 1 && !S.waveActive },
+    { text: "Wave cleared! Here are <b>+100 bonus credits</b>. Tap one of your satellites to open its upgrades.",
+      enter: () => { S.money += 100; updateUI(true); sfx("coin"); }, world: () => S.towers[0] && { x: S.towers[0].x, y: S.towers[0].y, r: 14 }, done: () => !!S.selectedTower },
+    { text: "Tap the <b>upgrade card</b>. Every tier makes the satellite stronger and changes how it looks.",
+      el: () => ui.info.querySelector("[data-up]"), done: () => S.towers.some(t => t.level >= 1) },
+    { text: "At <b>tier 3</b> you pick one of <b>two specializations</b>, like a prism that splits beams or a lance that melts bosses. The choice is permanent!", next: "Got it" },
+    { text: "That's the <b>Moon</b>. It carries its own turret ring, and its gravity pulls invaders toward it, so satellites there see lots of action.",
+      world: () => B.bodies[1] && { x: B.bodies[1].x, y: B.bodies[1].y, r: B.bodies[1].r + 6 }, next: "Next" },
+    { text: "Crowded rings? <b>Pinch</b> or use <b>+ / −</b> to zoom in and drag to look around. <b>⚡ Overdrive</b> spins the rings fast for a few seconds.", el: () => ui.zoomCtl, next: "Next" },
+    { text: "<b>You're ready!</b> Survive 30 waves to save Earth. Good luck, Commander.", next: "Start defending" },
+  ];
+
+  function startTutorial() {
+    MAP_KEY = "earth"; DIFF_KEY = "easy";
+    begin("earth", "easy");
+    tut = { i: -1 };
+    document.body.classList.add("tutorial");
+    ui.coach.classList.remove("hidden");
+    tutGo(0);
+  }
+  function tutGo(i) {
+    document.querySelectorAll(".coach-glow").forEach(e => e.classList.remove("coach-glow"));
+    if (i >= TUT_STEPS.length) return endTutorial(false);
+    tut.i = i;
+    const step = TUT_STEPS[i];
+    if (step.enter) step.enter();
+    ui.coachText.innerHTML = step.text;
+    ui.coachNext.textContent = step.next || "";
+    ui.coachNext.classList.toggle("hidden", !step.next);
+    ui.coachStep.textContent = `${i + 1} / ${TUT_STEPS.length}`;
+    if (i > 0) sfx("click");
+  }
+  function endTutorial(skipped) {
+    if (!tut) return;
+    tut = null;
+    store.set(TUT_KEY, "1");
+    document.querySelectorAll(".coach-glow").forEach(e => e.classList.remove("coach-glow"));
+    ui.coach.classList.add("hidden");
+    ui.coachArrow.classList.add("hidden");
+    document.body.classList.remove("tutorial");
+    if (skipped) toast("Tutorial skipped. You can replay it from the main menu.", 2600);
+    else { toast("Tutorial complete! 🎓", 2200); sfx("clear"); }
+  }
+  // Leaving the game mid-tutorial just stops it (it will be offered again next time).
+  function abandonTutorial() {
+    if (!tut) return;
+    tut = null;
+    document.querySelectorAll(".coach-glow").forEach(e => e.classList.remove("coach-glow"));
+    ui.coach.classList.add("hidden"); ui.coachArrow.classList.add("hidden");
+    document.body.classList.remove("tutorial");
+  }
+  function tutWorldTarget() {
+    if (!tut || !S) return null;
+    const step = TUT_STEPS[tut.i];
+    return step && step.world ? step.world() : null;
+  }
+  // Called every frame: advance when the step is done, and keep the pointer arrow on its target.
+  function tutTick() {
+    if (!tut || !S) return;
+    const step = TUT_STEPS[tut.i];
+    if (step.done && step.done()) return tutGo(tut.i + 1);
+    const el = step.el ? step.el() : null;
+    document.querySelectorAll(".coach-glow").forEach(e => { if (e !== el) e.classList.remove("coach-glow"); });
+    let x = null, y = null, up = false;
+    if (el && el.offsetParent !== null) {
+      el.classList.add("coach-glow");
+      const r = el.getBoundingClientRect();
+      x = r.left + r.width / 2;
+      if (r.top < 140) { y = r.bottom + 6; up = true; } else y = r.top - 6;
+    } else {
+      const w = step.world ? step.world() : null;
+      if (w) {
+        const sr = stage.getBoundingClientRect(), p = toScreen(w.x, w.y);
+        x = sr.left + p.x; y = sr.top + p.y - ((w.r || 12) * scale * zoom) - 10;
+      }
+    }
+    const arrow = ui.coachArrow;
+    if (x == null) { arrow.classList.add("hidden"); return; }
+    arrow.classList.remove("hidden");
+    arrow.classList.toggle("up", up);
+    arrow.style.left = `${x}px`;
+    arrow.style.top = `${y}px`;
+  }
+  ui.coach.addEventListener("click", ev => {
+    const b = ev.target.closest("[data-tut]");
+    if (!b || !tut) return;
+    if (b.dataset.tut === "skip") endTutorial(true);
+    else if (b.dataset.tut === "next") tutGo(tut.i + 1);
   });
-  canvas.addEventListener("pointerleave", () => { if (S) S.hover = null; });
-  canvas.addEventListener("pointerdown", ev => {
-    audio.init();
+
+  // ---------- camera: zoom + pan ----------
+  const ZOOM_MAX = 3, ZOOM_STEPS = [1, 1.5, 2, 3];
+  let zoom = 1, camX = 0, camY = 0, cssW = 0, cssH = 0, dpr = 1;
+  function clampCam() {
+    const hw = W / (2 * zoom), hh = H / (2 * zoom);
+    camX = Math.min(W - hw, Math.max(hw, camX));
+    camY = Math.min(H - hh, Math.max(hh, camY));
+  }
+  const toWorld = (sx, sy) => ({ x: camX + (sx - cssW / 2) / (scale * zoom), y: camY + (sy - cssH / 2) / (scale * zoom) });
+  const toScreen = (x, y) => ({ x: (x - camX) * scale * zoom + cssW / 2, y: (y - camY) * scale * zoom + cssH / 2 });
+  function setZoom(z, sx = cssW / 2, sy = cssH / 2) {
+    const anchor = toWorld(sx, sy);
+    zoom = Math.max(1, Math.min(ZOOM_MAX, z));
+    camX = anchor.x - (sx - cssW / 2) / (scale * zoom);
+    camY = anchor.y - (sy - cssH / 2) / (scale * zoom);
+    clampCam(); updateZoomUI();
+  }
+  function resetCamera() { zoom = 1; camX = CX; camY = CY; updateZoomUI(); }
+  // +/- buttons: step through 1×, 1.5×, 2×, 3×, zooming toward the selected satellite if there is one
+  function zoomStep(dir) {
+    let sx = cssW / 2, sy = cssH / 2;
+    if (dir > 0 && S && S.selectedTower) { const p = toScreen(S.selectedTower.x, S.selectedTower.y); sx = p.x; sy = p.y; }
+    const target = dir > 0 ? (ZOOM_STEPS.find(z => z > zoom + 0.01) || ZOOM_MAX) : ([...ZOOM_STEPS].reverse().find(z => z < zoom - 0.01) || 1);
+    setZoom(target, sx, sy);
+    if (target === 1) resetCamera();
+    sfx("click");
+  }
+  function updateZoomUI() {
+    ui.zoomLabel.textContent = `${Math.round(zoom * 10) / 10}×`;
+    ui.zoomOut.disabled = zoom <= 1.001;
+    ui.zoomIn.disabled = zoom >= ZOOM_MAX - 0.001;
+  }
+  ui.zoomIn.onclick = () => zoomStep(1);
+  ui.zoomOut.onclick = () => zoomStep(-1);
+  ui.zoomLabel.onclick = () => { resetCamera(); sfx("click"); };
+
+  // ---------- input: tap to build/select, drag to pan, pinch / wheel to zoom ----------
+  const pointers = new Map();
+  let gesture = null;
+  const local = ev => { const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+  // tap tolerance is in screen pixels, so it stays finger-sized at every zoom level
+  const hitRadius = touch => Math.min(40, (touch ? 26 : 16) / (scale * zoom));
+
+  function handleTap(sx, sy, touch) {
     if (!S || S.over || S.paused) return;
-    const p = canvasPoint(ev);
-    const touch = ev.pointerType !== "mouse";
-    const slot = nearestSlot(p.x, p.y, touch ? 36 : 26);
+    const w = toWorld(sx, sy);
+    const slot = nearestSlot(w.x, w.y, hitRadius(touch));
     if (slot == null) { S.selectedTower = null; S.selectedType = null; S.hover = null; renderInfo(); updateUI(true); return; }
     const existing = towerAt(slot);
     if (existing) {
@@ -1375,7 +1544,64 @@
       placeTower(slot);
       if (touch) S.hover = null;
     } else { S.selectedTower = null; renderInfo(); }
+  }
+
+  canvas.addEventListener("pointerdown", ev => {
+    audio.init();
+    try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+    const p = local(ev);
+    pointers.set(ev.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y });
+    if (pointers.size === 1) gesture = { moved: false, pinched: false };
+    if (pointers.size === 2 && gesture) {
+      const [a, b] = [...pointers.values()];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      gesture.pinched = true;
+      gesture.pinch = { d: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), z: zoom, world: toWorld(mx, my) };
+    }
   });
+  canvas.addEventListener("pointermove", ev => {
+    const p = local(ev);
+    const ptr = pointers.get(ev.pointerId);
+    if (!ptr) { // plain mouse hover
+      if (S && ev.pointerType === "mouse") {
+        const w = toWorld(p.x, p.y);
+        S.hover = nearestSlot(w.x, w.y, hitRadius(false));
+        canvas.style.cursor = S.hover != null ? "pointer" : zoom > 1 ? "grab" : "default";
+      }
+      return;
+    }
+    const dx = p.x - ptr.x, dy = p.y - ptr.y;
+    ptr.x = p.x; ptr.y = p.y;
+    if (pointers.size >= 2 && gesture && gesture.pinch) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      zoom = Math.max(1, Math.min(ZOOM_MAX, gesture.pinch.z * d / gesture.pinch.d));
+      camX = gesture.pinch.world.x - (mx - cssW / 2) / (scale * zoom);
+      camY = gesture.pinch.world.y - (my - cssH / 2) / (scale * zoom);
+      clampCam(); updateZoomUI();
+      return;
+    }
+    if (gesture && Math.hypot(p.x - ptr.sx, p.y - ptr.sy) > 8) gesture.moved = true;
+    if (gesture && gesture.moved && zoom > 1) {
+      camX -= dx / (scale * zoom); camY -= dy / (scale * zoom); clampCam();
+      canvas.style.cursor = "grabbing";
+    }
+  });
+  function endPointer(ev) {
+    const ptr = pointers.get(ev.pointerId);
+    if (!ptr) return;
+    pointers.delete(ev.pointerId);
+    if (ev.type === "pointerup" && pointers.size === 0 && gesture && !gesture.moved && !gesture.pinched) handleTap(ptr.x, ptr.y, ev.pointerType !== "mouse");
+    if (pointers.size === 0) gesture = null;
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("pointerleave", () => { if (S && !pointers.size) S.hover = null; });
+  canvas.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const p = local(ev);
+    setZoom(zoom * Math.exp(-ev.deltaY * 0.0015), p.x, p.y);
+  }, { passive: false });
 
   window.addEventListener("keydown", ev => {
     const k = ev.key.toLowerCase();
@@ -1391,6 +1617,9 @@
     else if (k === "f") toggleSpeed();
     else if (k === "p") pauseMenu();
     else if (k === "q") activateOverdrive();
+    else if (k === "+" || k === "=") zoomStep(1);
+    else if (k === "-" || k === "_") zoomStep(-1);
+    else if (k === "0") { resetCamera(); }
     else for (const [type, def] of Object.entries(TOWERS)) if (def.key === k) selectType(type);
   });
 
@@ -1422,10 +1651,12 @@
     W = r.width / scale; H = r.height / scale;
     CX = W / 2; CY = H / 2;
     SPAWN_R = Math.hypot(W, H) / 2 + 30;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    cssW = r.width; cssH = r.height;
     canvas.style.width = r.width + "px"; canvas.style.height = r.height + "px";
     canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
-    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+    if (zoom <= 1.001) { camX = CX; camY = CY; }
+    clampCam();
     positionBodies();
     makeStars();
   }
@@ -1445,12 +1676,13 @@
       if (uiTimer > 0.1) { uiTimer = 0; updateUI(); }
     } else if (!S) advanceBoard(raw); // menu: let the planets turn in the background
     render();
+    tutTick();
     requestAnimationFrame(frame);
   }
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
+    state: () => S, board: () => B, begin, startWave, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 

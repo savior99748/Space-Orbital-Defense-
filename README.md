@@ -69,6 +69,11 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 | Overdrive (rings spin 5× and fire rate +30% for 6s, 30s cooldown) | **⚡ Overdrive** | `Q` |
 | Speed 1× / 2× / 3× | speed button | `F` |
 | Pause / settings | ❚❚ | `P` / `Esc` |
+| Zoom in / out (up to 3×) | pinch, mouse wheel, or the **+ / −** buttons; drag to pan; tap **1×** to reset | `+` / `-` / `0` |
+
+## Tutorial
+
+On your first mission the game offers a short guided tutorial on Earth (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
 
 ## Saving, ads and achievements
 
