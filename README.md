@@ -81,6 +81,14 @@ On your first mission the game offers a short guided tutorial on Earth (build, l
 - **10 achievements** (see the menu). On Steam they unlock real Steam achievements.
 - On ad-supported platforms (CrazyGames now, mobile later), you can watch an optional ad for bonus credits between waves, or for one revive after losing. A short ad may play when you leave an end-of-game screen. The GitHub Pages version has no ads.
 
+## Press kit & business
+
+- **Press kit** (trailer, clips, GIFs, screenshots, icon, facts): `presskit/`, live at https://savior99748.github.io/Space-Orbital-Defense-/presskit/
+- **One-page pitch**: `presskit/pitch.html` (print to PDF) and `presskit/orbital-defense-pitch.pdf`
+- **Publisher shortlist**: [business/PUBLISHERS.md](business/PUBLISHERS.md) · **Pitch email**: [business/PITCH-EMAIL.md](business/PITCH-EMAIL.md)
+- **Player stats** setup and how to read them: [business/STATS.md](business/STATS.md)
+- Regenerate media after game changes: `node tools/capture-media.mjs` (needs Playwright + ffmpeg)
+
 ## Publishing
 
 The same code builds for the web, itch.io, CrazyGames, Steam/desktop and iOS/Android. See **[PUBLISHING.md](PUBLISHING.md)**.
