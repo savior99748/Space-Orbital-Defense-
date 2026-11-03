@@ -1,6 +1,6 @@
 {
   "name": "orbital-defense",
-  "version": "0.6.0",
+  "version": "2.0.0-dev",
   "private": true,
   "description": "A space tower defense game across our Solar System.",
   "scripts": {
