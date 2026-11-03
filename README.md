@@ -2,7 +2,7 @@
 
 A space tower defense game set across our Solar System. Hostile drones, comets, asteroids, shield cruisers and motherships spiral in toward the planet you're defending. You build satellites on **rotating orbit rings** around the planet and its moons, and because the rings turn, your defenses sweep around over time. Survive **30 waves** and destroy the Dreadnought, then keep going in Freeplay.
 
-**Play:** https://savior99748.github.io/Space-Orbital-Defense-/
+**Play:** https://savior99748.github.io/Space-Orbital-Defense-/ · **itch.io:** https://savior99748.itch.io/orbital-defense
 
 It's plain HTML, CSS and JavaScript: open `index.html` to play, no install needed. It's also an installable web app that works offline. It works on desktop and phones, and all sound and music are generated in the browser.
 

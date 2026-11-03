@@ -11,6 +11,7 @@ Hi [Name / Publishing team],
 I'm [your name], an independent developer. I'd like to introduce **Orbital Defense**, a tower defense game where players build satellites on **rings that orbit the planet**. The rings rotate, so defenses sweep across the sky, and moons pull invaders in with gravity. It's familiar tower defense with a twist players understand at a glance.
 
 - **Play it now (browser, phone or desktop):** https://savior99748.github.io/Space-Orbital-Defense-/
+- **itch.io page:** https://savior99748.itch.io/orbital-defense
 - **15-second clip / trailer:** [link to clip from the press kit]
 - **Press kit and one-page pitch:** https://savior99748.github.io/Space-Orbital-Defense-/presskit/
 
