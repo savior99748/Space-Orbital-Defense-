@@ -232,6 +232,7 @@ window.OD = window.OD || {};
     if (n % 10 === 0 && n < 30) add("mother", n / 10, 4);
     if (n === 30) add("dread", 1, 1);
     if (n > 30 && n % 5 === 0) add("mother", Math.floor((n - 25) / 5), 3);
+    if (n > 30 && n % 20 === 10) add("dread", 1 + Math.floor((n - 30) / 40), 2); // waves 50, 70, 90…
     return g;
   };
 

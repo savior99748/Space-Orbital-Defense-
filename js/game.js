@@ -30,6 +30,15 @@
   let W = 1000, H = 700, CX = 500, CY = 350, SPAWN_R = 640, scale = 1;
   let MAP_KEY = MAP_ORDER.includes(store.get("od_map")) ? store.get("od_map") : "earth";
   let DIFF_KEY = DIFFICULTY[store.get("od_diff")] ? store.get("od_diff") : "medium";
+  let MODE = store.get("od_mode") === "endless" ? "endless" : "campaign";
+  const LB = OD.leaderboard;
+  let lbView = null; // { map, diff } while the leaderboard screen is open
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+  // Endless milestones: bonus credits + score at waves 40, 50, 75, 100, then every 25.
+  const isMilestone = w => [40, 50, 75, 100].includes(w) || (w > 100 && w % 25 === 0);
+  const milestoneReward = w => (w >= 100 ? 3000 : w >= 75 ? 1500 : w >= 50 ? 800 : 500);
+  const nextMilestone = w => { for (let m = w + 1; ; m++) if (isMilestone(m)) return m; };
   let MAP = MAPS[MAP_KEY];
   let B = null;
 
@@ -351,8 +360,9 @@
       sfx("clear");
       unlock("first_wave");
       if ([1, 3, 5, 10, 15, 20, 25, 30].includes(S.wave) || (S.wave > 30 && S.wave % 10 === 0)) stats.track(`wave/${S.mapKey}/${S.wave}`);
-      if (S.wave === OD.WIN_WAVE && !S.won) return victory();
-      toast(`Wave ${S.wave} cleared! +${bonus} credits`);
+      if (S.wave === OD.WIN_WAVE && !S.won && !S.endless) return victory();
+      if (S.endless && isMilestone(S.wave)) endlessMilestone();
+      else toast(`Wave ${S.wave} cleared! +${bonus} credits`);
       saveRun();
       updateUI(true);
       if (S.auto) setTimeout(() => S && !S.paused && startWave(), 1200);
@@ -632,7 +642,7 @@
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
       v: 1, map: S.mapKey, diff: S.diffKey, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
-      stats: S.stats, realTime: S.realTime, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave,
+      stats: S.stats, realTime: S.realTime, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless,
       towers: S.towers.map(packTower), retired: S.retired.map(packTower),
       board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
     }));
@@ -644,7 +654,7 @@
   const clearRun = () => store.remove(RUN_KEY);
   function resumeRun(r) {
     MAP_KEY = r.map; DIFF_KEY = r.diff;
-    begin(r.map, r.diff, true);
+    begin(r.map, r.diff, true, !!r.endless);
     Object.assign(S, { wave: r.wave, lives: r.lives, money: r.money, score: r.score, realTime: r.realTime || 0,
       won: !!r.won, freeplay: !!r.freeplay, revived: !!r.revived, adWave: r.adWave });
     Object.assign(S.stats, r.stats || {});
@@ -674,6 +684,8 @@
     { id: "win_hard", name: "Hardened", desc: "Win any map on Hard." },
     { id: "grand_tour", name: "Grand Tour", desc: "Win on all eight planets." },
     { id: "win_sol", name: "Guardian of the Sun", desc: "Win the Solar System map." },
+    { id: "endless_50", name: "Deep Space", desc: "Reach wave 50 in Endless mode." },
+    { id: "endless_100", name: "Centurion", desc: "Reach wave 100 in Endless mode." },
   ];
   function getAch() { try { return JSON.parse(store.get("od_ach") || "{}"); } catch { return {}; } }
   function unlock(id) {
@@ -705,17 +717,48 @@
   P.onAdStart = () => { adPause = true; audio.setMuted(true); };
   P.onAdEnd = () => { adPause = false; audio.setMuted(false); };
 
+  // ---------- endless milestones ----------
+  function endlessMilestone() {
+    const w = S.wave, reward = Math.round(milestoneReward(w) * S.diff.reward);
+    S.money += reward; S.stats.earnedBonus += reward;
+    S.score += w * 100;
+    S.stats.milestones = (S.stats.milestones || 0) + 1;
+    toast(`🏁 Endless milestone: wave ${w}! +${reward} credits`, 3200);
+    sfx("win");
+    const root = B.bodies[0];
+    burst(root.x, root.y, "#ffd166", 70, 280, 1.3);
+    ringFx(root.x, root.y, root.r * 3, "#ffd166", 0.9);
+    S.shake = Math.max(S.shake, 6);
+    stats.track(`endless/milestone-${w}`);
+    if (w >= 50) unlock("endless_50");
+    if (w >= 100) unlock("endless_100");
+  }
+
   // ---------- end states + stats screen ----------
   function gameOver() {
     S.over = true; S.lives = 0;
     audio.setIntensity(0);
     P.gameplayStop();
     clearRun();
-    stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
-    const { rec, newBest } = saveRec();
     sfx("lose");
-    showStats("over", rec, newBest);
+    if (S.endless) {
+      stats.track(`endless-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
+      S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
+      showStats("over", null, false, S.lastLb);
+    } else {
+      stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
+      const { rec, newBest } = saveRec();
+      showStats("over", rec, newBest);
+    }
     updateUI(true);
+  }
+
+  function lbTable(entries, highlightId) {
+    if (!entries.length) return `<p class="muted">No Endless runs yet. Choose <b>∞ Endless</b> on the menu and see how far you get!</p>`;
+    const medal = i => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1);
+    return `<table class="lb"><thead><tr><th>#</th><th>Name</th><th>Wave</th><th>Score</th><th>Date</th></tr></thead><tbody>
+      ${entries.map((e, i) => `<tr class="${e.id === highlightId ? "me" : ""}"><td>${medal(i)}</td><td>${esc(e.name || "You")}</td><td><b>${e.wave}</b></td><td>${e.score.toLocaleString()}</td><td>${esc(e.date)}</td></tr>`).join("")}
+      </tbody></table>`;
   }
 
   function victory() {
@@ -733,7 +776,7 @@
     showStats("won", rec, newBest);
   }
 
-  function showStats(mode, rec, newBest) {
+  function showStats(mode, rec, newBest, lb) {
     const st = S.stats;
     const all = [...S.towers, ...S.retired].filter(t => (t.dmg || 0) > 0 || (t.earned || 0) > 0 || mode === "pause");
     all.sort((a, b) => (b.dmg || 0) - (a.dmg || 0) || (b.earned || 0) - (a.earned || 0));
@@ -743,6 +786,8 @@
     const lifeName = MAP.lifeName || MAP.name;
     const head = mode === "won"
       ? `<h1 style="color:var(--good)">${MAP.final ? "SOLAR SYSTEM SAVED" : `${MAP.name.toUpperCase()} SAVED`}</h1><p>You destroyed the Dreadnought and survived all ${OD.WIN_WAVE} waves!</p>`
+      : mode === "over" && S.endless
+        ? `<h1 style="color:var(--gold)">ENDLESS RUN OVER</h1><p>You reached <b>wave ${S.wave}</b> with <b>${S.score.toLocaleString()}</b> points.</p>`
       : mode === "over"
         ? `<h1 style="color:var(--danger)">${MAP.final ? "THE SUN HAS FALLEN" : `${MAP.name.toUpperCase()} LOST`}</h1><p>You held out until <b>wave ${S.wave}</b>.</p>`
         : `<h1>MISSION STATS</h1><p class="muted">Wave ${S.wave} in progress</p>`;
@@ -769,6 +814,10 @@
       ${head}
       <p class="muted">${MAP.name} · <span style="color:${S.diff.color}">${S.diff.name}</span>${rec ? ` · Best: wave ${rec.wave}, ${rec.score.toLocaleString()} pts` : ""}</p>
       ${newBest ? `<p class="newbest">★ New high score! ★</p>` : ""}
+      ${lb ? `
+        <p class="${lb.rank === 1 ? "newbest" : "muted"}">${lb.rank === 1 ? "★ New personal best! ★" : lb.rank ? `#${lb.rank} on your ${MAP.name} · ${S.diff.name} leaderboard` : "Not in your top 10 this time. One more run?"}</p>
+        ${lb.rank && !LB.nickname() ? `<div class="nick"><input id="nickInput" maxlength="16" placeholder="Name for the leaderboard" autocomplete="off"><button class="primary" data-act="save-nick">Save</button></div>` : ""}
+        ${lbTable(lb.entries, lb.entry.id)}` : ""}
       <div class="tiles">
         ${tile("Score", S.score.toLocaleString(), "var(--accent)")}
         ${tile("Waves", S.wave)}
@@ -779,6 +828,7 @@
         ${tile("Credits earned", fmt(st.earnedKills + st.earnedBonus + st.earnedMining), "var(--gold)")}
         ${tile("Credits spent", fmt(st.spent), "var(--gold)")}
         ${tile("Time", `${mins}:${String(secs).padStart(2, "0")}`)}
+        ${S.endless ? tile("Milestones", S.stats.milestones || 0, "var(--gold)") : ""}
       </div>
       <h3 class="rep-title">Satellite report</h3>
       <div class="report">${rows || `<p class="muted">No satellites built.</p>`}${all.length > 14 ? `<p class="muted">…and ${all.length - 14} more</p>` : ""}</div>
@@ -1164,7 +1214,7 @@
     const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over].join("|");
     if (key === lastUI && !force) return;
     lastUI = key;
-    ui.wave.textContent = S.won || S.freeplay ? `${S.wave}` : `${S.wave}/${OD.WIN_WAVE}`;
+    ui.wave.textContent = S.endless ? `${S.wave} ∞` : S.won || S.freeplay ? `${S.wave}` : `${S.wave}/${OD.WIN_WAVE}`;
     ui.livesLabel.textContent = MAP.lifeName || MAP.name;
     ui.lives.textContent = Math.max(0, S.lives);
     ui.lives.classList.toggle("danger", S.lives / S.diff.lives < 0.3);
@@ -1190,7 +1240,8 @@
     const pvKey = `${pv}|${S.waveActive}`;
     if (pvKey !== lastPreview) {
       lastPreview = pvKey;
-      ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${previewText(pv)}`;
+      const nm = S.endless ? nextMilestone(S.wave) : 0;
+      ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${previewText(pv)}${S.endless ? `<span class="chip milestone">🏁 Wave ${nm}: +${Math.round(milestoneReward(nm) * S.diff.reward)}</span>` : ""}`;
     }
     if (S.selectedTower) {
       ui.info.querySelectorAll("[data-up]").forEach(b => {
@@ -1223,7 +1274,7 @@
     return `<button class="map-card${key === MAP_KEY ? " selected" : ""}${m.final ? " final" : ""}" data-map="${key}">
       <canvas width="140" height="100" data-map-preview="${key}"></canvas>
       <b>${m.name}</b><small>${m.moons.length ? `${m.moons.length} ${m.final ? "planets" : m.moons.length === 1 ? "moon" : "moons"}` : "No moons"}</small>
-      <span class="medals">${medals}</span></button>`;
+      <span class="medals">${medals}</span>${LB.bestMap(key) ? `<span class="eb" title="Best Endless wave">∞ ${LB.bestMap(key)}</span>` : ""}</button>`;
   }
 
   function drawMapPreview(c, key) {
@@ -1262,7 +1313,7 @@
     showOverlay(`
       <h1>ORBITAL DEFENSE</h1>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
-      ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
+      ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
         <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
@@ -1272,8 +1323,16 @@
       <div class="diff-row">
         ${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === DIFF_KEY ? " selected" : ""}" data-diff="${k}" style="--c:${d.color}"><b>${d.name}</b><small>${d.lives} HP</small></button>`).join("")}
       </div>
-      <p class="muted small">${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>
-      <div class="btns"><button class="primary big" data-act="start">Launch Mission ▶</button><button data-act="tutorial">🎓 Tutorial</button></div>
+      <div class="mode-row">
+        <button class="mode-btn${MODE === "campaign" ? " selected" : ""}" data-mode="campaign"><b>Campaign</b><small>Survive 30 waves</small></button>
+        <button class="mode-btn${MODE === "endless" ? " selected" : ""}" data-mode="endless"><b>∞ Endless</b><small>How far can you go?</small></button>
+      </div>
+      ${MODE === "endless" ? (() => {
+        const lbTop = LB.top(MAP_KEY, DIFF_KEY)[0], bestAll = LB.bestAll();
+        return `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
+          <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
+      })() : `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
+      <div class="btns"><button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : "Launch Mission ▶"}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button></div>
       ${soundButtons()}
       <details><summary>How to play</summary>
         <ul>
@@ -1284,6 +1343,7 @@
           <li>Mining Sats earn credits during waves. Shields regenerate; railguns break them fastest.</li>
           <li>Keys: <b>1–7</b> satellites · <b>Space</b> wave · <b>Q</b> overdrive · <b>F</b> speed · <b>P</b> pause · <b>Esc</b> cancel</li>
           <li>Your game saves automatically between waves; use <b>Continue</b> to pick up where you left off.</li>
+          <li><b>∞ Endless</b>: waves never stop. Reach milestones at waves 40, 50, 75 and 100 for bonus credits, and climb your leaderboard.</li>
         </ul>
       </details>
       <details><summary>🏆 Achievements (${ACHIEVEMENTS.filter(a => got[a.id]).length}/${ACHIEVEMENTS.length})</summary>
@@ -1293,13 +1353,26 @@
     ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
   }
 
+  function showLeaderboards() {
+    lbView = lbView || { map: MAP_KEY, diff: DIFF_KEY };
+    const { map, diff } = lbView;
+    showOverlay(`
+      <h1>🏆 LEADERBOARDS</h1>
+      <p class="muted">Endless mode · your best runs on this device</p>
+      <div class="lb-maps">${MAP_ORDER.map(k => `<button class="chip-btn${k === map ? " selected" : ""}" data-lbmap="${k}">${MAPS[k].name}${LB.bestMap(k) ? ` <small>∞${LB.bestMap(k)}</small>` : ""}</button>`).join("")}</div>
+      <div class="diff-row">${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === diff ? " selected" : ""}" data-lbdiff="${k}" style="--c:${d.color}"><b>${d.name}</b></button>`).join("")}</div>
+      ${lbTable(LB.top(map, diff))}
+      <p class="muted small">🌍 Worldwide leaderboards are coming soon.</p>
+      <div class="btns"><button class="primary" data-act="lb-play">Play Endless here ∞</button><button data-act="menu">← Back</button></div>`, true);
+  }
+
   function pauseMenu() {
     if (!S || S.over) return;
     S.paused = true;
     P.gameplayStop();
     showOverlay(`
       <h1>PAUSED</h1>
-      <p class="muted">${MAP.name} · Wave ${S.wave} · <span style="color:${S.diff.color}">${S.diff.name}</span></p>
+      <p class="muted">${MAP.name} · Wave ${S.wave}${S.endless ? " · ∞ Endless" : ""} · <span style="color:${S.diff.color}">${S.diff.name}</span></p>
       <div class="btns"><button class="primary" data-act="resume">Resume</button><button data-act="stats">📊 Stats</button></div>
       ${soundButtons()}
       <div class="btns"><button data-act="retry">Restart</button><button data-act="menu">Main Menu</button></div>`);
@@ -1308,6 +1381,10 @@
 
   ui.overlay.addEventListener("click", ev => {
     audio.init();
+    const lm = ev.target.closest("[data-lbmap]"), ld = ev.target.closest("[data-lbdiff]"), md = ev.target.closest("[data-mode]");
+    if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
+    if (ld) { lbView.diff = ld.dataset.lbdiff; sfx("click"); return showLeaderboards(); }
+    if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
     const mc = ev.target.closest("[data-map]");
     if (mc) { MAP_KEY = mc.dataset.map; store.set("od_map", MAP_KEY); sfx("click"); return mainMenu(); }
     const d = ev.target.closest("[data-diff]");
@@ -1330,10 +1407,21 @@
             <p>Take a quick guided game on Earth to learn the basics. It takes about 2 minutes.</p>
             <div class="btns"><button class="primary big" data-act="tutorial">🎓 Play tutorial</button></div>
             <div class="btns"><button data-act="skiptut">Skip, I know how to play</button></div>`);
-        } else begin(MAP_KEY, DIFF_KEY);
+        } else begin(MAP_KEY, DIFF_KEY, false, MODE === "endless");
         break;
       case "tutorial": startTutorial(); break;
-      case "skiptut": store.set(TUT_KEY, "1"); begin(MAP_KEY, DIFF_KEY); break;
+      case "skiptut": store.set(TUT_KEY, "1"); begin(MAP_KEY, DIFF_KEY, false, MODE === "endless"); break;
+      case "leaderboards": lbView = { map: MAP_KEY, diff: DIFF_KEY }; showLeaderboards(); break;
+      case "lb-play": MAP_KEY = lbView.map; DIFF_KEY = lbView.diff; MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_diff", DIFF_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
+      case "save-nick": {
+        const input = document.getElementById("nickInput");
+        const name = LB.setNickname(input ? input.value : "");
+        if (!name) { if (input) input.focus(); break; }
+        S.lastLb.entries = LB.top(S.mapKey, S.diffKey);
+        showStats("over", null, false, S.lastLb);
+        toast(`Saved as ${name}`);
+        break;
+      }
       case "continue": { const r = loadRun(); if (r) resumeRun(r); break; }
       case "discard": clearRun(); mainMenu(); break;
       case "revive":
@@ -1350,7 +1438,7 @@
       case "resume": S.paused = false; hideOverlay(); P.gameplayStart(); updateUI(true); break;
       case "pause": pauseMenu(); break;
       case "stats": showStats("pause"); break;
-      case "retry": begin(S.mapKey, S.diffKey); break;
+      case "retry": begin(S.mapKey, S.diffKey, false, !!S.endless); break;
       case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, S.diffKey); break; }
       case "menu": mainMenu(); break;
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
@@ -1360,12 +1448,13 @@
     }
   });
 
-  function begin(mapKey, diffKey, resuming) {
+  function begin(mapKey, diffKey, resuming, endless) {
     audio.init();
     abandonTutorial();
     buildBoard(mapKey); B.key = mapKey;
     resetCamera();
     S = newState(diffKey);
+    S.endless = !!endless;
     P.gameplayStart();
     document.body.classList.remove("in-menu");
     lastUI = ""; lastPreview = -1;
@@ -1373,9 +1462,9 @@
     renderInfo();
     updateUI(true);
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
-    stats.track(`game-start/${mapKey}/${diffKey}`);
+    stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : ""}`);
     clearRun(); saveRun();
-    toast(`${MAP.name}: ${MAP.feature}`, 3500);
+    toast(S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
   }
 
@@ -1618,6 +1707,10 @@
   }, { passive: false });
 
   window.addEventListener("keydown", ev => {
+    if (ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA")) {
+      if (ev.key === "Enter" && ev.target.id === "nickInput") { const b = ui.overlay.querySelector('[data-act="save-nick"]'); if (b) b.click(); }
+      return;
+    }
     const k = ev.key.toLowerCase();
     if (!S || (S.won && !S.freeplay) || S.over) return;
     if (k === "escape") {
@@ -1696,7 +1789,7 @@
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    state: () => S, board: () => B, begin, startWave, LB, isMilestone, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };

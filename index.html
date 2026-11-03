@@ -151,6 +151,27 @@
   .resume { display: flex; gap: 6px; margin: 12px 0 4px; }
   .resume button.primary { flex: 1; font-size: 15px; padding: 10px; }
   .version a { color: var(--muted); }
+  /* ---------- endless + leaderboards ---------- */
+  .mode-row { display: flex; gap: 8px; margin-top: 8px; }
+  .mode-btn { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .mode-btn b { color: var(--accent); }
+  .mode-btn small { color: var(--muted); font-size: 11px; }
+  .mode-btn.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, 0 0 12px rgba(108,240,255,.25); }
+  .milestones { font-size: 13px; color: var(--muted); display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .milestones .ms { border: 1px solid #3a3f6e; border-radius: 99px; padding: 1px 9px; }
+  .milestones .ms.got { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 8px rgba(255,209,102,.35); }
+  .chip.milestone { border-color: var(--gold); color: var(--gold); }
+  .map-card .eb { position: absolute; top: 4px; right: 6px; font-size: 11px; color: var(--accent); font-weight: 700; }
+  table.lb { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+  table.lb th { color: var(--muted); font-weight: 500; font-size: 12px; text-align: left; padding: 4px 6px; border-bottom: 1px solid #2c3270; }
+  table.lb td { padding: 6px; border-bottom: 1px solid #191d3d; text-align: left; }
+  table.lb tr.me td { background: rgba(255,209,102,.12); color: var(--gold); }
+  .lb-maps { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 12px 0 4px; }
+  .chip-btn { padding: 5px 10px; font-size: 13px; border-radius: 99px; }
+  .chip-btn small { color: var(--accent); }
+  .chip-btn.selected { border-color: var(--accent); color: var(--accent); }
+  .nick { display: flex; gap: 6px; justify-content: center; margin: 8px 0; }
+  .nick input { font: inherit; color: var(--text); background: #0a0d1f; border: 1px solid var(--gold); border-radius: 8px; padding: 7px 10px; width: min(240px, 60vw); user-select: text; -webkit-user-select: text; }
   .ach { list-style: none; padding: 0; }
   .ach li { opacity: .55; }
   .ach li.got { opacity: 1; }
@@ -292,6 +313,7 @@
 <script src="js/audio.js"></script>
 <script src="js/platform.js"></script>
 <script src="js/analytics.js"></script>
+<script src="js/leaderboard.js"></script>
 <script src="js/draw.js"></script>
 <script src="js/bodies.js"></script>
 <script src="js/game.js"></script>
