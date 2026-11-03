@@ -59,7 +59,7 @@ Steam setup:
 1. Pay the Steam Direct fee in Steamworks and get your **App ID**.
 2. Put the App ID in `platforms/electron/steam_appid.txt`. The app connects to Steam through `steamworks.js` and shows the overlay.
 3. In Steamworks, create achievements with these API names. They are the game's ids in capitals:
-   `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`.
+   `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`, `ENDLESS_50`, `ENDLESS_100`.
 4. Upload the `release/` builds with Valve's SteamPipe tools.
 
 macOS builds must be made (and signed) on a Mac. Windows builds can be made on Windows, or on Linux with Wine.

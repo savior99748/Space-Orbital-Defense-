@@ -22,6 +22,9 @@ On CrazyGames, stats are off by default (`statsOnPortals: false`) because CrazyG
 | `wave/<map>/<N>` | Reached wave 1, 3, 5, 10, 15, 20, 25, 30 (then every 10) |
 | `game-over/<map>/<difficulty>/w<range>` | Where players lose (waves 1-4, 5-9, 10-19, 20-29, 30+) |
 | `win/<map>/<difficulty>` | Beat all 30 waves |
+| `game-start/<map>/<difficulty>/endless` | An Endless run started |
+| `endless/milestone-<wave>` | Reached an Endless milestone (40, 50, 75, 100…) |
+| `endless-over/<map>/<difficulty>/w<range>` | Where Endless runs end (ranges go up to 100+) |
 | `quit/<map>/w<range>` | Left to the menu mid-game (possible frustration or boredom) |
 | `path/<satellite>/<specialization>` | Which tier-3 specialization players choose |
 | `ad/credits`, `ad/revive` | Optional rewarded ads watched (portal and mobile builds) |

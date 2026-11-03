@@ -3,7 +3,10 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## v2.0.0 (in development)
-Planned: endless mode with leaderboards, and reasons to come back daily.
+- **∞ Endless mode**: pick Campaign or Endless on the menu. Waves never stop and the Dreadnought returns at waves 50, 70, 90…
+- **Endless milestones** at waves 40, 50, 75, 100 (then every 25): bonus credits and score, with milestone badges on the menu and a next-milestone chip during play
+- **Leaderboards**: top-10 Endless runs per map and difficulty on each device, with your name, wave, score and date; a leaderboard screen on the menu; best Endless wave shown on each map card. Built so a worldwide board can be added next.
+- 2 new achievements: Deep Space (Endless wave 50) and Centurion (Endless wave 100)
 - Added itch.io page link to the press kit, pitch and README.
 
 ## v1.0.0 (Nov 3, 2026): first public release

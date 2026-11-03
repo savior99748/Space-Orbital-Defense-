@@ -23,7 +23,7 @@ window.OD = window.OD || {};
     setEnabled(on) { store.set("od_stats_off", on ? "0" : "1"); },
   });
 
-  let queue = [], loaded = false, loading = false;
+  let queue = [], loaded = false, loading = false, blocked = false;
   function load() {
     if (loading || !A.enabled) return;
     loading = true;
@@ -34,6 +34,7 @@ window.OD = window.OD || {};
     s.dataset.goatcounter = `https://${cfg.goatcounter}.goatcounter.com/count`;
     s.dataset.goatcounterSettings = JSON.stringify({ no_onload: true });
     s.onload = () => { loaded = true; flush(); };
+    s.onerror = () => { blocked = true; queue = []; }; // ad blocker or offline: stop quietly
     document.head.appendChild(s);
   }
   function flush() {
@@ -45,8 +46,8 @@ window.OD = window.OD || {};
   // Count one event. Names are short paths, e.g. "game-start/earth/medium".
   A.track = function (path) {
     if (debug) console.log("[stats]", path);
-    if (!A.enabled) return;
-    queue.push(path);
+    if (!A.enabled || blocked) return;
+    if (queue.length < 200) queue.push(path);
     load();
     flush();
   };
@@ -69,6 +70,7 @@ window.OD = window.OD || {};
     A.track(`session/${P.name}`);
   };
 
-  const bucket = w => (w >= 30 ? "30+" : w >= 20 ? "20-29" : w >= 10 ? "10-19" : w >= 5 ? "5-9" : "1-4");
+  const bucket = w => (w >= 100 ? "100+" : w >= 75 ? "75-99" : w >= 50 ? "50-74" : w >= 40 ? "40-49" : w >= 30 ? "30-39" :
+    w >= 20 ? "20-29" : w >= 10 ? "10-19" : w >= 5 ? "5-9" : "1-4");
   A.bucket = bucket;
 })(window.OD);

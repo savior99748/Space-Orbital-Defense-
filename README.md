@@ -71,6 +71,10 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 | Pause / settings | ❚❚ | `P` / `Esc` |
 | Zoom in / out (up to 3×) | pinch, mouse wheel, or the **+ / −** buttons; drag to pan; tap **1×** to reset | `+` / `-` / `0` |
 
+## Endless mode & leaderboards
+
+Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Each map and difficulty keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
+
 ## Tutorial
 
 On your first mission the game offers a short guided tutorial on Earth (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
