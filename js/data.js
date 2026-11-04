@@ -7,16 +7,16 @@ window.OD = window.OD || {};
 
   OD.DIFFICULTY = {
     easy: {
-      name: "Easy", color: "#7dff9a", money: 450, lives: 50, hp: 0.8, growth: 0.2, speed: 0.95, reward: 1.15,
+      name: "Easy", color: "#7dff9a", money: 450, lives: 50, hp: 0.8, growth: 0.2, late: 0.018, late2: 0.03, speed: 0.95, reward: 1.15,
       desc: "50 planet HP, extra credits, weaker enemies.",
     },
     medium: {
-      name: "Medium", color: "#ffd166", money: 325, lives: 25, hp: 1.0, growth: 0.3, speed: 1.0, reward: 1.0,
+      name: "Medium", color: "#ffd166", money: 325, lives: 25, hp: 1.0, growth: 0.33, late: 0.038, late2: 0.07, speed: 1.03, reward: 1.0,
       desc: "25 planet HP. A real fight past wave 15.",
     },
     hard: {
-      name: "Hard", color: "#ff5c7a", money: 300, lives: 10, hp: 1.15, growth: 0.36, speed: 1.08, reward: 0.9,
-      desc: "10 planet HP, tough, fast enemies. Every leak hurts.",
+      name: "Hard", color: "#ff5c7a", money: 300, lives: 15, hp: 1.05, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
+      desc: "15 planet HP, tough, fast enemies that ramp up hard after wave 10.",
     },
   };
 
@@ -211,7 +211,7 @@ window.OD = window.OD || {};
     asteroid: { name: "Asteroid",       hp: 150,   speed: 30,  reward: 10,  size: 16, color: "#a68a6d", dmg: 2,   spiral: 0.6, split: { type: "rock", n: 2 } },
     rock:     { name: "Rock",           hp: 45,    speed: 40,  reward: 3,   size: 9,  color: "#8f7a64", dmg: 1,   spiral: 0.6 },
     cruiser:  { name: "Shield Cruiser", hp: 150,   shield: 130, speed: 36, reward: 16, size: 13, color: "#5c9dff", dmg: 3, spiral: 0.7 },
-    mother:   { name: "Mothership",     hp: 1500,  speed: 20,  reward: 150, size: 30, color: "#ff3df2", dmg: 15,  spiral: 0.5, boss: true, spawn: { type: "drone", every: 4 } },
+    mother:   { name: "Mothership",     hp: 1500,  speed: 20,  reward: 150, size: 30, color: "#ff3df2", dmg: 6,  spiral: 0.5, boss: true, spawn: { type: "drone", every: 4 } },
     dread:    { name: "Dreadnought",    hp: 6000, shield: 2200, speed: 13, reward: 600, size: 44, color: "#ff2d55", dmg: 20, spiral: 0.45, boss: true, spawn: { type: "cruiser", every: 6 } },
   };
 
@@ -237,6 +237,8 @@ window.OD = window.OD || {};
   };
 
   OD.hpScale = function (n, diff) {
-    return diff.hp * (1 + (n - 1) * diff.growth + Math.max(0, n - 12) ** 2 * 0.02);
+    // linear growth, plus a curve from wave 8 that is steeper on harder difficulties
+    // and a second, steeper climb from wave 18 so the last stretch stays tense
+    return diff.hp * (1 + (n - 1) * diff.growth + Math.max(0, n - 8) ** 2 * diff.late + Math.max(0, n - 18) ** 2 * diff.late2);
   };
 })(window.OD);

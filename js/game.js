@@ -305,7 +305,8 @@
       if (doFreeze) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, "#dff8ff", 0.45); sfx("freeze"); } }
     }
 
-    const spd = S.diff.speed * (MAP.enemySpeed || 1);
+    // invaders speed up a little each wave after wave 10 (up to +25%)
+    const spd = S.diff.speed * (MAP.enemySpeed || 1) * (1 + Math.min(0.25, Math.max(0, S.wave - 10) * 0.012));
     const rootR = B.bodies[0].r;
     for (const e of S.enemies) {
       if (e.dead) continue;

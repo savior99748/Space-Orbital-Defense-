@@ -7,6 +7,7 @@ Each release records the exact git commit it was built from. `git checkout <comm
 - **Endless milestones** at waves 40, 50, 75, 100 (then every 25): bonus credits and score, with milestone badges on the menu and a next-milestone chip during play
 - **Leaderboards**: top-10 Endless runs per map and difficulty on each device, with your name, wave, score and date; a leaderboard screen on the menu; best Endless wave shown on each map card. Built so a worldwide board can be added next.
 - 2 new achievements: Deep Space (Endless wave 50) and Centurion (Endless wave 100)
+- **Difficulty rebalance** (tested with a skilled-player bot): the wave-10 Mothership no longer ends Hard runs instantly (leak damage 15 → 6); enemy health now climbs more steeply after wave 8 and again after wave 18, and invaders speed up ~1.2% per wave after wave 10 (max +25%). Hard now has 15 HP and the steepest late curve. Result: Easy stays beginner-friendly, Medium costs HP late, Hard is won by a skilled bot about 3 in 5 times, often with only a few HP left.
 - Added itch.io page link to the press kit, pitch and README.
 
 ## v1.0.0 (Nov 3, 2026): first public release
