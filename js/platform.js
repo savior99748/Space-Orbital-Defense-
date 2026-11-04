@@ -120,7 +120,7 @@ window.OD = window.OD || {};
   }
 
   // ---------- installable web app (PWA): offline support on the plain web build ----------
-  if (name === "web" && "serviceWorker" in navigator && /^https?:$/.test(location.protocol) && window.top === window.self) {
+  if (name === "web" && !window.OD_NO_SW && "serviceWorker" in navigator && /^https?:$/.test(location.protocol) && window.top === window.self) {
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
   }
 })(window.OD);

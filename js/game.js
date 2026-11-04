@@ -1635,7 +1635,11 @@
   function handleTap(sx, sy, touch) {
     if (!S || S.over || S.paused) return;
     const w = toWorld(sx, sy);
-    const slot = nearestSlot(w.x, w.y, hitRadius(touch));
+    tapSlot(nearestSlot(w.x, w.y, hitRadius(touch)), touch);
+  }
+  // Act on a tapped slot (or empty space when slot is null). Also used by the 3D view.
+  function tapSlot(slot, touch) {
+    if (!S || S.over || S.paused) return;
     if (slot == null) { S.selectedTower = null; S.selectedType = null; S.hover = null; renderInfo(); updateUI(true); return; }
     const existing = towerAt(slot);
     if (existing) {
@@ -1783,14 +1787,14 @@
       uiTimer += raw;
       if (uiTimer > 0.1) { uiTimer = 0; updateUI(); }
     } else if (!S) advanceBoard(raw); // menu: let the planets turn in the background
-    render();
+    if (!window.OD_NO2D) render(); // the 3D view draws instead when OD_NO2D is set
     tutTick();
     requestAnimationFrame(frame);
   }
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, LB, isMilestone, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
