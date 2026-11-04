@@ -4,7 +4,8 @@ import * as THREE from "../vendor/three/three.module.js";
 
 const od = () => window.__od;
 const TAU = Math.PI * 2;
-const SAT = 0.7;       // satellites are drawn at 70% of their 2D size (planets are bigger)
+const SAT = 1.0;       // satellites are drawn at their 2D size…
+const SAT_MIN_PX = 13; // …and the body never smaller than ~13 px across on screen
 const H = 2;           // height above the orbital plane for satellites / effects
 
 // ---------- renderer, scene, camera ----------
@@ -257,7 +258,7 @@ function buildWorld(B) {
     return line;
   });
   // slots
-  const slotMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(3.4, 10, 8), new THREE.MeshBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.6 }), B.slots.length);
+  const slotMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(4.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.6 }), B.slots.length);
   group.add(slotMesh);
   scene.add(group);
   world = { B, group, bodies, rings, slotMesh };
@@ -292,7 +293,7 @@ function buildSat(t) {
   const g = new THREE.Group(), turret = new THREE.Group(); turret.name = "turret";
   // body + solar panels along the orbit (local z = along the ring)
   g.add(part(geo.sph, mat("#1a1f40", col, 0.25), 18, 14, 18));
-  const pl = 14 + lvl * 4, panel = mat(lvl >= 3 ? pc : "#3c5bb8", lvl >= 3 ? pc : "#000000", lvl >= 3 ? 0.25 : 0);
+  const pl = 8 + lvl * 2.5, panel = mat(lvl >= 3 ? pc : "#3c5bb8", lvl >= 3 ? pc : "#000000", lvl >= 3 ? 0.25 : 0);
   if (t.type !== "carrier") { g.add(part(geo.box, panel, 7, 1.2, pl, 0, 0, 9 + pl / 2)); g.add(part(geo.box, panel, 7, 1.2, pl, 0, 0, -9 - pl / 2)); }
   const M = mat(col, col, glow), dark = mat("#20243f");
   switch (T.kind) {
@@ -342,7 +343,7 @@ function buildSat(t) {
   }
   g.add(turret);
   if (lvl >= 4) { const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(hexA(pc, 0.55)), blending: THREE.AdditiveBlending, depthWrite: false })); halo.scale.set(70, 70, 1); g.add(halo); }
-  g.scale.setScalar(SAT); // model units match the 2D sizes
+  g.scale.setScalar(SAT); // model units match the 2D sizes (rescaled every frame, see satScale)
   return g;
 }
 const hexA = (h, a) => { const [r, g, b] = hex(h); return `rgba(${r},${g},${b},${a})`; };
@@ -423,7 +424,10 @@ function sync() {
   world.slotMesh.material.opacity = building ? 0.95 : 0.4;
   world.slotMesh.material.color.set(building ? 0xffd166 : 0x6cf0ff);
 
-  // satellites
+  // satellites: grow when zoomed out so they stay at least SAT_MIN_PX across on screen
+  const viewH = canvas.clientHeight || 1;
+  const worldPerPx = 2 * cam.dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / viewH;
+  const satScale = Math.max(SAT, SAT_MIN_PX * worldPerPx / 20); // a satellite body is ~20 model units wide
   const seen = new Set();
   if (S) for (const tw of S.towers) {
     seen.add(tw.id);
@@ -432,6 +436,7 @@ function sync() {
     if (!m || m.userData.key !== key) { if (m) scene.remove(m); m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
     const p = OD.slotPos(tw.slot), ring = B.rings[B.slots[tw.slot].ring], body = B.bodies[ring.body];
     m.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y);
+    m.scale.setScalar(satScale);
     // orient: local x = outward from the body, local z = along the orbit
     const q = OD.ringPoint(ring, p.a + 0.02);
     _ax.set(p.x - body.x, p.z || 0, p.y - body.y).normalize();
