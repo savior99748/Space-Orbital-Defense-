@@ -9,6 +9,8 @@ Each release records the exact git commit it was built from. `git checkout <comm
 - 2 new achievements: Deep Space (Endless wave 50) and Centurion (Endless wave 100)
 - **Difficulty rebalance** (tested with a skilled-player bot): the wave-10 Mothership no longer ends Hard runs instantly (leak damage 15 → 6); enemy health now climbs more steeply after wave 8 and again after wave 18, and invaders speed up ~1.2% per wave after wave 10 (max +25%). Hard now has 15 HP and the steepest late curve. Result: Easy stays beginner-friendly, Medium costs HP late, Hard is won by a skilled bot about 3 in 5 times, often with only a few HP left.
 - Added itch.io page link to the press kit, pitch and README.
+- **3D preview** (`/proto3d/`, separate from the main game): Three.js view of the same gameplay. Lit 3D planets with generated textures, clouds and atmosphere; Earth bigger with LEO / MEO / HEO rings; 70%-size satellite models that change with tier and path; drag to rotate, pinch to zoom, tap to build. Three.js 0.186.1 is bundled in `vendor/three/` (MIT).
+- **Full 3D gameplay in the preview**: the engine now works in 3D (heights, 3D distances and ranges, 3D enemy flight, homing missiles, railgun lines, explosions, fighters). On 2D maps every height stays 0, so the main game plays exactly as before. The preview's Earth uses tilted orbits (LEO 10°, MEO 30°, HEO 50°, Moon ring 40°) and invaders that attack from any height; satellites get +20% range there (they cover a volume) and invaders 12% less health.
 
 ## v1.0.0 (Nov 3, 2026): first public release
 Published on itch.io: https://savior99748.itch.io/orbital-defense (also on GitHub Pages).

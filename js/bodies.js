@@ -47,6 +47,7 @@ window.OD = window.OD || {};
   }
 
   // Saturn's rings and Uranus's faint ring are drawn behind the planet (top-down view = circles).
+  OD.BODY_STYLE = STYLE; // shared with the 3D view
   OD.drawBodyRings = function (ctx, style, x, y, r) {
     const st = STYLE[style];
     if (!st) return;

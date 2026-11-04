@@ -46,13 +46,13 @@
     MAP_KEY = key; MAP = MAPS[key];
     const root = { name: MAP.name, style: MAP.body.style, r: MAP.body.r, belt: MAP.body.belt, root: true, x: CX, y: CY };
     const bodies = [root];
-    const rings = MAP.rings.map(r => ({ body: 0, r: r.r, slots: r.slots, speed: r.speed, angle: 0 }));
+    const rings = MAP.rings.map(r => ({ body: 0, r: r.r, slots: r.slots, speed: r.speed, angle: 0, incl: r.incl || 0, node: r.node || 0 }));
     for (const m of MAP.moons) {
       const bi = bodies.push({
         name: m.name, style: m.style, r: m.r, orbit: m.orbit, speed: m.speed, angle: m.phase,
         gravity: m.gravity, gravR: m.gravR || m.r * 4.5 + 38, x: 0, y: 0,
       }) - 1;
-      rings.push({ body: bi, r: m.ring.r, slots: m.ring.slots, speed: m.ring.speed, angle: m.phase * 2 });
+      rings.push({ body: bi, r: m.ring.r, slots: m.ring.slots, speed: m.ring.speed, angle: m.phase * 2, incl: m.ring.incl || 0, node: m.ring.node || 0 });
     }
     const slots = [];
     rings.forEach((ring, ri) => { for (let i = 0; i < ring.slots; i++) slots.push({ id: slots.length, ring: ri, i }); });
@@ -77,10 +77,20 @@
     positionBodies();
   }
 
+  // Position of a slot on its ring. Rings can be tilted (incl) around a line through their body at
+  // angle `node`, which lifts slots above/below the orbital plane (z). Flat rings give z = 0.
+  function ringPoint(ring, a) {
+    const b = B.bodies[ring.body];
+    if (!ring.incl) return { x: b.x + Math.cos(a) * ring.r, y: b.y + Math.sin(a) * ring.r, z: 0 };
+    const u = a - ring.node, lx = Math.cos(u) * ring.r, ly = Math.sin(u) * ring.r;
+    const ci = Math.cos(ring.incl), cn = Math.cos(ring.node), sn = Math.sin(ring.node);
+    return { x: b.x + lx * cn - ly * ci * sn, y: b.y + lx * sn + ly * ci * cn, z: ly * Math.sin(ring.incl) };
+  }
   function slotPos(id) {
-    const s = B.slots[id], ring = B.rings[s.ring], b = B.bodies[ring.body];
+    const s = B.slots[id], ring = B.rings[s.ring];
     const a = ring.angle + s.i * TAU / ring.slots;
-    return { x: b.x + Math.cos(a) * ring.r, y: b.y + Math.sin(a) * ring.r, a };
+    const p = ringPoint(ring, a); p.a = a;
+    return p;
   }
 
   // ---------- state ----------
@@ -109,6 +119,8 @@
 
   // ---------- helpers ----------
   const dist2 = (ax, ay, bx, by) => (ax - bx) ** 2 + (ay - by) ** 2;
+  // 3D squared distance between two things with x, y and (optional) z
+  const d3 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + ((a.z || 0) - (b.z || 0)) ** 2;
   const towerAt = id => S && S.towers.find(t => t.slot === id);
   const baseStats = t => tierOf(t.type, t.level, t.path);
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : Math.round(n).toString();
@@ -129,22 +141,24 @@
     toast.t = setTimeout(() => (ui.toast.style.opacity = 0), ms);
   }
 
-  function burst(x, y, color, n = 12, spd = 120, life = 0.7) {
+  function burst(x, y, color, n = 12, spd = 120, life = 0.7, z = 0) {
     if (S.particles.length > 900) n = Math.min(n, 3);
+    const up = MAP.threeD ? 1 : 0;
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * TAU, v = Math.random() * spd;
-      S.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: life * (0.6 + Math.random() * 0.6), max: life, color });
+      const a = Math.random() * TAU, v = Math.random() * spd, vz = up * (Math.random() - 0.5) * spd;
+      S.particles.push({ x, y, z, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz, life: life * (0.6 + Math.random() * 0.6), max: life, color });
     }
   }
   const floater = (x, y, text, color) => S.floaters.push({ x, y, text, color, life: 1.2 });
-  const ringFx = (x, y, r, color, life = 0.35, inward = false) => S.rings.push({ x, y, r, color, life, max: life, inward });
+  const ringFx = (x, y, r, color, life = 0.35, inward = false, z = 0) => S.rings.push({ x, y, z, r, color, life, max: life, inward });
 
-  function pickTarget(x, y, range, mode, exclude) {
+  // p: the shooter ({x, y, z}); distances are 3D
+  function pickTarget(p, range, mode, exclude) {
     let best = null, bestScore = -Infinity;
     const r2 = range * range;
     for (const e of S.enemies) {
       if (e.dead || e === exclude) continue;
-      const d = dist2(x, y, e.x, e.y);
+      const d = d3(p, e);
       if (d > r2) continue;
       const score = mode === "last" ? e.r : mode === "strong" ? e.hp + (e.shield || 0) : mode === "close" ? -d : -e.r;
       if (score > bestScore) { bestScore = score; best = e; }
@@ -185,17 +199,20 @@
     const scaleHp = def.boss ? 1 + (hpScale - 1) * 0.55 : hpScale;
     const hp = Math.round(def.hp * scaleHp);
     const theta = Math.random() * TAU;
+    // 3D maps: invaders come from any height (elevation up to ±55°)
+    const phi = MAP.threeD && !at ? (Math.random() * 2 - 1) * 0.96 : 0;
     const e = {
       id: nextId++, type, def, hp, maxHp: hp, hpScale,
       shield: def.shield ? Math.round(def.shield * scaleHp) : 0,
-      x: at ? at.x + (Math.random() - 0.5) * 16 : CX + Math.cos(theta) * SPAWN_R,
-      y: at ? at.y + (Math.random() - 0.5) * 16 : CY + Math.sin(theta) * SPAWN_R,
+      x: at ? at.x + (Math.random() - 0.5) * 16 : CX + Math.cos(theta) * Math.cos(phi) * SPAWN_R,
+      y: at ? at.y + (Math.random() - 0.5) * 16 : CY + Math.sin(theta) * Math.cos(phi) * SPAWN_R,
+      z: at ? (at.z || 0) + (MAP.threeD ? (Math.random() - 0.5) * 16 : 0) : Math.sin(phi) * SPAWN_R,
       dir: at ? at.dir : Math.random() < 0.5 ? 1 : -1,
       slow: 1, vuln: 1, stun: 0, frozen: 0, hit: 0, spin: Math.random() * TAU, seed: Math.random() * 10,
       shieldHitAt: -10, spawnTimer: def.spawn ? def.spawn.every : 0, burn: null,
     };
     e.maxShield = e.shield;
-    e.r = Math.hypot(e.x - CX, e.y - CY);
+    e.r = Math.hypot(e.x - CX, e.y - CY, e.z);
     S.enemies.push(e);
     return e;
   }
@@ -233,8 +250,8 @@
     S.score += reward * 10;
     S.stats.killed++; S.stats.earnedKills += reward;
     const big = e.def.boss;
-    burst(e.x, e.y, e.def.color, big ? 60 : 12, big ? 240 : 130, big ? 1.4 : 0.7);
-    if (big) { S.stats.bosses++; unlock("first_boss"); burst(e.x, e.y, "#ffffff", 30, 300, 1); ringFx(e.x, e.y, e.def.size * 4, e.def.color, 0.8); S.shake = 12; sfx("nova"); }
+    burst(e.x, e.y, e.def.color, big ? 60 : 12, big ? 240 : 130, big ? 1.4 : 0.7, e.z);
+    if (big) { S.stats.bosses++; unlock("first_boss"); burst(e.x, e.y, "#ffffff", 30, 300, 1, e.z); ringFx(e.x, e.y, e.def.size * 4, e.def.color, 0.8, false, e.z); S.shake = 12; sfx("nova"); }
     else sfx(e.type === "asteroid" ? "crunch" : "pop");
     if (e.def.split) for (let i = 0; i < e.def.split.n; i++) spawnEnemy(e.def.split.type, e.hpScale, e);
   }
@@ -259,7 +276,7 @@
     // tower positions + stats (with Command Relay buffs and overdrive)
     for (const t of S.towers) {
       const p = slotPos(t.slot);
-      t.x = p.x; t.y = p.y; t.ringA = p.a;
+      t.x = p.x; t.y = p.y; t.z = p.z; t.ringA = p.a;
       t.buffRate = 1; t.buffRange = 1;
     }
     for (const r of S.towers) {
@@ -267,7 +284,7 @@
       if (!rs.buffRange) continue;
       for (const t of S.towers) {
         if (t === r || t.type === "miner") continue;
-        if (dist2(r.x, r.y, t.x, t.y) <= rs.buffRange ** 2) {
+        if (d3(r, t) <= rs.buffRange ** 2) {
           t.buffRate = Math.max(t.buffRate, rs.buffRate);
           t.buffRange = Math.max(t.buffRange, rs.buffRangeMul);
         }
@@ -277,7 +294,8 @@
       const b = baseStats(t);
       const rateMul = t.buffRate * (odActive ? OVERDRIVE.rateMul : 1);
       t.st = Object.assign({}, b, {
-        range: b.range ? b.range * t.buffRange : b.range,
+        // 3D maps give extra range: satellites cover a volume instead of a flat disk
+        range: b.range ? b.range * t.buffRange * (MAP.rangeMul || 1) : b.range,
         rate: b.rate ? b.rate * rateMul : b.rate,
         dps: b.dps ? b.dps * rateMul : b.dps,
       });
@@ -293,7 +311,7 @@
       const doFreeze = st.freezeEvery && t.timer >= st.freezeEvery;
       let any = false;
       for (const e of S.enemies) {
-        if (e.dead || dist2(t.x, t.y, e.x, e.y) > r2) continue;
+        if (e.dead || d3(t, e) > r2) continue;
         any = true;
         e.slow = Math.min(e.slow, st.slow);
         if (st.vuln) e.vuln = Math.max(e.vuln, st.vuln);
@@ -301,8 +319,8 @@
         if (doPush) pushOut(e, st.push * (e.def.boss ? 0.2 : 1));
         if (doFreeze) e.frozen = Math.max(e.frozen, st.freeze * (e.def.boss ? 0.3 : 1));
       }
-      if (doPush) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, TOWERS.tractor.paths.A.color, 0.5, true); sfx("push"); } }
-      if (doFreeze) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, "#dff8ff", 0.45); sfx("freeze"); } }
+      if (doPush) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, TOWERS.tractor.paths.A.color, 0.5, true, t.z); sfx("push"); } }
+      if (doFreeze) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, "#dff8ff", 0.45, false, t.z); sfx("freeze"); } }
     }
 
     // invaders speed up a little each wave after wave 10 (up to +25%)
@@ -327,7 +345,7 @@
         const lost = Math.min(def.dmg, Math.max(0, S.lives));
         S.lives -= def.dmg;
         S.stats.leaked++; S.stats.hpLost += lost;
-        burst(e.x, e.y, "#ff5c7a", 18, 160);
+        burst(e.x, e.y, "#ff5c7a", 18, 160, 0.7, e.z);
         floater(e.x, e.y, `-${lost}`, "#ff5c7a");
         S.shake = Math.max(S.shake, def.boss ? 16 : 8);
         sfx("leak");
@@ -340,7 +358,7 @@
 
     for (const b of S.beams) b.life -= dt;
     for (const r of S.rings) r.life -= dt;
-    for (const p of S.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; }
+    for (const p of S.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += (p.vz || 0) * dt; p.vx *= 0.96; p.vy *= 0.96; p.vz = (p.vz || 0) * 0.96; }
     for (const f of S.floaters) { f.life -= dt; f.y -= 22 * dt; }
     S.enemies = S.enemies.filter(e => !e.dead);
     S.shots = S.shots.filter(m => !m.dead);
@@ -371,45 +389,49 @@
   }
 
   // Invaders spiral toward the centre; moons/planets bend their path with gravity.
+  // Works in 3D (z = height); on flat maps z stays 0 and this is the classic 2D spiral.
   function moveEnemy(e, v, dt) {
-    const dx = e.x - CX, dy = e.y - CY, r = Math.hypot(dx, dy) || 1;
-    const ux = dx / r, uy = dy / r;
-    let vx, vy;
+    const dx = e.x - CX, dy = e.y - CY, dz = e.z || 0, r = Math.hypot(dx, dy, dz) || 1;
+    const ux = dx / r, uy = dy / r, uz = dz / r;
+    let vx, vy, vz;
     if (r > B.spiral) {
-      vx = -ux * v * 1.6; vy = -uy * v * 1.6;
+      vx = -ux * v * 1.6; vy = -uy * v * 1.6; vz = -uz * v * 1.6;
     } else {
       const sp = e.def.spiral, inward = Math.sqrt(1 - sp * sp), tang = sp * Math.min(1, r / 60);
-      const tx = -uy * e.dir, ty = ux * e.dir;
+      const hl = Math.hypot(ux, uy) || 1; // horizontal circling direction
+      const tx = (-uy / hl) * e.dir, ty = (ux / hl) * e.dir;
       vx = (-ux * inward + tx * tang) * v;
       vy = (-uy * inward + ty * tang) * v;
-      const belt = B.bodies[0].belt;
-      if (belt && r > belt.inner && r < belt.outer) { vx *= belt.slow; vy *= belt.slow; }
+      vz = -uz * inward * v;
+      const belt = B.bodies[0].belt, hr = Math.hypot(dx, dy);
+      if (belt && hr > belt.inner && hr < belt.outer && Math.abs(dz) < 25) { vx *= belt.slow; vy *= belt.slow; vz *= belt.slow; }
       for (const b of B.bodies) {
         if (b.root || !b.gravity) continue;
-        const bx = b.x - e.x, by = b.y - e.y, d = Math.hypot(bx, by) || 1;
+        const bx = b.x - e.x, by = b.y - e.y, bz = -dz, d = Math.hypot(bx, by, bz) || 1;
         if (d < b.gravR) {
           const k = Math.min(0.9, b.gravity * 1.4 * (1 - d / b.gravR)) * v;
-          vx += (bx / d) * k; vy += (by / d) * k;
+          vx += (bx / d) * k; vy += (by / d) * k; vz += (bz / d) * k;
         }
       }
     }
-    e.x += vx * dt; e.y += vy * dt;
+    e.x += vx * dt; e.y += vy * dt; e.z = dz + vz * dt;
     // invaders can't fly through moons: slide around them
     for (const b of B.bodies) {
       if (b.root) continue;
-      const bx = e.x - b.x, by = e.y - b.y, d = Math.hypot(bx, by) || 1, min = b.r + e.def.size * 0.6;
+      const bx = e.x - b.x, by = e.y - b.y, bz = e.z, d = Math.hypot(bx, by, bz) || 1, min = b.r + e.def.size * 0.6;
       if (d < min) {
-        const nx = bx / d, ny = by / d;
-        e.x = b.x + nx * min - ny * e.dir * v * dt; e.y = b.y + ny * min + nx * e.dir * v * dt;
+        const nx = bx / d, ny = by / d, nz = bz / d;
+        e.x = b.x + nx * min - ny * e.dir * v * dt; e.y = b.y + ny * min + nx * e.dir * v * dt; e.z = nz * min;
       }
     }
-    e.r = Math.hypot(e.x - CX, e.y - CY);
+    e.vx = vx; e.vy = vy; e.vz = vz;
+    e.r = Math.hypot(e.x - CX, e.y - CY, e.z);
   }
 
   function pushOut(e, amount) {
-    const dx = e.x - CX, dy = e.y - CY, r = Math.hypot(dx, dy) || 1;
+    const dx = e.x - CX, dy = e.y - CY, dz = e.z || 0, r = Math.hypot(dx, dy, dz) || 1;
     const nr = Math.min(B.spiral, r + amount);
-    e.x = CX + (dx / r) * nr; e.y = CY + (dy / r) * nr; e.r = nr;
+    e.x = CX + (dx / r) * nr; e.y = CY + (dy / r) * nr; e.z = (dz / r) * nr; e.r = nr;
   }
 
   function towerAct(t, dt) {
@@ -435,14 +457,14 @@
     if (kind === "emp") {
       if (st.arc) {
         if (t.cd > 0) return;
-        const first = pickTarget(t.x, t.y, st.range, "close");
+        const first = pickTarget(t, st.range, "close");
         if (!first) return;
         t.cd = 1 / st.rate;
-        let prev = { x: t.x, y: t.y }, cur = first;
+        let prev = { x: t.x, y: t.y, z: t.z }, cur = first;
         const hit = new Set();
         for (let i = 0; i <= st.chains && cur; i++) {
           hit.add(cur);
-          S.beams.push({ x1: prev.x, y1: prev.y, x2: cur.x, y2: cur.y, life: 0.12, color: "#cfe0ff", w: 2, bolt: true });
+          S.beams.push({ x1: prev.x, y1: prev.y, z1: prev.z || 0, x2: cur.x, y2: cur.y, z2: cur.z || 0, life: 0.12, color: "#cfe0ff", w: 2, bolt: true });
           cur.stun = Math.max(cur.stun, st.stun);
           const from = cur;
           damage(cur, st.dmg, t);
@@ -450,7 +472,7 @@
           let next = null, nd = 110 * 110;
           for (const e of S.enemies) {
             if (e.dead || hit.has(e)) continue;
-            const d = dist2(from.x, from.y, e.x, e.y);
+            const d = d3(from, e);
             if (d < nd) { nd = d; next = e; }
           }
           cur = next;
@@ -460,25 +482,28 @@
       }
       if (t.cd > 0) return;
       const r2 = st.range * st.range;
-      const targets = S.enemies.filter(e => !e.dead && dist2(t.x, t.y, e.x, e.y) <= r2);
+      const targets = S.enemies.filter(e => !e.dead && d3(t, e) <= r2);
       if (!targets.length) return;
       t.cd = 1 / st.rate;
       for (const e of targets) { e.stun = Math.max(e.stun, st.stun * (e.def.boss ? 0.3 : 1)); damage(e, st.dmg, t); }
-      ringFx(t.x, t.y, st.range, t.path === "A" ? TOWERS.emp.paths.A.color : TOWERS.emp.color, 0.4);
+      ringFx(t.x, t.y, st.range, t.path === "A" ? TOWERS.emp.paths.A.color : TOWERS.emp.color, 0.4, false, t.z);
       sfx("emp");
       return;
     }
 
-    const target = pickTarget(t.x, t.y, st.range, t.targeting);
-    if (target) t.aim = Math.atan2(target.y - t.y, target.x - t.x);
+    const target = pickTarget(t, st.range, t.targeting);
+    if (target) {
+      t.aim = Math.atan2(target.y - t.y, target.x - t.x);
+      t.aimP = Math.atan2((target.z || 0) - (t.z || 0), Math.hypot(target.x - t.x, target.y - t.y)); // 3D: barrel pitch
+    }
 
     if (kind === "laser" && st.dps) {
       if (!target) { t.heat = 0; t.beamTarget = null; return; }
       if (t.beamTarget === target) t.heat = Math.min(2, (t.heat || 0) + dt); else { t.heat = 0; t.beamTarget = target; }
       const mul = 1 + Math.min(1, t.heat / 2) * (st.ramp - 1);
       damage(target, st.dps * mul * dt, t, { flash: false });
-      S.beams.push({ x1: t.x + Math.cos(t.aim) * 26, y1: t.y + Math.sin(t.aim) * 26, x2: target.x, y2: target.y, life: dt * 1.5, color: TOWERS.laser.paths.B.color, w: 2 + t.heat * 2.5, core: true });
-      if (Math.random() < 0.3) burst(target.x, target.y, "#ffd27a", 1, 60, 0.3);
+      S.beams.push({ x1: t.x + Math.cos(t.aim) * 26, y1: t.y + Math.sin(t.aim) * 26, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: dt * 1.5, color: TOWERS.laser.paths.B.color, w: 2 + t.heat * 2.5, core: true });
+      if (Math.random() < 0.3) burst(target.x, target.y, "#ffd27a", 1, 60, 0.3, target.z);
       sfx("lance");
       return;
     }
@@ -493,13 +518,13 @@
       const nx = -Math.sin(t.aim), ny = Math.cos(t.aim);
       const ox = t.x + Math.cos(t.aim) * 15 + nx * off, oy = t.y + Math.sin(t.aim) * 15 + ny * off;
       damage(target, st.dmg, t, { flash: false });
-      S.beams.push({ x1: ox, y1: oy, x2: target.x, y2: target.y, life: 0.07, color: t.path === "A" ? "#ffffff" : TOWERS.laser.color, w: 2 });
+      S.beams.push({ x1: ox, y1: oy, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: 0.07, color: t.path === "A" ? "#ffffff" : TOWERS.laser.color, w: 2 });
       if (st.chain) {
         const hues = ["#ff5c7a", "#ffd166", "#7dff9a", "#6cf0ff", "#c18cff"];
-        const others = S.enemies.filter(e => !e.dead && e !== target && dist2(e.x, e.y, target.x, target.y) < 130 * 130)
-          .sort((a, b) => dist2(a.x, a.y, target.x, target.y) - dist2(b.x, b.y, target.x, target.y)).slice(0, st.chain);
+        const others = S.enemies.filter(e => !e.dead && e !== target && d3(e, target) < 130 * 130)
+          .sort((a, b) => d3(a, target) - d3(b, target)).slice(0, st.chain);
         others.forEach((e, i) => {
-          S.beams.push({ x1: target.x, y1: target.y, x2: e.x, y2: e.y, life: 0.08, color: hues[i % hues.length], w: 1.5 });
+          S.beams.push({ x1: target.x, y1: target.y, z1: target.z || 0, x2: e.x, y2: e.y, z2: e.z || 0, life: 0.08, color: hues[i % hues.length], w: 1.5 });
           damage(e, st.dmg * 0.6, t, { flash: false });
         });
         sfx("prism");
@@ -508,7 +533,7 @@
       for (let i = 0; i < st.count; i++) {
         const a = t.aim + (i - (st.count - 1) / 2) * 0.35;
         S.shots.push({
-          kind: "missile", x: t.x + Math.cos(a) * 12, y: t.y + Math.sin(a) * 12, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150,
+          kind: "missile", x: t.x + Math.cos(a) * 12, y: t.y + Math.sin(a) * 12, z: t.z, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, vz: 0,
           target, dmg: st.dmg, splash: st.splash, cluster: st.cluster, clusterDmg: st.clusterDmg, burn: st.burn,
           nova: t.path === "B", life: 4, tower: t,
         });
@@ -516,31 +541,36 @@
       sfx("missile");
     } else if (kind === "rail") {
       t.recoil = 1;
-      const ex = t.x + Math.cos(t.aim) * st.range, ey = t.y + Math.sin(t.aim) * st.range;
+      // fire along the 3D line toward the target, out to full range
+      const ddx = target.x - t.x, ddy = target.y - t.y, ddz = (target.z || 0) - (t.z || 0), dl = Math.hypot(ddx, ddy, ddz) || 1;
+      const ex = t.x + ddx / dl * st.range, ey = t.y + ddy / dl * st.range, ez = (t.z || 0) + ddz / dl * st.range;
       const color = t.path ? TOWERS.rail.paths[t.path].color : TOWERS.rail.color;
       if (st.pierce) {
         for (const e of S.enemies) {
-          if (!e.dead && segDist2(t.x, t.y, ex, ey, e.x, e.y) <= (e.def.size + 5) ** 2) damage(e, st.dmg, t, { rail: true });
+          if (!e.dead && segDist3(t, { x: ex, y: ey, z: ez }, e) <= (e.def.size + 5) ** 2) damage(e, st.dmg, t, { rail: true });
         }
-        S.beams.push({ x1: t.x, y1: t.y, x2: ex, y2: ey, life: t.path === "B" ? 0.08 : 0.25, color, w: t.path === "A" ? 6 : t.path === "B" ? 2 : 4, core: true });
+        S.beams.push({ x1: t.x, y1: t.y, z1: t.z, x2: ex, y2: ey, z2: ez, life: t.path === "B" ? 0.08 : 0.25, color, w: t.path === "A" ? 6 : t.path === "B" ? 2 : 4, core: true });
       } else {
         damage(target, st.dmg, t, { rail: true });
-        S.beams.push({ x1: t.x, y1: t.y, x2: target.x, y2: target.y, life: 0.25, color, w: 4, core: true });
+        S.beams.push({ x1: t.x, y1: t.y, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: 0.25, color, w: 4, core: true });
       }
-      burst(target.x, target.y, color, t.path === "B" ? 3 : 8, 90);
+      burst(target.x, target.y, color, t.path === "B" ? 3 : 8, 90, 0.7, target.z);
       sfx(t.path === "B" ? "coil" : "rail");
     }
   }
 
-  function segDist2(x1, y1, x2, y2, px, py) {
-    const dx = x2 - x1, dy = y2 - y1, len = dx * dx + dy * dy;
-    let k = len ? ((px - x1) * dx + (py - y1) * dy) / len : 0;
+  // squared distance from point p to the segment a→b (3D)
+  function segDist3(a, b, p) {
+    const az = a.z || 0, bz = b.z || 0, pz = p.z || 0;
+    const dx = b.x - a.x, dy = b.y - a.y, dz = bz - az, len = dx * dx + dy * dy + dz * dz;
+    let k = len ? ((p.x - a.x) * dx + (p.y - a.y) * dy + (pz - az) * dz) / len : 0;
     k = Math.max(0, Math.min(1, k));
-    return dist2(px, py, x1 + dx * k, y1 + dy * k);
+    return (p.x - a.x - dx * k) ** 2 + (p.y - a.y - dy * k) ** 2 + (pz - az - dz * k) ** 2;
   }
 
-  function explode(x, y, radius, dmg, src, opts = {}) {
-    for (const e of S.enemies) if (!e.dead && dist2(x, y, e.x, e.y) < (radius + e.def.size) ** 2) {
+  // p: blast centre ({x, y, z})
+  function explode(p, radius, dmg, src, opts = {}) {
+    for (const e of S.enemies) if (!e.dead && d3(p, e) < (radius + e.def.size) ** 2) {
       damage(e, dmg, src);
       if (opts.burn) e.burn = { dps: opts.burn, t: 3, src };
     }
@@ -550,33 +580,33 @@
     for (const m of S.shots) {
       m.life -= dt;
       if (m.kind === "bomblet") {
-        m.x += m.vx * dt; m.y += m.vy * dt; m.vx *= 0.9; m.vy *= 0.9;
-        if (m.life <= 0) { m.dead = true; explode(m.x, m.y, 32, m.dmg, m.tower); burst(m.x, m.y, "#ffd166", 5, 70, 0.4); sfx("boom"); }
+        m.x += m.vx * dt; m.y += m.vy * dt; m.z += (m.vz || 0) * dt; m.vx *= 0.9; m.vy *= 0.9; m.vz = (m.vz || 0) * 0.9;
+        if (m.life <= 0) { m.dead = true; explode(m, 32, m.dmg, m.tower); burst(m.x, m.y, "#ffd166", 5, 70, 0.4, m.z); sfx("boom"); }
         continue;
       }
-      if (!m.target || m.target.dead) m.target = pickTarget(m.x, m.y, 400, "close");
-      if (m.target) {
-        const a = Math.atan2(m.target.y - m.y, m.target.x - m.x);
-        m.vx += Math.cos(a) * 1000 * dt; m.vy += Math.sin(a) * 1000 * dt;
+      if (!m.target || m.target.dead) m.target = pickTarget(m, 400, "close");
+      if (m.target) { // home in (3D)
+        const hx = m.target.x - m.x, hy = m.target.y - m.y, hz = (m.target.z || 0) - (m.z || 0), hl = Math.hypot(hx, hy, hz) || 1;
+        m.vx += hx / hl * 1000 * dt; m.vy += hy / hl * 1000 * dt; m.vz = (m.vz || 0) + hz / hl * 1000 * dt;
       }
-      const sp = Math.hypot(m.vx, m.vy), max = m.nova ? 260 : 360;
-      if (sp > max) { m.vx *= max / sp; m.vy *= max / sp; }
-      m.x += m.vx * dt; m.y += m.vy * dt;
-      if (Math.random() < 0.7) S.particles.push({ x: m.x, y: m.y, vx: 0, vy: 0, life: m.nova ? 0.5 : 0.3, max: 0.5, color: m.nova ? "#ff8a5c" : "#ffcf8a" });
-      const hit = m.target && dist2(m.x, m.y, m.target.x, m.target.y) < (m.target.def.size + 5) ** 2;
+      const sp = Math.hypot(m.vx, m.vy, m.vz || 0), max = m.nova ? 260 : 360;
+      if (sp > max) { m.vx *= max / sp; m.vy *= max / sp; m.vz = (m.vz || 0) * max / sp; }
+      m.x += m.vx * dt; m.y += m.vy * dt; m.z = (m.z || 0) + (m.vz || 0) * dt;
+      if (Math.random() < 0.7) S.particles.push({ x: m.x, y: m.y, z: m.z, vx: 0, vy: 0, vz: 0, life: m.nova ? 0.5 : 0.3, max: 0.5, color: m.nova ? "#ff8a5c" : "#ffcf8a" });
+      const hit = m.target && d3(m, m.target) < (m.target.def.size + 5) ** 2;
       if (hit || m.life <= 0) {
         m.dead = true;
-        explode(m.x, m.y, m.splash, m.dmg, m.tower, { burn: m.burn });
+        explode(m, m.splash, m.dmg, m.tower, { burn: m.burn });
         if (m.nova) {
-          burst(m.x, m.y, "#ffb347", 40, 220, 0.9); burst(m.x, m.y, "#fff3c0", 15, 120, 0.6);
-          ringFx(m.x, m.y, m.splash, "#ff5c5c", 0.5); S.shake = Math.max(S.shake, 6); sfx("nova");
+          burst(m.x, m.y, "#ffb347", 40, 220, 0.9, m.z); burst(m.x, m.y, "#fff3c0", 15, 120, 0.6, m.z);
+          ringFx(m.x, m.y, m.splash, "#ff5c5c", 0.5, false, m.z); S.shake = Math.max(S.shake, 6); sfx("nova");
         } else {
-          burst(m.x, m.y, TOWERS.missile.color, 14, 140);
-          ringFx(m.x, m.y, m.splash, TOWERS.missile.color, 0.2); sfx("boom");
+          burst(m.x, m.y, TOWERS.missile.color, 14, 140, 0.7, m.z);
+          ringFx(m.x, m.y, m.splash, TOWERS.missile.color, 0.2, false, m.z); sfx("boom");
         }
         for (let i = 0; i < (m.cluster || 0); i++) {
-          const a = Math.random() * TAU, v = 120 + Math.random() * 120;
-          S.shots.push({ kind: "bomblet", x: m.x, y: m.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.35 + Math.random() * 0.2, dmg: m.clusterDmg, tower: m.tower });
+          const a = Math.random() * TAU, v = 120 + Math.random() * 120, vz = MAP.threeD ? (Math.random() - 0.5) * 160 : 0;
+          S.shots.push({ kind: "bomblet", x: m.x, y: m.y, z: m.z, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz, life: 0.35 + Math.random() * 0.2, dmg: m.clusterDmg, tower: m.tower });
         }
       }
     }
@@ -588,36 +618,36 @@
       const st = t.st, bomber = !!st.bomb;
       t.crafts = t.crafts || [];
       if (t.crafts.length && t.crafts[0].bomber !== bomber) t.crafts = [];
-      while (t.crafts.length < st.craft) t.crafts.push({ x: t.x, y: t.y, vx: 0, vy: 0, angle: 0, cd: Math.random(), bomber, orbit: Math.random() * TAU });
-      const target = pickTarget(t.x, t.y, st.range, t.targeting);
+      while (t.crafts.length < st.craft) t.crafts.push({ x: t.x, y: t.y, z: t.z || 0, vx: 0, vy: 0, vz: 0, angle: 0, cd: Math.random(), bomber, orbit: Math.random() * TAU });
+      const target = pickTarget(t, st.range, t.targeting);
       t.crafts.forEach((f, i) => {
         f.cd -= dt; f.orbit += dt * (bomber ? 1.5 : 3);
-        let tx, ty;
+        let tx, ty, tz;
         const tgt = target && !target.dead ? target : null;
         if (tgt) {
           const rad = bomber ? 6 : 34;
-          tx = tgt.x + Math.cos(f.orbit + i) * rad; ty = tgt.y + Math.sin(f.orbit + i) * rad;
+          tx = tgt.x + Math.cos(f.orbit + i) * rad; ty = tgt.y + Math.sin(f.orbit + i) * rad; tz = tgt.z || 0;
         } else {
-          tx = t.x + Math.cos(f.orbit + i * TAU / st.craft) * 30; ty = t.y + Math.sin(f.orbit + i * TAU / st.craft) * 30;
+          tx = t.x + Math.cos(f.orbit + i * TAU / st.craft) * 30; ty = t.y + Math.sin(f.orbit + i * TAU / st.craft) * 30; tz = t.z || 0;
         }
         const max = bomber ? 200 : 300, acc = bomber ? 500 : 900;
-        const a = Math.atan2(ty - f.y, tx - f.x);
-        f.vx += Math.cos(a) * acc * dt; f.vy += Math.sin(a) * acc * dt;
-        const sp = Math.hypot(f.vx, f.vy);
-        if (sp > max) { f.vx *= max / sp; f.vy *= max / sp; }
-        f.vx *= 0.985; f.vy *= 0.985;
-        f.x += f.vx * dt; f.y += f.vy * dt;
+        const sx = tx - f.x, sy = ty - f.y, sz = tz - (f.z || 0), sl = Math.hypot(sx, sy, sz) || 1;
+        f.vx += sx / sl * acc * dt; f.vy += sy / sl * acc * dt; f.vz = (f.vz || 0) + sz / sl * acc * dt;
+        const sp = Math.hypot(f.vx, f.vy, f.vz);
+        if (sp > max) { f.vx *= max / sp; f.vy *= max / sp; f.vz *= max / sp; }
+        f.vx *= 0.985; f.vy *= 0.985; f.vz *= 0.985;
+        f.x += f.vx * dt; f.y += f.vy * dt; f.z = (f.z || 0) + f.vz * dt;
         f.angle = Math.atan2(f.vy, f.vx);
         if (!tgt || f.cd > 0) return;
-        const d2 = dist2(f.x, f.y, tgt.x, tgt.y);
+        const d2 = d3(f, tgt);
         if (bomber && d2 < 40 * 40) {
           f.cd = 1 / st.rate;
-          explode(tgt.x, tgt.y, st.splash, st.dmg, t);
-          burst(tgt.x, tgt.y, "#ff6b8b", 14, 120); ringFx(tgt.x, tgt.y, st.splash, "#ff6b8b", 0.25); sfx("bomb");
+          explode(tgt, st.splash, st.dmg, t);
+          burst(tgt.x, tgt.y, "#ff6b8b", 14, 120, 0.7, tgt.z); ringFx(tgt.x, tgt.y, st.splash, "#ff6b8b", 0.25, false, tgt.z); sfx("bomb");
         } else if (!bomber && d2 < 110 * 110) {
           f.cd = 1 / st.rate;
           damage(tgt, st.dmg, t, { flash: false });
-          S.beams.push({ x1: f.x, y1: f.y, x2: tgt.x, y2: tgt.y, life: 0.05, color: "#ffc4ee", w: 1.2 });
+          S.beams.push({ x1: f.x, y1: f.y, z1: f.z, x2: tgt.x, y2: tgt.y, z2: tgt.z || 0, life: 0.05, color: "#ffc4ee", w: 1.2 });
           sfx("pew");
         }
       });
@@ -665,7 +695,7 @@
     positionBodies();
     S.towers = r.towers.filter(t => B.slots[t.slot] && TOWERS[t.type]).map(t => {
       const p = slotPos(t.slot);
-      return Object.assign({ id: nextId++, cd: 0, aim: p.a, x: p.x, y: p.y, ringA: p.a }, t);
+      return Object.assign({ id: nextId++, cd: 0, aim: p.a, x: p.x, y: p.y, z: p.z, ringA: p.a }, t);
     });
     S.retired = (r.retired || []).filter(t => TOWERS[t.type]).map(t => Object.assign({ id: nextId++ }, t));
     lastPreview = -1;
@@ -1169,8 +1199,8 @@
     S.money -= tier.cost; t.spent += tier.cost; S.stats.spent += tier.cost;
     t.level = nextLevel; t.path = usePath;
     const p = slotPos(t.slot);
-    burst(p.x, p.y, nextLevel >= 3 ? TOWERS[t.type].paths[usePath].color : "#ffd166", 22, 110);
-    ringFx(p.x, p.y, 30, "#ffd166", 0.4);
+    burst(p.x, p.y, nextLevel >= 3 ? TOWERS[t.type].paths[usePath].color : "#ffd166", 22, 110, 0.7, p.z);
+    ringFx(p.x, p.y, 30, "#ffd166", 0.4, false, p.z);
     sfx(nextLevel === 3 ? "path" : "upgrade");
     if (nextLevel >= 3) toast(`${tier.name}!`);
     if (nextLevel === 4) unlock("tier5");
@@ -1185,7 +1215,7 @@
     S.towers = S.towers.filter(x => x !== t);
     t.sold = true; t.crafts = null;
     S.retired.push(t);
-    burst(t.x, t.y, "#ffd166", 10, 80);
+    burst(t.x, t.y, "#ffd166", 10, 80, 0.7, t.z);
     sfx("sell");
     S.selectedTower = null;
     if (!S.waveActive) saveRun();
@@ -1199,8 +1229,8 @@
     S.money -= cost; S.stats.spent += cost;
     const p = slotPos(slotId);
     S.towers.push({ id: nextId++, type: S.selectedType, slot: slotId, level: 0, path: null, spent: cost,
-      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, ringA: p.a });
-    burst(p.x, p.y, def.color, 12, 90);
+      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a });
+    burst(p.x, p.y, def.color, 12, 90, 0.7, p.z);
     sfx("place");
     if (S.money < cost) S.selectedType = null;
     if (S.towers.length >= 20) unlock("armada");
@@ -1635,7 +1665,11 @@
   function handleTap(sx, sy, touch) {
     if (!S || S.over || S.paused) return;
     const w = toWorld(sx, sy);
-    const slot = nearestSlot(w.x, w.y, hitRadius(touch));
+    tapSlot(nearestSlot(w.x, w.y, hitRadius(touch)), touch);
+  }
+  // Act on a tapped slot (or empty space when slot is null). Also used by the 3D view.
+  function tapSlot(slot, touch) {
+    if (!S || S.over || S.paused) return;
     if (slot == null) { S.selectedTower = null; S.selectedType = null; S.hover = null; renderInfo(); updateUI(true); return; }
     const existing = towerAt(slot);
     if (existing) {
@@ -1783,14 +1817,14 @@
       uiTimer += raw;
       if (uiTimer > 0.1) { uiTimer = 0; updateUI(); }
     } else if (!S) advanceBoard(raw); // menu: let the planets turn in the background
-    render();
+    if (!window.OD_NO2D) render(); // the 3D view draws instead when OD_NO2D is set
     tutTick();
     requestAnimationFrame(frame);
   }
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, LB, isMilestone, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
