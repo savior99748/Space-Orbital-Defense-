@@ -1,4 +1,4 @@
-// 3D view (preview): draws the running game with Three.js. The game logic, UI and balance are the
+// 3D view: draws the running game with Three.js (the default view since v3; Classic 2D uses game.js drawing). The game logic, UI and balance are the
 // same as the 2D game; this file only replaces the drawing and turns taps into slot selections.
 import * as THREE from "../vendor/three/three.module.js";
 
@@ -544,4 +544,10 @@ function loop() {
 }
 resize();
 requestAnimationFrame(loop);
-window.__view3d = { cam, camera, scene, renderer };
+// Screen position (relative to the stage) of a game-world point; used by the tutorial arrow.
+function project(x, y, z = 0) {
+  const C = od().center(), r = canvas.getBoundingClientRect();
+  _v.set(x - C.x, H + z, y - C.y).project(camera);
+  return { x: (_v.x + 1) / 2 * r.width, y: (1 - _v.y) / 2 * r.height, behind: _v.z > 1 };
+}
+window.__view3d = { cam, camera, scene, renderer, project };

@@ -71,6 +71,10 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 | Pause / settings | ❚❚ | `P` / `Esc` |
 | Zoom in / out (up to 3×) | pinch, mouse wheel, or the **+ / −** buttons; drag to pan; tap **1×** to reset | `+` / `-` / `0` |
 
+## 3D and Classic 2D
+
+Since v3 the game is **3D**: bigger planets, tilted orbits (Earth has LEO, MEO and HEO), and invaders that attack from every height. Drag to rotate, pinch or use **+ / −** to zoom. Prefer the original look? Choose **▦ Classic 2D** on the main menu (the v2 maps and balance). Each view keeps its own records and leaderboards.
+
 ## Endless mode & leaderboards
 
 Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Each map and difficulty keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.

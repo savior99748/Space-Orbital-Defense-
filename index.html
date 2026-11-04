@@ -120,7 +120,17 @@
   summary { cursor: pointer; color: var(--accent); }
   details li { margin: 4px 0; }
   .hidden { display: none !important; }
-  body.in-menu #hud, body.in-menu #shop, body.in-menu #zoomCtl { display: none; }
+  body.in-menu #hud, body.in-menu #shop, body.in-menu #zoomCtl, body.in-menu #v3ctl { display: none !important; }
+
+  /* ---------- 3D view ---------- */
+  .mode-3d canvas#game { opacity: 0; pointer-events: none; }
+  canvas#game3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .mode-3d #zoomCtl { display: none !important; }
+  #v3ctl { display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; gap: 4px; z-index: 2; }
+  .mode-3d #v3ctl { display: flex; }
+  #v3ctl button { width: 42px; height: 42px; padding: 0; font-size: 22px; line-height: 1; background: rgba(22,26,54,.88); }
+  #info.open ~ #v3ctl { display: none !important; }
+  .view-row { display: flex; gap: 6px; justify-content: center; align-items: center; margin: 4px 0 10px; flex-wrap: wrap; }
 
   /* ---------- zoom controls ---------- */
   #zoomCtl { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 4px; z-index: 2; }
@@ -288,6 +298,11 @@
     <div id="info"></div>
     <div id="preview"></div>
     <div id="toast"></div>
+    <div id="v3ctl" aria-label="View">
+      <button id="v3in" title="Zoom in">+</button>
+      <button id="v3reset" title="Reset view">⟲</button>
+      <button id="v3out" title="Zoom out">−</button>
+    </div>
     <div id="zoomCtl" aria-label="Zoom">
       <button id="zoomIn" title="Zoom in (+)">+</button>
       <button id="zoomLabel" title="Reset zoom (0)">1×</button>
@@ -310,6 +325,8 @@
 <script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/maps.js"></script>
+<script src="js/maps3d.js"></script>
+<script src="js/mode.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/platform.js"></script>
 <script src="js/analytics.js"></script>
@@ -317,5 +334,9 @@
 <script src="js/draw.js"></script>
 <script src="js/bodies.js"></script>
 <script src="js/game.js"></script>
+<script>
+  // 3D view: load Three.js + the 3D renderer. If that fails (e.g. opened from a file), fall back to Classic 2D.
+  if (OD.is3D && !OD.headless) import("./js/view3d.js").catch(err => { console.warn("3D view unavailable, using Classic 2D", err); OD.setView("2d"); });
+</script>
 </body>
 </html>

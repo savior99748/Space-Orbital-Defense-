@@ -16,7 +16,7 @@ On CrazyGames, stats are off by default (`statsOnPortals: false`) because CrazyG
 | --- | --- |
 | `new-player` | First time this device opens the game |
 | `return/d1`, `return/d3`, `return/d7`, `return/d30` | Came back exactly 1 / 3 / 7 / 30 days after their first day (once each) |
-| `session/<platform>` | Each time the game is opened (web, crazygames, electron, capacitor) |
+| `session/<platform>/<view>` | Each time the game is opened (web, crazygames, electron, capacitor; view 3d or 2d) |
 | `tutorial/start`, `tutorial/step-N`, `tutorial/done`, `tutorial/skip-at-step-N` | Tutorial funnel: where people drop off or skip |
 | `game-start/<map>/<difficulty>` | Which maps and difficulties are played |
 | `wave/<map>/<N>` | Reached wave 1, 3, 5, 10, 15, 20, 25, 30 (then every 10) |
