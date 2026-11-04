@@ -105,7 +105,7 @@ function tap(sx, sy, touch) {
   let best = null, bd = (touch ? 34 : 22) ** 2;
   for (const s of B.slots) {
     const p = od().slotPos(s.id);
-    _v.set(p.x - C.x, H, p.y - C.y).project(camera);
+    _v.set(p.x - C.x, H + (p.z || 0), p.y - C.y).project(camera);
     const px = (_v.x + 1) / 2 * r.width, py = (1 - _v.y) / 2 * r.height;
     const d = (px - sx) ** 2 + (py - sy) ** 2;
     if (d < bd) { bd = d; best = s.id; }
@@ -244,10 +244,15 @@ function buildWorld(B) {
   sunPoint.visible = MAP.final; sun.visible = !MAP.final;
   // turret rings (dashed) + labels (LEO / MEO / HEO or moon names)
   const rings = B.rings.map((r, i) => {
-    const line = circleLine(r.r, 0x6cf0ff, 0.35, true);
+    const body = B.bodies[r.body], pts = [];
+    for (let k = 0; k <= 160; k++) { const p = od().ringPoint(r, k / 160 * TAU); pts.push(new THREE.Vector3(p.x - body.x, p.z, p.y - body.y)); }
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.4, dashSize: 6, gapSize: 9 }));
+    line.computeLineDistances();
     const name = i < MAP.rings.length ? MAP.rings[i].name : null;
-    let label = null;
-    if (name) { label = textSprite(name, "#6cf0ff", 24); label.position.set(r.r + 14, 6, 0); line.add(label); }
+    if (name) { // label at the highest point of the orbit
+      const lp = od().ringPoint(r, r.node + Math.PI / 2), label = textSprite(name, "#6cf0ff", 24);
+      label.position.set(lp.x - body.x, lp.z + 10, lp.y - body.y); line.add(label);
+    }
     group.add(line);
     return line;
   });
@@ -379,12 +384,16 @@ rangeMesh.rotation.x = -Math.PI / 2;
 const rangeEdge = circleLine(1, 0x6cf0ff, 0.6, false);
 const selRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 32), new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
 selRing.rotation.x = -Math.PI / 2;
-scene.add(beamMesh, shotMesh, craftMesh, particles, rangeMesh, rangeEdge, selRing, ...ringPool);
+const rangeSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), new THREE.MeshBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.07, depthWrite: false }));
+rangeSphere.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 10)), new THREE.LineBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.18 })));
+scene.add(beamMesh, shotMesh, craftMesh, particles, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
 
 // ---------- per-frame sync with the game state ----------
 const satMeshes = new Map(), enemyMeshes = new Map();
 const dummy = new THREE.Object3D(), tmpC = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
-const W = (x, y, h = 0) => { const C = od().center(); return new THREE.Vector3(x - C.x, h, y - C.y); };
+const _ax = new THREE.Vector3(), _ay = new THREE.Vector3(), _az = new THREE.Vector3(), _dir = new THREE.Vector3(), _xAxis = new THREE.Vector3(1, 0, 0);
+const _m4 = new THREE.Matrix4(), _qi = new THREE.Quaternion();
+const W = (x, y, h = 0, z = 0) => { const C = od().center(); return new THREE.Vector3(x - C.x, h + (z || 0), y - C.y); };
 
 function sync() {
   const OD = window.__od; if (!OD) return;
@@ -401,12 +410,12 @@ function sync() {
   });
   if (od().map().final) sunPoint.position.set(0, 0, 0);
   // rings follow their body and rotate
-  B.rings.forEach((r, i) => { const b = B.bodies[r.body], l = world.rings[i]; l.position.set(b.x - C.x, 0, b.y - C.y); l.rotation.y = -r.angle; l.children.forEach(ch => ch.position.set(r.r + 14, 6, 0)); });
+  B.rings.forEach((r, i) => { const b = B.bodies[r.body]; world.rings[i].position.set(b.x - C.x, H, b.y - C.y); });
   // empty slots
   const building = S && S.selectedType;
   B.slots.forEach((s, i) => {
     const p = OD.slotPos(s.id), taken = S && OD.towerAt(s.id);
-    dummy.position.set(p.x - C.x, H, p.y - C.y); dummy.rotation.set(0, 0, 0);
+    dummy.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y); dummy.rotation.set(0, 0, 0);
     dummy.scale.setScalar(taken ? 0.0001 : building ? 1.6 : 1); dummy.updateMatrix();
     world.slotMesh.setMatrixAt(i, dummy.matrix);
   });
@@ -421,10 +430,20 @@ function sync() {
     const key = `${tw.type}|${tw.level}|${tw.path}`;
     let m = satMeshes.get(tw.id);
     if (!m || m.userData.key !== key) { if (m) scene.remove(m); m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
-    const p = OD.slotPos(tw.slot);
-    m.position.set(p.x - C.x, H, p.y - C.y);
-    m.rotation.y = -p.a;
-    const tur = m.getObjectByName("turret"); if (tur && tw.aim != null) tur.rotation.y = -(tw.aim - p.a);
+    const p = OD.slotPos(tw.slot), ring = B.rings[B.slots[tw.slot].ring], body = B.bodies[ring.body];
+    m.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y);
+    // orient: local x = outward from the body, local z = along the orbit
+    const q = OD.ringPoint(ring, p.a + 0.02);
+    _ax.set(p.x - body.x, p.z || 0, p.y - body.y).normalize();
+    _az.set(q.x - p.x, (q.z || 0) - (p.z || 0), q.y - p.y).normalize();
+    _ay.crossVectors(_az, _ax).normalize(); _az.crossVectors(_ax, _ay);
+    m.quaternion.setFromRotationMatrix(_m4.makeBasis(_ax, _ay, _az));
+    const tur = m.getObjectByName("turret");
+    if (tur && tw.aim != null) { // world aim direction → turret's local frame
+      const cp = Math.cos(tw.aimP || 0);
+      _dir.set(Math.cos(tw.aim) * cp, Math.sin(tw.aimP || 0), Math.sin(tw.aim) * cp).applyQuaternion(_qi.copy(m.quaternion).invert());
+      tur.quaternion.setFromUnitVectors(_xAxis, _dir.normalize());
+    }
   }
   for (const [id, m] of satMeshes) if (!seen.has(id)) { scene.remove(m); satMeshes.delete(id); }
 
@@ -434,12 +453,12 @@ function sync() {
     eseen.add(e.id);
     let m = enemyMeshes.get(e.id);
     if (!m) { m = buildEnemy(e); enemyMeshes.set(e.id, m); scene.add(m); m.userData.px = e.x; m.userData.py = e.y; }
-    const h = H + m.userData.hover + Math.sin(t * 2 + e.seed) * 2;
+    const threeD = od().map().threeD;
+    const h = H + (e.z || 0) + (threeD ? 0 : m.userData.hover + Math.sin(t * 2 + e.seed) * 2);
     m.position.set(e.x - C.x, h, e.y - C.y);
-    const dx = e.x - m.userData.px, dy = e.y - m.userData.py;
-    if (dx * dx + dy * dy > 0.01) { m.rotation.y = -Math.atan2(dy, dx); m.userData.px = e.x; m.userData.py = e.y; }
-    if (e.type === "asteroid" || e.type === "rock") m.rotation.x = e.spin;
-    if (e.type === "mother") m.rotation.y = e.spin;
+    if (e.vx != null && (e.vx || e.vy || e.vz)) { _dir.set(e.vx, e.vz || 0, e.vy).normalize(); m.quaternion.setFromUnitVectors(_xAxis, _dir); }
+    if (e.type === "asteroid" || e.type === "rock") m.rotateX(e.spin);
+    if (e.type === "mother") m.rotateY(e.spin);
     const mt = m.userData.mat;
     mt.emissiveIntensity = e.hit > 0 ? 1.6 : e.frozen > 0 ? 0.9 : 0.35;
     mt.emissive.set(e.hit > 0 ? 0xffffff : e.frozen > 0 ? 0xcdf6ff : e.def.color);
@@ -451,7 +470,7 @@ function sync() {
   let n = 0;
   if (S) for (const bm of S.beams) {
     if (n >= BEAMS) break;
-    const a = W(bm.x1, bm.y1, H + 1), b = W(bm.x2, bm.y2, H + 4), len = a.distanceTo(b);
+    const a = W(bm.x1, bm.y1, H + 1, bm.z1), b = W(bm.x2, bm.y2, H + 4, bm.z2), len = a.distanceTo(b);
     if (len < 0.5) continue;
     dummy.position.copy(a).add(b).multiplyScalar(0.5);
     dummy.lookAt(b); dummy.scale.set(Math.max(0.8, bm.w * 0.7), Math.max(0.8, bm.w * 0.7), len); dummy.updateMatrix();
@@ -463,14 +482,14 @@ function sync() {
 
   // missiles + bomblets
   n = 0;
-  if (S) for (const m of S.shots) { if (n >= SHOTS) break; dummy.position.copy(W(m.x, m.y, H + 3)); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(m.nova ? 7 : m.kind === "bomblet" ? 2.5 : 4); dummy.updateMatrix(); shotMesh.setMatrixAt(n++, dummy.matrix); }
+  if (S) for (const m of S.shots) { if (n >= SHOTS) break; dummy.position.copy(W(m.x, m.y, H + 3, m.z)); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(m.nova ? 7 : m.kind === "bomblet" ? 2.5 : 4); dummy.updateMatrix(); shotMesh.setMatrixAt(n++, dummy.matrix); }
   shotMesh.count = n; shotMesh.instanceMatrix.needsUpdate = true;
 
   // carrier fighters
   n = 0;
   if (S) for (const tw of S.towers) if (tw.crafts) for (const f of tw.crafts) {
     if (n >= CRAFT) break;
-    dummy.position.copy(W(f.x, f.y, H + 10)); dummy.rotation.set(0, -f.angle, -Math.PI / 2); dummy.scale.set(3, f.bomber ? 9 : 7, 3); dummy.updateMatrix();
+    dummy.position.copy(W(f.x, f.y, H + 10, f.z)); dummy.rotation.set(0, -f.angle, -Math.PI / 2); dummy.scale.set(3, f.bomber ? 9 : 7, 3); dummy.updateMatrix();
     craftMesh.setMatrixAt(n++, dummy.matrix);
   }
   craftMesh.count = n; craftMesh.instanceMatrix.needsUpdate = true;
@@ -479,7 +498,7 @@ function sync() {
   n = 0;
   if (S) for (const p of S.particles) {
     if (n >= PMAX) break;
-    pPos[n * 3] = p.x - C.x; pPos[n * 3 + 1] = H + 4; pPos[n * 3 + 2] = p.y - C.y;
+    pPos[n * 3] = p.x - C.x; pPos[n * 3 + 1] = H + 4 + (p.z || 0); pPos[n * 3 + 2] = p.y - C.y;
     tmpC.set(p.color).multiplyScalar(Math.max(0, p.life / p.max));
     pCol[n * 3] = tmpC.r; pCol[n * 3 + 1] = tmpC.g; pCol[n * 3 + 2] = tmpC.b; n++;
   }
@@ -490,19 +509,22 @@ function sync() {
     const r = S && S.rings[i];
     if (!r) { m.visible = false; return; }
     const k = 1 - r.life / r.max, rad = Math.max(1, r.r * (r.inward ? 1 - k * 0.8 : 0.3 + k * 0.7));
-    m.visible = true; m.position.copy(W(r.x, r.y, H + 2)); m.scale.setScalar(rad);
+    m.visible = true; m.position.copy(W(r.x, r.y, H + 2, r.z)); m.scale.setScalar(rad);
     m.material.color.set(r.color); m.material.opacity = 1 - k;
   });
 
   // selection + range
   const sel = S && S.selectedTower;
-  const showRange = (x, y, r, color) => { rangeMesh.visible = rangeEdge.visible = true; rangeMesh.position.copy(W(x, y, 0.5)); rangeMesh.scale.setScalar(r); rangeEdge.position.copy(rangeMesh.position); rangeEdge.scale.setScalar(r); rangeMesh.material.color.set(color); rangeEdge.material.color.set(color); };
-  rangeMesh.visible = rangeEdge.visible = false; selRing.visible = false;
+  const showRange = (x, y, r, color, z) => {
+    if (od().map().threeD) { rangeSphere.visible = true; rangeSphere.position.copy(W(x, y, H, z)); rangeSphere.scale.setScalar(r); rangeSphere.material.color.set(color); return; }
+    rangeMesh.visible = rangeEdge.visible = true; rangeMesh.position.copy(W(x, y, 0.5)); rangeMesh.scale.setScalar(r); rangeEdge.position.copy(rangeMesh.position); rangeEdge.scale.setScalar(r); rangeMesh.material.color.set(color); rangeEdge.material.color.set(color);
+  };
+  rangeMesh.visible = rangeEdge.visible = rangeSphere.visible = false; selRing.visible = false;
   if (sel) {
     const T = window.OD.TOWERS[sel.type], st = sel.st || window.OD.tierOf(sel.type, sel.level, sel.path);
     const r = st.buffRange || st.range;
-    if (r) showRange(sel.x, sel.y, r, sel.path ? T.paths[sel.path].color : T.color);
-    selRing.visible = true; selRing.position.copy(W(sel.x, sel.y, H + 0.5)); selRing.scale.setScalar(13);
+    if (r) showRange(sel.x, sel.y, r, sel.path ? T.paths[sel.path].color : T.color, sel.z);
+    selRing.visible = true; selRing.position.copy(W(sel.x, sel.y, H + 0.5, sel.z)); selRing.scale.setScalar(13);
   }
 
   // shake
