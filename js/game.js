@@ -655,7 +655,9 @@
   }
 
   // ---------- records ----------
-  const recKey = (map, diff) => `od_rec_${map}_${diff}`;
+  // 3D and Classic 2D play differently, so each view keeps its own records, saved game and leaderboards.
+  const VIEW_TAG = OD.is3D ? "3d" : "";
+  const recKey = (map, diff) => `od_rec${VIEW_TAG}_${map}_${diff}`;
   function getRec(map, diff) { try { return JSON.parse(store.get(recKey(map, diff)) || "null"); } catch { return null; } }
   function saveRec() {
     const old = getRec(S.mapKey, S.diffKey) || {};
@@ -666,7 +668,7 @@
 
   // ---------- saved game (resume) ----------
   // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
-  const RUN_KEY = "od_run";
+  const RUN_KEY = `od_run${VIEW_TAG}`;
   const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
     dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold });
   function saveRun() {
@@ -1345,6 +1347,10 @@
       <h1>ORBITAL DEFENSE</h1>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
       ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
+      <div class="view-row">
+        <button class="chip-btn${OD.is3D ? " selected" : ""}" data-view="3d"${OD.webgl ? "" : ' disabled title="3D needs WebGL, which this device does not support"'}>🌐 3D</button>
+        <button class="chip-btn${OD.is3D ? "" : " selected"}" data-view="2d">▦ Classic 2D</button>
+      </div>
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
         <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
@@ -1412,6 +1418,8 @@
 
   ui.overlay.addEventListener("click", ev => {
     audio.init();
+    const vw = ev.target.closest("[data-view]");
+    if (vw) { if ((vw.dataset.view === "3d") !== !!OD.is3D) { sfx("click"); OD.setView(vw.dataset.view); } return; }
     const lm = ev.target.closest("[data-lbmap]"), ld = ev.target.closest("[data-lbdiff]"), md = ev.target.closest("[data-mode]");
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
     if (ld) { lbView.diff = ld.dataset.lbdiff; sfx("click"); return showLeaderboards(); }
@@ -1516,7 +1524,7 @@
     for (const sl of inner) { const p = slotPos(sl.id), d = dist2(p.x, p.y, first.x, first.y); if (d > bd) { bd = d; best = sl; } }
     return best.id;
   }
-  const slotTarget = () => { const id = tutSlot(); if (id == null) return null; const p = slotPos(id); return { x: p.x, y: p.y, r: 10 }; };
+  const slotTarget = () => { const id = tutSlot(); if (id == null) return null; const p = slotPos(id); return { x: p.x, y: p.y, z: p.z, r: 10 }; };
   const laserBtn = () => ui.shop.querySelector('[data-type="laser"]');
 
   const TUT_STEPS = [
@@ -1528,13 +1536,16 @@
     { text: "Press <b>Launch Wave</b> to bring in the first invaders.", el: () => ui.waveBtn, done: () => S.waveActive || S.wave > 0 },
     { text: "Your satellites fire on their own. Hang tight until the wave is cleared.", done: () => S.wave >= 1 && !S.waveActive },
     { text: "Wave cleared! Here are <b>+100 bonus credits</b>. Tap one of your satellites to open its upgrades.",
-      enter: () => { S.money += 100; updateUI(true); sfx("coin"); }, world: () => S.towers[0] && { x: S.towers[0].x, y: S.towers[0].y, r: 14 }, done: () => !!S.selectedTower },
+      enter: () => { S.money += 100; updateUI(true); sfx("coin"); }, world: () => S.towers[0] && { x: S.towers[0].x, y: S.towers[0].y, z: S.towers[0].z, r: 14 }, done: () => !!S.selectedTower },
     { text: "Tap the <b>upgrade card</b>. Every tier makes the satellite stronger and changes how it looks.",
       el: () => ui.info.querySelector("[data-up]"), done: () => S.towers.some(t => t.level >= 1) },
     { text: "At <b>tier 3</b> you pick one of <b>two specializations</b>, like a prism that splits beams or a lance that melts bosses. The choice is permanent!", next: "Got it" },
     { text: "That's the <b>Moon</b>. It carries its own turret ring, and its gravity pulls invaders toward it, so satellites there see lots of action.",
       world: () => B.bodies[1] && { x: B.bodies[1].x, y: B.bodies[1].y, r: B.bodies[1].r + 6 }, next: "Next" },
-    { text: "Crowded rings? <b>Pinch</b> or use <b>+ / −</b> to zoom in and drag to look around. <b>⚡ Overdrive</b> spins the rings fast for a few seconds.", el: () => ui.zoomCtl, next: "Next" },
+    { text: OD.is3D
+        ? "<b>Drag</b> to rotate around the planet, and <b>pinch</b> or use <b>+ / −</b> to zoom. Orbits are tilted, so invaders come from every height. <b>⚡ Overdrive</b> spins the rings fast for a few seconds."
+        : "Crowded rings? <b>Pinch</b> or use <b>+ / −</b> to zoom in and drag to look around. <b>⚡ Overdrive</b> spins the rings fast for a few seconds.",
+      el: () => (OD.is3D ? document.getElementById("v3ctl") : ui.zoomCtl), next: "Next" },
     { text: "<b>You're ready!</b> Survive 30 waves to save Earth. Good luck, Commander.", next: "Start defending" },
   ];
 
@@ -1601,8 +1612,9 @@
     } else {
       const w = step.world ? step.world() : null;
       if (w) {
-        const sr = stage.getBoundingClientRect(), p = toScreen(w.x, w.y);
-        x = sr.left + p.x; y = sr.top + p.y - ((w.r || 12) * scale * zoom) - 10;
+        const sr = stage.getBoundingClientRect();
+        if (OD.is3D && window.__view3d) { const p = window.__view3d.project(w.x, w.y, w.z || 0); x = sr.left + p.x; y = sr.top + p.y - 18; }
+        else { const p = toScreen(w.x, w.y); x = sr.left + p.x; y = sr.top + p.y - ((w.r || 12) * scale * zoom) - 10; }
       }
     }
     const arrow = ui.coachArrow;

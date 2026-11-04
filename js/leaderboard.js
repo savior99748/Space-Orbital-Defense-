@@ -8,7 +8,8 @@ window.OD = window.OD || {};
   const P = OD.platform;
   const store = { get: k => P.save.get(k), set: (k, v) => P.save.set(k, v) };
   const MAX = 10;
-  const key = (map, diff) => `od_lb_${map}_${diff}`;
+  // 3D and Classic 2D keep separate boards (they play differently)
+  const key = (map, diff) => `od_lb${OD.is3D ? "3d" : ""}_${map}_${diff}`;
 
   const L = (OD.leaderboard = {});
 

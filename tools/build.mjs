@@ -19,7 +19,7 @@ const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
 const VERSION = pkg.version;
 
 // Files that make up the game.
-const GAME_FILES = ["index.html", "privacy.html", "js", "assets/icons/icon-180.png", "assets/icons/icon-192.png", "assets/icons/icon-512.png"];
+const GAME_FILES = ["index.html", "privacy.html", "js", "vendor", "assets/icons/icon-180.png", "assets/icons/icon-192.png", "assets/icons/icon-512.png"];
 const PWA_FILES = ["manifest.webmanifest", "sw.js"];
 
 const TARGETS = {

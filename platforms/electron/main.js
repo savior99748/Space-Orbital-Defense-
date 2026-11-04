@@ -1,7 +1,20 @@
 // Desktop wrapper: opens the game in its own window and connects to Steam when available.
-const { app, BrowserWindow, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, protocol, net } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { pathToFileURL } = require("url");
+
+// Serve the game from app://game/ instead of file:// so the 3D view (ES modules) can load.
+protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+function serveApp() {
+  const root = path.join(__dirname, "app");
+  protocol.handle("app", req => {
+    const { pathname } = new URL(req.url);
+    const file = path.normalize(path.join(root, decodeURIComponent(pathname)));
+    if (!file.startsWith(root)) return new Response("Not found", { status: 404 }); // stay inside the game folder
+    return net.fetch(pathToFileURL(file).toString());
+  });
+}
 
 // ---- Steam (optional) ----
 // Set your Steam App ID in steam_appid.txt next to this file (or STEAM_APP_ID env var) once Valve
@@ -31,7 +44,7 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
   });
-  win.loadFile(path.join(__dirname, "app", "index.html"));
+  win.loadURL("app://game/index.html");
   // F11 = fullscreen, Ctrl/Cmd+Q handled by the OS
   win.webContents.on("before-input-event", (event, input) => {
     if (input.type === "keyDown" && input.key === "F11") { win.setFullScreen(!win.isFullScreen()); event.preventDefault(); }
@@ -46,6 +59,7 @@ ipcMain.on("quit", () => app.quit());
 
 Menu.setApplicationMenu(null);
 app.whenReady().then(() => {
+  serveApp();
   initSteam();
   createWindow();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

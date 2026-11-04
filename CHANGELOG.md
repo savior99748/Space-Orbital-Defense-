@@ -2,6 +2,15 @@
 
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
+## v3.0.0 (in development): full 3D
+- **3D is the main game.** Three.js renderer (bundled in `vendor/three/`, MIT): lit planets with generated surfaces, Earth clouds and atmosphere, Saturn's rings, the Sun's glow; drag to rotate, pinch / wheel / + − to zoom.
+- **All 9 maps rebuilt for 3D** (`js/maps3d.js`): bigger planets, smaller satellite models on **tilted orbits** (Earth: LEO / MEO / HEO; others LOW / MID / HIGH, Uranus a near-polar orbit), tilted moon rings, and the Solar System with each planet's ring tilted.
+- **3D gameplay**: invaders attack from every height and spiral in through 3D space; ranges are spheres; barrels, missiles, railguns, lightning, explosions and fighters all work in 3D. Satellites get +20% range in 3D; each map's invader health is retuned with the skilled-player bot (Solar System is the toughest).
+- **Classic 2D option** on the main menu (🌐 3D / ▦ Classic 2D): the v2 look, maps and balance, unchanged. Devices without WebGL, or a game opened from a local file, use Classic 2D automatically. Each view keeps its own records, leaderboards and saved game.
+- Tutorial works in 3D (arrow follows 3D slots; rotate/zoom tip).
+- Desktop app serves the game from `app://game/` so 3D loads there too.
+- `/proto3d/` now redirects to the main game.
+
 ## v2.0.0 (in development)
 - **∞ Endless mode**: pick Campaign or Endless on the menu. Waves never stop and the Dreadnought returns at waves 50, 70, 90…
 - **Endless milestones** at waves 40, 50, 75, 100 (then every 25): bonus credits and score, with milestone badges on the menu and a next-milestone chip during play
