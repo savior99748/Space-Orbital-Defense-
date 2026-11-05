@@ -1,6 +1,8 @@
 // 3D view: draws the running game with Three.js (the default view since v3; Classic 2D uses game.js drawing). The game logic, UI and balance are the
 // same as the 2D game; this file only replaces the drawing and turns taps into slot selections.
 import * as THREE from "../vendor/three/three.module.js";
+import { buildSatellite } from "./sat3d.js";
+import { buildAlien } from "./aliens3d.js";
 
 const od = () => window.__od;
 const TAU = Math.PI * 2;
@@ -272,98 +274,23 @@ function circleLine(radius, color, opacity, dashed) {
   return l;
 }
 
-// ---------- satellite models (change with tier and specialization) ----------
-const matCache = {};
-function mat(color, emissive = 0, ei = 0) {
-  const k = color + "|" + emissive + "|" + ei;
-  return matCache[k] || (matCache[k] = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: ei, roughness: 0.5, metalness: 0.35 }));
-}
+// ---------- shared geometry for effects ----------
 const geo = {
   box: new THREE.BoxGeometry(1, 1, 1), cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 12), sph: new THREE.SphereGeometry(0.5, 16, 12),
   cone: new THREE.ConeGeometry(0.5, 1, 12), hex: new THREE.CylinderGeometry(0.5, 0.5, 1, 6), tor: new THREE.TorusGeometry(1, 0.12, 8, 32),
   oct: new THREE.OctahedronGeometry(0.5), tet: new THREE.TetrahedronGeometry(0.6),
 };
-function part(g, material, sx, sy, sz, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-  const m = new THREE.Mesh(g, material); m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); return m;
-}
+// satellite models live in js/sat3d.js (seven designs, every tier and specialization)
 function buildSat(t) {
-  const T = window.OD.TOWERS[t.type], lvl = t.level, path = t.path;
-  const c = T.color, pc = path ? T.paths[path].color : c;
-  const col = lvl >= 3 ? pc : c, glow = lvl >= 4 ? 0.9 : lvl >= 3 ? 0.45 : 0.15;
-  const g = new THREE.Group(), turret = new THREE.Group(); turret.name = "turret";
-  // body + solar panels along the orbit (local z = along the ring)
-  g.add(part(geo.sph, mat("#1a1f40", col, 0.25), 18, 14, 18));
-  const pl = 8 + lvl * 2.5, panel = mat(lvl >= 3 ? pc : "#3c5bb8", lvl >= 3 ? pc : "#000000", lvl >= 3 ? 0.25 : 0);
-  if (t.type !== "carrier") { g.add(part(geo.box, panel, 7, 1.2, pl, 0, 0, 9 + pl / 2)); g.add(part(geo.box, panel, 7, 1.2, pl, 0, 0, -9 - pl / 2)); }
-  const M = mat(col, col, glow), dark = mat("#20243f");
-  switch (T.kind) {
-    case "laser":
-      if (path === "B") { turret.add(part(geo.cyl, M, 5, lvl >= 4 ? 30 : 24, 5, 15, 0, 0, 0, 0, Math.PI / 2)); turret.add(part(geo.sph, mat("#fff1c0", "#ffb347", 1.5), 7, 7, 7, lvl >= 4 ? 30 : 24)); }
-      else {
-        const n = lvl >= 1 ? 2 : 1;
-        for (let i = 0; i < n; i++) turret.add(part(geo.cyl, M, 3, 16, 3, 9, 0, n > 1 ? (i ? 3 : -3) : 0, 0, 0, Math.PI / 2));
-        if (lvl >= 2 && !path) turret.add(part(geo.sph, mat("#e9fdff", c, 1.2), 5, 5, 5, 18));
-        if (path === "A") turret.add(part(geo.tet, mat("#ffffff", "#c18cff", 1.2), lvl >= 4 ? 11 : 8, lvl >= 4 ? 11 : 8, lvl >= 4 ? 11 : 8, 20));
-      }
-      break;
-    case "missile":
-      if (path === "A") turret.add(part(geo.hex, M, lvl >= 4 ? 26 : 22, 10, lvl >= 4 ? 26 : 22, 0, 4));
-      else if (path === "B") { turret.add(part(geo.cyl, dark, 10, 26, 10, 8, 2, 0, 0, 0, Math.PI / 2)); turret.add(part(geo.cone, mat("#dddddd", "#ff5c5c", 0.6), 9, 10, 9, 25, 2, 0, 0, 0, -Math.PI / 2)); }
-      else { const n = lvl === 0 ? 1 : lvl === 1 ? 2 : 4; for (let i = 0; i < n; i++) turret.add(part(geo.cyl, M, 4, 13, 4, 8, 3 + (i >= 2 ? 4 : 0), (i % 2 ? 3 : -3) * (n > 1 ? 1 : 0), 0, 0, Math.PI / 2)); }
-      break;
-    case "field":
-      if (path === "A") { turret.add(part(geo.sph, mat("#000000"), 12, 12, 12)); turret.add(part(geo.tor, mat(pc, pc, 1.2), 12, 12, 12, 0, 0, 0, Math.PI / 2.4)); }
-      else if (path === "B") turret.add(part(geo.oct, mat("#e6fbff", "#9ae8ff", 1), lvl >= 4 ? 26 : 20, lvl >= 4 ? 26 : 20, lvl >= 4 ? 26 : 20, 0, 4));
-      else { turret.add(part(geo.tor, M, 9 + lvl * 2, 9 + lvl * 2, 9 + lvl * 2, 0, 3, 0, Math.PI / 2)); turret.add(part(geo.sph, mat(c, c, 1), 6, 6, 6, 0, 3)); }
-      break;
-    case "rail": {
-      const L = path === "A" ? (lvl >= 4 ? 44 : 36) : lvl >= 2 ? 30 : 24;
-      if (path === "B") for (let i = 0; i < (lvl >= 4 ? 5 : 3); i++) { const a = i / (lvl >= 4 ? 5 : 3) * TAU; turret.add(part(geo.cyl, M, 2.4, 24, 2.4, 12, Math.sin(a) * 4 + 2, Math.cos(a) * 4, 0, 0, Math.PI / 2)); }
-      else { turret.add(part(geo.box, M, L, 3, 2, L / 2, 2, -2.5)); turret.add(part(geo.box, M, L, 3, 2, L / 2, 2, 2.5)); }
-      break;
-    }
-    case "emp":
-      turret.add(part(geo.sph, mat("#fff8d0", col, 1.4), 12, 12, 12, 0, 3));
-      if (path === "B") for (let i = 0; i < (lvl >= 4 ? 5 : 3); i++) { const a = i / (lvl >= 4 ? 5 : 3) * TAU; turret.add(part(geo.sph, mat("#dfe9ff", col, 1), 5, 5, 5, Math.cos(a) * 15, 3, Math.sin(a) * 15)); }
-      else for (let i = 0; i < [4, 6, 8, 8, 10][lvl]; i++) { const a = i / [4, 6, 8, 8, 10][lvl] * TAU; turret.add(part(geo.cone, M, 2.2, 9, 2.2, Math.cos(a) * 11, 3, Math.sin(a) * 11, 0, -a, -Math.PI / 2)); }
-      break;
-    case "miner":
-      g.add(part(geo.hex, mat("#2a2412", col, 0.4), 20, 9, 20));
-      g.add(part(geo.cone, mat("#c9c9d6"), 5, 11, 5, -14, 0, 0, 0, 0, Math.PI / 2));
-      if (path === "A") g.add(part(geo.sph, mat("#fff3c0", "#ff9a3c", 2), 9, 9, 9, 0, 6));
-      if (path === "B") g.add(part(geo.sph, mat(pc, pc, 0.6), 14, 6, 14, 6, 7));
-      break;
-    case "carrier": {
-      const L = 26 + lvl * 5;
-      g.add(part(geo.box, mat(path === "B" ? "#2b1420" : "#22152c", col, 0.35), 12, 6, L));
-      g.add(part(geo.cone, mat(col, col, 0.6), 6, 10, 6, 0, 0, L / 2 + 4, Math.PI / 2));
-      g.add(part(geo.sph, mat("#ffd0f0", col, 2), 6, 6, 6, 0, 0, -L / 2));
-      break;
-    }
-  }
-  g.add(turret);
-  if (lvl >= 4) { const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(hexA(pc, 0.55)), blending: THREE.AdditiveBlending, depthWrite: false })); halo.scale.set(70, 70, 1); g.add(halo); }
-  g.scale.setScalar(SAT); // model units match the 2D sizes (rescaled every frame, see satScale)
+  const g = buildSatellite({ type: t.type, level: t.level, path: t.path });
+  g.scale.setScalar(SAT * g.userData.baseScale);
   return g;
 }
-const hexA = (h, a) => { const [r, g, b] = hex(h); return `rgba(${r},${g},${b},${a})`; };
 
 // ---------- enemies ----------
+// invader models live in js/aliens3d.js
 function buildEnemy(e) {
-  const d = e.def, s = d.size, col = d.color;
-  const M = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.6, metalness: 0.2, flatShading: true });
-  const g = new THREE.Group(); let m;
-  switch (e.type) {
-    case "asteroid": case "rock": m = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), M); m.scale.set(1, 0.8, 0.9); break;
-    case "comet": m = new THREE.Mesh(geo.sph, M); m.scale.setScalar(s * 2); { const tail = new THREE.Mesh(geo.cone, new THREE.MeshBasicMaterial({ color: 0x9ad7ff, transparent: true, opacity: 0.35, depthWrite: false })); tail.scale.set(s * 1.6, s * 5, s * 1.6); tail.rotation.z = Math.PI / 2; tail.position.x = -s * 2.6; g.add(tail); } break;
-    case "cruiser": m = new THREE.Mesh(geo.oct, M); m.scale.set(s * 2.4, s * 1.2, s * 2); break;
-    case "mother": m = new THREE.Mesh(geo.sph, M); m.scale.set(s * 2, s * 0.6, s * 2); g.add(part(geo.tor, new THREE.MeshBasicMaterial({ color: 0xffd1fb }), s * 0.8, s * 0.8, s * 0.8, 0, 0, 0, Math.PI / 2)); break;
-    case "dread": m = new THREE.Mesh(geo.cone, M); m.scale.set(s * 1.3, s * 2.4, s * 0.8); m.rotation.z = -Math.PI / 2; break;
-    case "swarm": m = new THREE.Mesh(geo.tet, M); m.scale.setScalar(s * 1.6); break;
-    default: m = new THREE.Mesh(geo.cone, M); m.scale.set(s * 1.1, s * 2, s * 1.1); m.rotation.z = -Math.PI / 2;
-  }
-  g.add(m); g.userData.mat = M;
-  if (d.shield) { const sh = new THREE.Mesh(geo.sph, new THREE.MeshBasicMaterial({ color: 0x8cc8ff, transparent: true, opacity: 0.18, depthWrite: false })); sh.scale.setScalar(s * 2 + 12); sh.name = "shield"; g.add(sh); }
+  const g = buildAlien(e.type, e.def.size, e.def.color);
   g.userData.hover = (e.seed % 1) * 8 + 4;
   return g;
 }
@@ -436,7 +363,8 @@ function sync() {
     if (!m || m.userData.key !== key) { if (m) scene.remove(m); m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
     const p = OD.slotPos(tw.slot), ring = B.rings[B.slots[tw.slot].ring], body = B.bodies[ring.body];
     m.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y);
-    m.scale.setScalar(satScale);
+    m.scale.setScalar(satScale * m.userData.baseScale);
+    m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
     // orient: local x = outward from the body, local z = along the orbit
     const q = OD.ringPoint(ring, p.a + 0.02);
     _ax.set(p.x - body.x, p.z || 0, p.y - body.y).normalize();
@@ -464,9 +392,8 @@ function sync() {
     if (e.vx != null && (e.vx || e.vy || e.vz)) { _dir.set(e.vx, e.vz || 0, e.vy).normalize(); m.quaternion.setFromUnitVectors(_xAxis, _dir); }
     if (e.type === "asteroid" || e.type === "rock") m.rotateX(e.spin);
     if (e.type === "mother") m.rotateY(e.spin);
-    const mt = m.userData.mat;
-    mt.emissiveIntensity = e.hit > 0 ? 1.6 : e.frozen > 0 ? 0.9 : 0.35;
-    mt.emissive.set(e.hit > 0 ? 0xffffff : e.frozen > 0 ? 0xcdf6ff : e.def.color);
+    m.userData.flash(e.hit > 0, e.frozen > 0);
+    m.userData.update(t);
     const sh = m.getObjectByName("shield"); if (sh) sh.visible = e.shield > 0;
   }
   for (const [id, m] of enemyMeshes) if (!eseen.has(id)) { scene.remove(m); enemyMeshes.delete(id); }

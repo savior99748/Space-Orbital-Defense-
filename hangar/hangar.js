@@ -1,6 +1,8 @@
 // Satellite Hangar: preview every satellite model at every tier (dev / design review page).
 import * as THREE from "../vendor/three/three.module.js";
 import { buildSatellite, SAT_NAMES } from "../js/sat3d.js";
+import { buildAlien, ALIEN_NAMES } from "../js/aliens3d.js";
+const ENEMY = { drone: [9, "#ff5c7a"], swarm: [5, "#ff9fb2"], comet: [7, "#9ad7ff"], asteroid: [16, "#a68a6d"], rock: [9, "#8f7a64"], cruiser: [13, "#5c9dff"], mother: [30, "#ff3df2"], dread: [44, "#ff2d55"] };
 
 const PATHS = {
   laser: ["Prism Array", "Spectrum Cannon", "Solar Lance", "Sunspear"],
@@ -38,11 +40,14 @@ const holder = new THREE.Group(); scene.add(holder);
 function setup() {
   holder.clear(); cells = [];
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === current));
-  const list = current === "overview"
+  const list = current === "aliens"
+    ? Object.keys(ENEMY).map(t => ({ alien: t, label: ALIEN_NAMES[t], sub: t }))
+    : current === "overview"
     ? Object.keys(SAT_NAMES).flatMap(t => [{ type: t, level: 2, path: null, label: SAT_NAMES[t], sub: "Tier 3" }])
     : VARIANTS(current).map(v => ({ ...v, type: current, sub: v.label, label: v.path ? `${v.path}${v.level - 2}` : "" }));
   for (const v of list) {
-    const m = buildSatellite(v);
+    const m = v.alien ? buildAlien(v.alien, ENEMY[v.alien][0], ENEMY[v.alien][1]) : buildSatellite(v);
+    if (v.alien) m.userData.baseScale = 1;
     holder.add(m); m.userData.update(0, false, 0); m.scale.setScalar(m.userData.baseScale);
     const box = new THREE.Box3().setFromObject(m);
     m.visible = false;
@@ -62,13 +67,13 @@ function layout() {
     c.rect = { x: off + k * cw, y: top + r * ch, w: cw, h: ch };
     const d = document.createElement("div"); d.className = "lab";
     d.style.left = c.rect.x + cw / 2 + "px"; d.style.top = c.rect.y + ch - 40 + "px";
-    d.innerHTML = current === "overview" ? `<b>${c.label}</b>${c.type}` : `<b>${c.sub}</b>${c.label || "&nbsp;"}`;
+    d.innerHTML = current === "overview" || current === "aliens" ? `<b>${c.label}</b>${c.sub || c.type}` : `<b>${c.sub}</b>${c.label || "&nbsp;"}`;
     labs.appendChild(d);
   });
 }
 const tabs = document.getElementById("tabs");
-for (const t of ["overview", ...Object.keys(SAT_NAMES)]) {
-  const b = document.createElement("button"); b.dataset.t = t; b.textContent = t === "overview" ? "All seven" : SAT_NAMES[t];
+for (const t of ["overview", ...Object.keys(SAT_NAMES), "aliens"]) {
+  const b = document.createElement("button"); b.dataset.t = t; b.textContent = t === "overview" ? "All seven" : t === "aliens" ? "👾 Invaders" : SAT_NAMES[t];
   b.onclick = () => { current = t; setup(); }; tabs.appendChild(b);
 }
 addEventListener("resize", layout);
