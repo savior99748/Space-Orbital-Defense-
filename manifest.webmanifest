@@ -1,6 +1,6 @@
 {
-  "name": "Orbital Defense",
-  "short_name": "Orbital Defense",
+  "name": "Ringwarden: Orbital Defense",
+  "short_name": "Ringwarden",
   "description": "A space tower defense game across our Solar System.",
   "start_url": "./",
   "scope": "./",

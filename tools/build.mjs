@@ -105,4 +105,4 @@ for (const n of names) {
   if (!existsSync(path.join(root, "assets/icons/icon-1024.png"))) { console.error("Missing icons: run node tools/make-icons.mjs first"); process.exit(1); }
   build(n);
 }
-console.log(`\nOrbital Defense v${VERSION}: built ${names.length} target(s).`);
+console.log(`\nRingwarden: Orbital Defense v${VERSION}: built ${names.length} target(s).`);

@@ -1,4 +1,4 @@
-# Orbital Defense
+# Ringwarden: Orbital Defense
 
 A space tower defense game set across our Solar System. Hostile drones, comets, asteroids, shield cruisers and motherships spiral in toward the planet you're defending. You build satellites on **rotating orbit rings** around the planet and its moons, and because the rings turn, your defenses sweep around over time. Survive **30 waves** and destroy the Dreadnought, then keep going in Freeplay.
 
@@ -74,6 +74,13 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 ## 3D and Classic 2D
 
 Since v3 the game is **3D**: bigger planets, tilted orbits (Earth has LEO, MEO and HEO), and invaders that attack from every height. Drag to rotate, pinch or use **+ / −** to zoom. Prefer the original look? Choose **▦ Classic 2D** on the main menu (the v2 maps and balance). Each view keeps its own records and leaderboards.
+
+## Graphics settings
+
+The 3D view adjusts itself: if a device can't keep a smooth frame rate during a game, it lowers the render
+resolution, then turns off metal reflections, then the nebula backdrop. **📳 Shake** on the main menu sets
+camera shake to On, Low or Off. Players who ask their system for reduced motion get a still menu scene and
+Low shake by default. Preview every satellite and invader model at `/hangar/`.
 
 ## Endless mode & leaderboards
 

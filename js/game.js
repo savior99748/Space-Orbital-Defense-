@@ -1,4 +1,4 @@
-// Orbital Defense: board (bodies/rings/slots), simulation, rendering, menus and stats.
+// Ringwarden: Orbital Defense: board (bodies/rings/slots), simulation, rendering, menus and stats.
 (function (OD) {
   "use strict";
   const TAU = Math.PI * 2;
@@ -891,7 +891,7 @@
     const k = scale * zoom * dpr;
     ctx.setTransform(k, 0, 0, k, dpr * (cssW / 2 - camX * scale * zoom), dpr * (cssH / 2 - camY * scale * zoom));
     const time = B.time;
-    if (S && S.shake) ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
+    if (S && S.shake && OD.shake) ctx.translate((Math.random() - 0.5) * S.shake * OD.shake, (Math.random() - 0.5) * S.shake * OD.shake);
 
     // map-tinted nebula + distant sunlight
     const neb = ctx.createRadialGradient(CX, CY, 20, CX, CY, MAP.view * 0.75);
@@ -1082,6 +1082,9 @@
     return true;
   }
   function repaintIcons() {
+    // the 3D module loads after the first menu is drawn: redraw the menu so it gains the 3D planet art
+    if (!S && document.body.classList.contains("in-menu") && ui.overlay.querySelector("[data-map]")) mainMenu();
+    ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
     if (ui.shop.children.length) buildShop();
     if (S && S.selectedTower) renderInfo();
   }
@@ -1345,9 +1348,13 @@
   }
   const hideOverlay = () => ui.overlay.classList.add("hidden");
 
+  // camera shake setting (visual only): 1 = on, 0.4 = reduced, 0 = off; reduced-motion users start at reduced
+  const SHAKE_STEPS = [1, 0.4, 0];
+  OD.shake = (() => { const v = parseFloat(store.get("od_shake")); if (SHAKE_STEPS.includes(v)) return v; return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.4 : 1; })();
+  const shakeLabel = () => `📳 Shake: ${OD.shake === 1 ? "On" : OD.shake ? "Low" : "Off"}`;
   function soundButtons() {
     const statBtn = stats.configured ? `<button data-act="stats-toggle" title="Anonymous gameplay stats, no personal data">${stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"}</button>` : "";
-    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button>${statBtn}</div>`;
+    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button>${statBtn}</div>`;
   }
 
   function mapCard(key) {
@@ -1363,6 +1370,7 @@
   }
 
   function drawMapPreview(c, key) {
+    if (OD.is3D && OD.planetThumb && c.width < 280) { c.width = 280; c.height = 200; } // sharper for 3D portraits
     const m = MAPS[key], g = c.getContext("2d"), w = c.width, h = c.height;
     g.clearRect(0, 0, w, h);
     const s = (h * 0.92) / m.view;
@@ -1370,13 +1378,17 @@
     for (const moon of m.moons) { g.strokeStyle = "rgba(160,170,220,0.25)"; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, moon.orbit * s, 0, Math.PI * 2); g.stroke(); }
     for (const r of m.rings) { g.strokeStyle = "rgba(108,240,255,0.25)"; g.setLineDash([2, 3]); g.beginPath(); g.arc(0, 0, r.r * s, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
     const rootR = Math.max(m.final ? 9 : 7, m.body.r * s * 1.4);
-    OD.drawBodyRings(g, m.body.style, 0, 0, rootR);
-    OD.drawBody(g, m.body.style, 0, 0, rootR, 0);
+    // 3D view: planet portraits rendered by the 3D engine (same look as the battlefield)
+    const portrait = (style, x, y, r) => {
+      const p = OD.is3D && OD.planetThumb && OD.planetThumb(style);
+      if (!p) return false;
+      const d = r * 2 * p.extent * 1.04; g.drawImage(p.canvas, x - d / 2, y - d / 2, d, d); return true;
+    };
+    if (!portrait(m.body.style, 0, 0, rootR * (m.final ? 1.25 : 1.7))) { OD.drawBodyRings(g, m.body.style, 0, 0, rootR); OD.drawBody(g, m.body.style, 0, 0, rootR, 0); }
     for (const moon of m.moons) {
       const x = Math.cos(moon.phase) * moon.orbit * s, y = Math.sin(moon.phase) * moon.orbit * s;
       const r = Math.max(2.2, moon.r * s * 1.6);
-      OD.drawBodyRings(g, moon.style, x, y, r);
-      OD.drawBody(g, moon.style, x, y, r, 0, -x || -1, -y || -1);
+      if (!portrait(moon.style, x, y, r * 1.15)) { OD.drawBodyRings(g, moon.style, x, y, r); OD.drawBody(g, moon.style, x, y, r, 0, -x || -1, -y || -1); }
     }
     g.restore();
   }
@@ -1396,7 +1408,7 @@
     const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun();
     const got = getAch();
     showOverlay(`
-      <h1>ORBITAL DEFENSE</h1>
+      <div class="rw-eyebrow">SOLAR SYSTEM DEFENSE COMMAND</div><h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
       ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
       <div class="view-row">
@@ -1405,6 +1417,7 @@
       </div>
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
+        ${OD.is3D && OD.planetThumb ? `<canvas class="map-globe" width="220" height="220" data-globe="${m.body.style}" aria-hidden="true"></canvas>` : ""}
         <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
         <p>${m.desc}</p>
         <p class="feature">✦ ${m.feature}</p>
@@ -1440,6 +1453,22 @@
       </details>
       <p class="muted small version">v${P.version}${P.name !== "web" ? ` · ${P.name}` : ""} · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>`, true);
     ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
+    spinGlobe();
+  }
+  // mission panel: a large planet that turns slowly (3D view only; reduced motion keeps it still)
+  let globeRaf = 0;
+  function spinGlobe() {
+    cancelAnimationFrame(globeRaf);
+    const c = ui.overlay.querySelector("canvas[data-globe]");
+    if (!c || !OD.planetThumb) return;
+    const still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let last = 0;
+    const tick = now => {
+      if (!c.isConnected) return;
+      if (now - last > 66) { last = now; const img = OD.planetThumb(c.dataset.globe, still ? 0 : now / 1000 * 0.35); if (img) { const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); g.drawImage(img.canvas, 0, 0, c.width, c.height); } }
+      if (!still) globeRaf = requestAnimationFrame(tick);
+    };
+    globeRaf = requestAnimationFrame(tick);
   }
 
   function showLeaderboards() {
@@ -1535,6 +1564,7 @@
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
+      case "shake": OD.shake = SHAKE_STEPS[(SHAKE_STEPS.indexOf(OD.shake) + 1) % SHAKE_STEPS.length]; store.set("od_shake", String(OD.shake)); a.textContent = shakeLabel(); break;
       case "stats-toggle": stats.setEnabled(!stats.enabled); a.textContent = stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"; break;
     }
   });
