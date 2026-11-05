@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Satellite Hangar</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05070f; color: #dfe7ff; font: 14px system-ui, sans-serif; overflow: hidden; }
+  #tabs { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 6px; padding: 10px 12px; flex-wrap: wrap; z-index: 2; background: linear-gradient(#05070fee, #05070f00); }
+  #tabs button { background: #121a33; color: #cfe0ff; border: 1px solid #2a3a6a; border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  #tabs button.on { background: #2b4cff; border-color: #6c8bff; color: #fff; }
+  #labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+  .lab { position: absolute; text-align: center; transform: translateX(-50%); font-size: 13px; color: #aebbe6; }
+  .lab b { display: block; color: #fff; font-size: 15px; }
+  #title { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; color: #8090c0; font-size: 13px; z-index: 2; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="tabs"></div>
+<div id="labels"></div>
+<div id="title">Drag to rotate · each satellite tab shows tier 1–3, then specialization A (tiers 4–5) and B (tiers 4–5)</div>
+<script type="module" src="./hangar.js"></script>
+</body>
+</html>
