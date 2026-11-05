@@ -182,36 +182,56 @@ async function cover(browser, name, w, h) {
 }
 
 // ---------- videos (pure gameplay, no UI or cursor) ----------
+// A scripted cinematic camera over a real battle: a close sweep past the satellites as they fire, a pull-back
+// that reveals the whole fight, then a slow push in. Rendered above the output size and scaled down
+// (smooth edges). Orbit labels and empty-slot markers are hidden for a clean picture.
+const SHOTS = {
+  //            time  yaw    pitch  dist   (dist in units of the fitted view)
+  landscape: [[0,    -1.2,  0.22,  0.34], [5, -0.8, 0.3, 0.38], [10, -0.45, 0.48, 0.54], [15, -0.15, 0.55, 0.58], [20, 0.1, 0.42, 0.44]],
+  portrait:  [[0,    -1.2,  0.26,  0.48], [5, -0.8, 0.36, 0.52], [10, -0.45, 0.55, 0.68], [15, -0.15, 0.6, 0.72],  [20, 0.1, 0.48, 0.58]],
+};
+const PREVIEW = !!process.env.PREVIEW; // quick check: small frames, every 2.5 s
+const SS = PREVIEW ? 0.4 : 1.34; // supersampling
 async function video(browser, name, outW, outH) {
   rmSync(TMP, { recursive: true, force: true }); mkdirSync(TMP, { recursive: true });
   const { ctx, page } = await openGame(browser, { width: 1280, height: 720 }, 1);
   const emptySlot = 3;
   await page.evaluate(SETUP, { emptySlot });
+  await page.evaluate(() => { const v = window.__view3d; if (v.quality) v.quality.level = 99; }); // the recorder runs on a virtual clock: keep full quality
   await page.evaluate(FULLSCREEN, [outW / 3, outH / 3]);
-  await step(page, 50, 200);
-  const portrait = outH > outW;
-  await page.evaluate(portrait => { const v = window.__view3d; v.cam.yaw = 0.2; v.cam.pitch = portrait ? 0.8 : 0.68; v.cam.dist = v.cam.fit * (portrait ? 1.0 : 0.72); v.cam.tx = 0; v.cam.tz = 0; }, portrait);
-  await page.evaluate(FULLSCREEN, [outW, outH]);
+  await step(page, 50, 160); // let the first invaders arrive
+  await page.evaluate(() => { // cinematic clean-up: no orbit/moon name tags, no empty-slot markers
+    const v = window.__view3d, n = window.__od.board().slots.length;
+    v.scene.traverse(o => { const im = o.isSprite && o.material.map && o.material.map.image; if (im && o.material.blending === 1 && im.height < 64 && im.width > im.height) o.visible = false; if (o.isInstancedMesh && o.count === n) o.visible = false; });
+  });
+  await page.evaluate(FULLSCREEN, [Math.round(outW * SS), Math.round(outH * SS)]);
+  const keys = SHOTS[outH > outW ? "portrait" : "landscape"];
   const FPS = 30, N = FPS * 20;
   for (let f = 0; f < N; f++) {
-    await page.evaluate(([f, emptySlot]) => {
-      const od = window.__od, v = window.__view3d, S = od.state();
-      v.cam.yaw += 0.0025; v.cam.dist *= 0.9994;
-      if (f === 90) od.placeTower(emptySlot, "rail");                     // 3 s: build a Railgun
-      if (f === 150) od.upgradeTower(od.towerAt(emptySlot));
-      if (f === 210) od.upgradeTower(od.towerAt(emptySlot));
-      if (f === 270) od.upgradeTower(od.towerAt(emptySlot), "A");          // specialize: Mass Driver
-      if (f === 330) od.upgradeTower(od.towerAt(emptySlot));               // Planet Cracker
-      if (f === 390) document.getElementById("odBtn").click();             // 13 s: Overdrive
-      if (S.queue.length === 0 && S.enemies.length < 8 && f < 510) { S.waveActive = false; od.startWave(); }
-    }, [f, emptySlot]);
+    await page.evaluate(([f, emptySlot, keys]) => {
+      const od = window.__od, v = window.__view3d, S = od.state(), t = f / 30;
+      // camera: smooth interpolation between the key shots
+      let i = 0; while (i < keys.length - 2 && t > keys[i + 1][0]) i++;
+      const a = keys[i], b = keys[i + 1], u = Math.min(1, Math.max(0, (t - a[0]) / (b[0] - a[0]))), e = u * u * (3 - 2 * u);
+      v.cam.yaw = a[1] + (b[1] - a[1]) * e; v.cam.pitch = a[2] + (b[2] - a[2]) * e; v.cam.dist = v.cam.fit * (a[3] + (b[3] - a[3]) * e); v.cam.tx = 0; v.cam.tz = 0;
+      // the battle: build and upgrade a railgun in shot, Overdrive at the climax, keep invaders coming
+      if (f === 165) od.placeTower(emptySlot, "rail");
+      if (f === 215) od.upgradeTower(od.towerAt(emptySlot));
+      if (f === 260) od.upgradeTower(od.towerAt(emptySlot));
+      if (f === 305) od.upgradeTower(od.towerAt(emptySlot), "A");
+      if (f === 350) od.upgradeTower(od.towerAt(emptySlot));
+      if (f === 400) document.getElementById("odBtn").click();
+      if (S.queue.length === 0 && S.enemies.length < 10 && f < 540) { S.waveActive = false; od.startWave(); }
+    }, [f, emptySlot, keys]);
+    if (PREVIEW && f % 75) { await step(page, 1000 / FPS); continue; }
     save(await page.evaluate(GRAB, [1000 / FPS, null, "image/jpeg"]), path.join(TMP, `f${String(f).padStart(4, "0")}.jpg`));
     if (f % 60 === 0) process.stdout.write(`  ${name}: ${f / FPS}s\n`);
   }
   await ctx.close();
+  if (PREVIEW) { ff("-pattern_type", "glob", "-i", path.join(TMP, "f*.jpg"), "-vf", "tile=4x2", path.join(OUT, `preview-${name}.jpg`)); return console.log(`preview-${name}.jpg`); }
   const out = path.join(OUT, `video-${name}-${outW}x${outH}.mp4`);
-  ff("-framerate", String(FPS), "-i", path.join(TMP, "f%04d.jpg"), "-vf", "format=yuv420p",
-    "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-movflags", "+faststart", "-an", out);
+  ff("-framerate", String(FPS), "-i", path.join(TMP, "f%04d.jpg"), "-vf", `scale=${outW}:${outH}:flags=lanczos,format=yuv420p`,
+    "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-movflags", "+faststart", "-an", out);
   rmSync(TMP, { recursive: true, force: true });
   console.log(`video-${name}-${outW}x${outH}.mp4 (${(statSync(out).size / 1e6).toFixed(1)} MB)`);
 }
@@ -224,7 +244,7 @@ try {
     await cover(browser, "square", 800, 800);
   }
   if (ONLY !== "covers") {
-    await video(browser, "landscape", 1920, 1080);
-    await video(browser, "portrait", 1080, 1620);
+    if (process.env.VIDEO !== "portrait") await video(browser, "landscape", 1920, 1080);
+    if (process.env.VIDEO !== "landscape") await video(browser, "portrait", 1080, 1620);
   }
 } finally { await browser.close(); server.close(); }
