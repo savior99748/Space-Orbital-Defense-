@@ -541,6 +541,31 @@ function glow(v, color, size, k = 1) { // v: world position, k: brightness 0..1
 const trails = new WeakMap(); // missile → recent positions
 // send only the used part of a dynamic buffer to the GPU (not the whole pool) each frame
 function upload(attr, count) { if (!count) return; attr.clearUpdateRanges(); attr.addUpdateRange(0, count); attr.needsUpdate = true; }
+// destruction debris: a pooled set of glowing fragments that fly apart and cool (visual only)
+const DEBRIS = 600, debris = [];
+for (let i = 0; i < DEBRIS; i++) debris.push({ on: false, p: new THREE.Vector3(), v: new THREE.Vector3(), c: "#fff", s: 1, t0: 0, life: 1 });
+let debrisNext = 0, debrisLast = 0;
+function spawnDebris(L, t) {
+  const n = L.boss ? 60 : Math.min(18, 6 + L.size);
+  _gv.set(L.x, L.y, L.z); glow(_gv, "#fff2d0", L.size * (L.boss ? 9 : 5), 1); glow(_gv, L.color, L.size * (L.boss ? 14 : 7), 0.8); // kill flash
+  for (let i = 0; i < n; i++) {
+    const d = debris[debrisNext]; debrisNext = (debrisNext + 1) % DEBRIS;
+    d.on = true; d.p.set(L.x, L.y, L.z); d.t0 = t; d.life = 0.7 + Math.random() * 0.8;
+    d.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar((L.boss ? 90 : 40) * (0.4 + Math.random()));
+    d.c = i % 3 ? "#ff9a3c" : L.color; d.s = (L.boss ? 3 : 1.6) * (0.6 + Math.random());
+  }
+}
+function stepDebris(t) {
+  const dt = Math.min(0.1, Math.max(0, t - debrisLast)); debrisLast = t;
+  for (const d of debris) {
+    if (!d.on) continue;
+    const age = t - d.t0; if (age > d.life || age < 0) { d.on = false; continue; }
+    d.p.addScaledVector(d.v, dt); d.v.multiplyScalar(1 - dt * 1.5);
+    const k = 1 - age / d.life; glow(d.p, d.c, d.s * (1 + k * 2), k);
+  }
+}
+// muzzle flash: brief glow at the turret when a satellite fires (cooldown just reset)
+const MUZZLE = { laser: "#bff8ff", missile: "#ffb347", rail: "#c9ffb0", emp: "#fff3a0", carrier: "#ffc4ee" };
 // invader engine glows: [color, distance behind the centre, size] in units of the invader's size
 const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cruiser: ["#9fe0ff", 1.45, 1.4], dread: ["#ff7a3c", 1.3, 1.1], asteroid: ["#ff9a3c", 1.3, 1.3] };
 const _ev = new THREE.Vector3();
@@ -599,6 +624,21 @@ function sync() {
     m.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y);
     m.scale.setScalar(satScale * m.userData.baseScale);
     m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
+    // firing visuals, read from the satellite's cooldown (no gameplay change)
+    const st = tw.st, period = st && st.rate ? 1 / st.rate : 0, cd = tw.cd || 0;
+    if (period && MUZZLE[tw.type] && !st.dps) {
+      const since = period - cd; // seconds since the last shot
+      if (since >= 0 && since < 0.09 && tw.aim != null) {
+        const cp = Math.cos(tw.aimP || 0), reach = 18 * satScale;
+        _gv.set(m.position.x + Math.cos(tw.aim) * cp * reach, m.position.y + Math.sin(tw.aimP || 0) * reach, m.position.z + Math.sin(tw.aim) * cp * reach);
+        glow(_gv, MUZZLE[tw.type], 9 * satScale, 1 - since / 0.09);
+      }
+      if (tw.type === "rail" && period > 0.8 && cd < 0.6 && cd > 0) { // railgun charge-up before each shot
+        const k = 1 - cd / 0.6, cp = Math.cos(tw.aimP || 0), reach = 12 * satScale;
+        _gv.set(m.position.x + Math.cos(tw.aim) * cp * reach, m.position.y + Math.sin(tw.aimP || 0) * reach, m.position.z + Math.sin(tw.aim) * cp * reach);
+        glow(_gv, "#7dff9a", (4 + k * 8) * satScale, 0.3 + k * 0.6);
+      }
+    }
     // orient: local x = outward from the body, local z = along the orbit
     const q = OD.ringPoint(ring, p.a + 0.02);
     _ax.set(p.x - body.x, p.z || 0, p.y - body.y).normalize();
@@ -627,12 +667,26 @@ function sync() {
     if (e.type === "asteroid" || e.type === "rock") m.rotateX(e.spin);
     if (e.type === "mother") m.rotateY(e.spin);
     m.userData.flash(e.hit > 0, e.frozen > 0);
+    m.userData.last = m.userData.last || {};
+    const L = m.userData.last; L.x = m.position.x; L.y = m.position.y; L.z = m.position.z; L.size = e.def.size; L.color = e.def.color; L.boss = !!e.def.boss; L.dead = e.dead;
+    const sh = m.getObjectByName("shield");
+    if (sh) sh.visible = e.shield > 0;
+    if (sh && sh.visible) { // shield-hit ripple: the bubble flares and swells for a moment when it absorbs a hit
+      const since = S.time - (e.shieldHitAt ?? -10), k = since < 0.35 ? 1 - since / 0.35 : 0;
+      sh.scale.setScalar(sh.userData.base || (sh.userData.base = sh.scale.x));
+      if (k > 0 && e.shield > 0) { sh.scale.multiplyScalar(1 + k * 0.08); glow(m.position, "#9fd8ff", e.def.size * 4.2, k * 0.45); }
+      sh.children.forEach(c => { if (c.material) c.material.opacity = (c.isLineSegments ? 0.28 : 0.1) + k * (c.isLineSegments ? 0.5 : 0.18); });
+    }
     const eg = ENGINE[e.type]; // engine exhaust glow behind the ship (shared glow system: no extra draw calls)
     if (eg) { _ev.set(-1, 0, 0).applyQuaternion(m.quaternion).multiplyScalar(e.def.size * eg[1]).add(m.position); glow(_ev, eg[0], e.def.size * eg[2], 0.9); }
     m.userData.update(t);
-    const sh = m.getObjectByName("shield"); if (sh) sh.visible = e.shield > 0;
   }
-  for (const [id, m] of enemyMeshes) if (!eseen.has(id)) { scene.remove(m); enemyMeshes.delete(id); }
+  for (const [id, m] of enemyMeshes) if (!eseen.has(id)) {
+    const L = m.userData.last; // destroyed (not leaked): flash + glowing fragments
+    if (L && L.dead && S) spawnDebris(L, t);
+    scene.remove(m); enemyMeshes.delete(id);
+  }
+  stepDebris(t);
 
   // beams
   let n = 0;
@@ -723,7 +777,8 @@ function sync() {
   }
 
   // shake
-  if (S && S.shake) { camera.position.x += (Math.random() - 0.5) * S.shake * 0.6; camera.position.z += (Math.random() - 0.5) * S.shake * 0.6; }
+  const shk = S && S.shake ? S.shake * 0.6 * (window.OD.shake ?? 1) : 0;
+  if (shk) { camera.position.x += (Math.random() - 0.5) * shk; camera.position.z += (Math.random() - 0.5) * shk; }
 }
 
 // ---------- automatic quality ----------

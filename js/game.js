@@ -891,7 +891,7 @@
     const k = scale * zoom * dpr;
     ctx.setTransform(k, 0, 0, k, dpr * (cssW / 2 - camX * scale * zoom), dpr * (cssH / 2 - camY * scale * zoom));
     const time = B.time;
-    if (S && S.shake) ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
+    if (S && S.shake && OD.shake) ctx.translate((Math.random() - 0.5) * S.shake * OD.shake, (Math.random() - 0.5) * S.shake * OD.shake);
 
     // map-tinted nebula + distant sunlight
     const neb = ctx.createRadialGradient(CX, CY, 20, CX, CY, MAP.view * 0.75);
@@ -1346,9 +1346,13 @@
   }
   const hideOverlay = () => ui.overlay.classList.add("hidden");
 
+  // camera shake setting (visual only): 1 = on, 0.4 = reduced, 0 = off; reduced-motion users start at reduced
+  const SHAKE_STEPS = [1, 0.4, 0];
+  OD.shake = (() => { const v = parseFloat(store.get("od_shake")); if (SHAKE_STEPS.includes(v)) return v; return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.4 : 1; })();
+  const shakeLabel = () => `📳 Shake: ${OD.shake === 1 ? "On" : OD.shake ? "Low" : "Off"}`;
   function soundButtons() {
     const statBtn = stats.configured ? `<button data-act="stats-toggle" title="Anonymous gameplay stats, no personal data">${stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"}</button>` : "";
-    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button>${statBtn}</div>`;
+    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button>${statBtn}</div>`;
   }
 
   function mapCard(key) {
@@ -1541,6 +1545,7 @@
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
+      case "shake": OD.shake = SHAKE_STEPS[(SHAKE_STEPS.indexOf(OD.shake) + 1) % SHAKE_STEPS.length]; store.set("od_shake", String(OD.shake)); a.textContent = shakeLabel(); break;
       case "stats-toggle": stats.setEnabled(!stats.enabled); a.textContent = stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"; break;
     }
   });
