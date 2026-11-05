@@ -1893,6 +1893,12 @@
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 
+  // iOS Safari can keep a scroll offset after the phone is rotated: snap back to the top.
+  const unscroll = () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); document.body.scrollTop = 0; document.documentElement.scrollTop = 0; };
+  window.addEventListener("orientationchange", () => { unscroll(); setTimeout(unscroll, 300); setTimeout(unscroll, 800); });
+  window.addEventListener("resize", unscroll);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", unscroll);
+
   buildBoard(MAP_KEY); B.key = MAP_KEY;
   buildShop();
   requestAnimationFrame(frame);
