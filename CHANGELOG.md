@@ -2,7 +2,9 @@
 
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
-## v3.0.0 (in development): full 3D
+## v3.0.0: full 3D (CrazyGames release)
+First released to CrazyGames. The exact commit is recorded in the merge of the release pull request on GitHub.
+
 - **3D is the main game.** Three.js renderer (bundled in `vendor/three/`, MIT): lit planets with generated surfaces, Earth clouds and atmosphere, Saturn's rings, the Sun's glow; drag to rotate, pinch / wheel / + − to zoom.
 - **All 9 maps rebuilt for 3D** (`js/maps3d.js`): bigger planets, smaller satellite models on **tilted orbits** (Earth: LEO / MEO / HEO; others LOW / MID / HIGH, Uranus a near-polar orbit), tilted moon rings, and the Solar System with each planet's ring tilted.
 - **3D gameplay**: invaders attack from every height and spiral in through 3D space; ranges are spheres; barrels, missiles, railguns, lightning, explosions and fighters all work in 3D. Satellites get +20% range in 3D; each map's invader health is retuned with the skilled-player bot (Solar System is the toughest).
