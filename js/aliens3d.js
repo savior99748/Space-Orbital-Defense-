@@ -198,6 +198,8 @@ export function buildAlien(type, size, color) {
   const seed = Math.random() * 10;
   g.userData.mat = hull;
   g.userData.flash = (hit, frozen) => {
+    const env = hull.metalness > 0.3 ? metalEnv() : null; // follows the automatic quality switch
+    if (hull.envMap !== env) { hull.envMap = env; hull.needsUpdate = true; }
     if (hit) { hull.emissive.set(0xffd9c0); hull.emissiveIntensity = 0.45; } // a warm flash; bosses under fire stay readable
     else if (frozen) { hull.emissive.set(0xcdf6ff); hull.emissiveIntensity = 0.8; }
     else { hull.emissive.copy(accent); hull.emissiveIntensity = 0.06; }
