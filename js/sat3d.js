@@ -493,6 +493,7 @@ function bake(root, key, stop = []) {
 // moving groups (a spinning pod, a gatling) merge their own contents once and then turn as one piece
 function bakeGroup(group) { const p = group.parent; group.removeFromParent(); bake(group, null); if (p) p.add(group); }
 
+export const metalEnv = () => (reflections ? ENV : null); // for other modules' metal (the invaders)
 export function setReflections(on) {
   reflections = on;
   for (const m of mats.values()) if (m.userData.env) { m.envMap = on ? ENV : null; m.needsUpdate = true; }

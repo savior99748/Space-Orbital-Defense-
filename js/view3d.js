@@ -458,6 +458,9 @@ function glow(v, color, size, k = 1) { // v: world position, k: brightness 0..1
   gSize[gN] = size; gN++;
 }
 const trails = new WeakMap(); // missile → recent positions
+// invader engine glows: [color, distance behind the centre, size] in units of the invader's size
+const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cruiser: ["#9fe0ff", 1.45, 1.4], dread: ["#ff7a3c", 1.3, 1.1], asteroid: ["#ff9a3c", 1.3, 1.3] };
+const _ev = new THREE.Vector3();
 scene.add(beamMesh, beamCore, shotMesh, craftMesh, particles, glowPoints, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
 
 // ---------- per-frame sync with the game state ----------
@@ -539,6 +542,8 @@ function sync() {
     if (e.type === "asteroid" || e.type === "rock") m.rotateX(e.spin);
     if (e.type === "mother") m.rotateY(e.spin);
     m.userData.flash(e.hit > 0, e.frozen > 0);
+    const eg = ENGINE[e.type]; // engine exhaust glow behind the ship (shared glow system: no extra draw calls)
+    if (eg) { _ev.set(-1, 0, 0).applyQuaternion(m.quaternion).multiplyScalar(e.def.size * eg[1]).add(m.position); glow(_ev, eg[0], e.def.size * eg[2], 0.9); }
     m.userData.update(t);
     const sh = m.getObjectByName("shield"); if (sh) sh.visible = e.shield > 0;
   }
