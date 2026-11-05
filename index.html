@@ -319,6 +319,23 @@ button:not(:disabled):active{transform:scale(.975)}
 #overlay h1{font-size:40px;background:linear-gradient(180deg,#ffffff,#9eeeff 55%,#3fc6ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px #2fd0ff66)}
 .map-card canvas{background:radial-gradient(circle at 50% 50%,#13294a 0%,rgba(10,25,48,0) 70%)}
 @media(max-width:720px){#overlay h1{font-size:30px}}
+/* Command interface (merged from the visual-upgrade ZIP, phases 6-7; without its backdrop blur and
+   drop-shadow filters, which cost frame rate over the live 3D view). */
+#overlay .rw-eyebrow{color:#70d9fa;font-size:10px;letter-spacing:.35em;font-weight:800;margin:0 0 6px}
+#overlay button.primary{background:linear-gradient(115deg,#087cbd,#10bde0);color:#f8ffff;border-color:#67dfff;box-shadow:0 0 22px rgba(7,159,236,.18)}
+#overlay button.primary:hover:not(:disabled){background:linear-gradient(115deg,#0b8fd8,#22cdf0)}
+@media(hover:hover){#overlay button:hover:not(:disabled),.tower-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(13,171,240,.17)}}
+button:not(:disabled):active{transform:translateY(0) scale(.97)}
+button:disabled{opacity:.42;filter:saturate(.4);cursor:not-allowed}
+button.on,.diff-btn.selected,.mode-btn.selected{box-shadow:inset 0 0 0 1px currentColor,0 0 14px rgba(98,233,255,.22)}
+#overlay .map-card{background:radial-gradient(ellipse at 50% 12%,rgba(31,75,120,.55),rgba(7,15,34,.95) 72%);border:1px solid rgba(100,160,211,.3);border-radius:13px;overflow:hidden}
+#overlay .map-card.selected{border-color:#6de8ff;box-shadow:inset 0 0 0 1px #6de8ff,0 0 20px rgba(35,197,245,.24)}
+#overlay .map-card.final{background:radial-gradient(ellipse at 50% 12%,rgba(120,80,30,.5),rgba(16,22,40,.95) 72%);border-color:rgba(214,150,70,.55)}
+#overlay .map-detail{border:1px solid rgba(94,161,215,.28);background:linear-gradient(90deg,rgba(23,51,86,.45),rgba(8,18,36,.2));border-radius:12px}
+.tower-btn.selected{border-color:#76e8ff;box-shadow:inset 0 0 0 1px #76e8ff,0 0 17px rgba(45,189,247,.3)}
+#overlay .card{animation:rwIn .28s ease-out}
+@keyframes rwIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){#overlay .card{animation:none}#overlay button,.tower-btn,button{transition:none}#overlay button:hover:not(:disabled),.tower-btn:hover:not(:disabled){transform:none}}
 </style>
 </head>
 <body>
