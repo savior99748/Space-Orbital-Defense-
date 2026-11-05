@@ -25,13 +25,13 @@ rmSync(TMP, { recursive: true, force: true }); mkdirSync(TMP, { recursive: true 
 // ---------- the cut ----------
 // keys: [time in the clip, yaw, pitch, distance as a fraction of the fitted view]
 const CLIPS = [
-  { map: "saturn", wave: 22, secs: 3.5, caption: "DEFEND EVERY WORLD",
+  { map: "saturn", wave: 22, secs: 3.5, caption: "DEFEND EVERY PLANET",
     keys: [[0, -1.0, 0.3, 0.42], [3.5, -0.55, 0.42, 0.58]] },
-  { map: "jupiter", wave: 24, secs: 3.5, caption: "MOONS BEND THEIR PATHS",
+  { map: "jupiter", wave: 24, secs: 3.5, caption: "GRAVITY BENDS ALIEN INVADERS' PATHS",
     keys: [[0, -1.3, 0.45, 0.72], [3.5, -0.9, 0.55, 0.58]] },
-  { map: "earth", wave: 25, secs: 2.5, caption: "COMMAND THE ORBITS",
+  { map: "earth", wave: 25, secs: 2.5, caption: "COMMAND YOUR STAR FLEET",
     keys: [[0, -1.25, 0.24, 0.42], [2.5, -0.95, 0.32, 0.5]] },
-  { map: "sol", wave: 50, endless: true, secs: 8, caption: "WAVE 50: THE DREADNOUGHT",
+  { map: "sol", wave: 50, endless: true, secs: 8, caption: "AND SAVE OUR SOLAR SYSTEM!",
     keys: [[0, 0.2, 0.5, 0.46], [4, 0.7, 0.6, 0.62], [8, 1.1, 0.5, 0.48]] },
 ];
 const END = 2.5; // end card seconds
@@ -94,13 +94,21 @@ const FRAME = ([keys, t, caption, capAlpha]) => {
   if (caption && capAlpha > 0) {
     const Wc = c.width, Hc = c.height, y = Hc * 0.78;
     g.font = `900 100px "Inter Display", Inter, sans-serif`;
-    const size = Math.min(Wc * 0.072, 100 * Wc * 0.84 / (g.measureText(caption).width * 1.06)); // fit the width
+    // long captions wrap onto two lines rather than shrinking to fit
+    let lines = [caption];
+    if (100 * Wc * 0.84 / (g.measureText(caption).width * 1.06) < Wc * 0.06) {
+      const words = caption.split(" "), half = Math.ceil(words.length / 2);
+      lines = [words.slice(0, half).join(" "), words.slice(half).join(" ")];
+    }
+    const widest = Math.max(...lines.map(l => g.measureText(l).width));
+    const size = Math.min(Wc * 0.072, 100 * Wc * 0.84 / (widest * 1.06));
     const band = g.createLinearGradient(0, y - size * 1.6, 0, y + size * 2.2); band.addColorStop(0, "rgba(2,6,16,0)"); band.addColorStop(0.5, `rgba(2,6,16,${0.55 * capAlpha})`); band.addColorStop(1, "rgba(2,6,16,0)");
     g.fillStyle = band; g.fillRect(0, y - size * 1.6, Wc, size * 3.8);
     g.globalAlpha = capAlpha; g.textAlign = "center"; g.textBaseline = "middle"; g.font = `900 ${size}px "Inter Display", Inter, sans-serif`;
     if ("letterSpacing" in g) g.letterSpacing = `${size * 0.05}px`;
     const grad = g.createLinearGradient(0, y - size / 2, 0, y + size / 2); grad.addColorStop(0, "#ffffff"); grad.addColorStop(1, "#7fe3ff");
-    g.shadowColor = "rgba(60,190,255,0.85)"; g.shadowBlur = size * 0.35; g.fillStyle = grad; g.fillText(caption, Wc / 2, y);
+    g.shadowColor = "rgba(60,190,255,0.85)"; g.shadowBlur = size * 0.35; g.fillStyle = grad;
+    lines.forEach((l, k) => g.fillText(l, Wc / 2, y + (k - (lines.length - 1) / 2) * size * 1.12));
   }
   return c.toDataURL("image/jpeg", 0.93);
 };
