@@ -123,6 +123,11 @@
   const d3 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + ((a.z || 0) - (b.z || 0)) ** 2;
   const towerAt = id => S && S.towers.find(t => t.slot === id);
   const baseStats = t => tierOf(t.type, t.level, t.path);
+  // Overclock (Endless and Freeplay): fully upgraded satellites keep getting stronger, at a rising price.
+  const OC_MUL = 1.25, OC_KEYS = ["dmg", "dps", "clusterDmg", "burn", "income"];
+  const canOverclock = t => t.level >= 4 && S && (S.endless || S.freeplay);
+  const applyOc = (st, oc) => { const m = OC_MUL ** oc; for (const k of OC_KEYS) if (st[k]) st[k] = k === "income" ? Math.round(st[k] * m) : Math.round(st[k] * m * 10) / 10; return st; };
+  const ocCost = t => Math.round(tierOf(t.type, 4, t.path).cost * 0.6 * 1.6 ** (t.oc || 0) / 10) * 10;
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : Math.round(n).toString();
 
   function nearestSlot(x, y, maxD) {
@@ -299,6 +304,7 @@
         rate: b.rate ? b.rate * rateMul : b.rate,
         dps: b.dps ? b.dps * rateMul : b.dps,
       });
+      if (t.oc) applyOc(t.st, t.oc);
     }
 
     // fields (tractor) apply slow / vulnerability / pulses
@@ -670,7 +676,7 @@
   // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
   const RUN_KEY = `od_run${VIEW_TAG}`;
   const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
-    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold });
+    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0 });
   function saveRun() {
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
@@ -868,6 +874,7 @@
       <p class="muted small">Earned: ${fmt(st.earnedKills)} from kills · ${fmt(st.earnedBonus)} wave bonuses · ${fmt(st.earnedMining)} mining${st.overdrives ? ` · ⚡ ${st.overdrives} overdrives` : ""}</p>
       <div class="btns">${btns}</div>`, true);
     ui.overlay.querySelectorAll("canvas[data-preview]").forEach(c => {
+      if (paint3D(c)) return;
       const [type, lvl, path] = c.dataset.preview.split("|");
       const g = c.getContext("2d");
       g.setTransform(0.75, 0, 0, 0.75, 20, 20);
@@ -1063,15 +1070,32 @@
   }
 
   // ---------- UI ----------
+  // Satellite icons: 3D renders when the 3D view is on (view3d.js provides OD.satThumb), else the 2D art.
+  function paint3D(c) {
+    const [type, lvl, path] = c.dataset.preview.split("|");
+    const img = OD.is3D && OD.satThumb && OD.satThumb(type, +lvl, path || null);
+    if (!img) return false;
+    const px = Math.max(128, Math.round((c.clientWidth || 48) * Math.min(3, window.devicePixelRatio || 1)));
+    if (c.width !== px) { c.width = px; c.height = px; }
+    const g = c.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, px, px);
+    g.drawImage(img, 0, 0, px, px);
+    return true;
+  }
+  function repaintIcons() {
+    if (ui.shop.children.length) buildShop();
+    if (S && S.selectedTower) renderInfo();
+  }
+
   function buildShop() {
     ui.shop.innerHTML = "";
     for (const [type, def] of Object.entries(TOWERS)) {
       const b = document.createElement("button");
       b.className = "tower-btn";
       b.dataset.type = type;
-      b.innerHTML = `<canvas width="72" height="72"></canvas><span class="tb-text"><b style="color:${def.color}">${def.name}</b><small>${def.desc}</small><span class="cost">${def.tiers[0].cost} cr</span></span><kbd>${def.key}</kbd>`;
+      b.innerHTML = `<canvas width="72" height="72" data-preview="${type}|0|"></canvas><span class="tb-text"><b style="color:${def.color}">${def.name}</b><small>${def.desc}</small><span class="cost">${def.tiers[0].cost} cr</span></span><kbd>${def.key}</kbd>`;
       b.addEventListener("click", () => { sfx("click"); selectType(type); });
       ui.shop.appendChild(b);
+      if (paint3D(b.querySelector("canvas"))) continue;
       const c = b.querySelector("canvas").getContext("2d");
       c.setTransform(1.6, 0, 0, 1.6, 36, 36);
       OD.drawTower(c, { type, level: 0, aim: -Math.PI / 4 }, 0, -2, -Math.PI / 2, 0);
@@ -1143,7 +1167,7 @@
   function renderInfo() {
     const t = S && S.selectedTower;
     if (!t) { ui.info.classList.remove("open"); ui.info.innerHTML = ""; return; }
-    const def = TOWERS[t.type], st = baseStats(t);
+    const def = TOWERS[t.type], st = t.oc ? applyOc({ ...baseStats(t) }, t.oc) : baseStats(t);
     const pathDef = t.path ? def.paths[t.path] : null;
     const color = pathDef ? pathDef.color : def.color;
     let upHtml = "", next = null;
@@ -1152,6 +1176,13 @@
       upHtml = `<div class="choose">Choose a specialization (permanent):</div>
         ${["A", "B"].map(p => `<div class="path-desc" style="color:${def.paths[p].color}">${def.paths[p].name}: <span>${def.paths[p].desc}</span></div>${upgradeCard(t, 3, p)}`).join("")}`;
     } else if (t.level === 3) { next = tierOf(t.type, 4, t.path); upHtml = upgradeCard(t, 4, t.path); }
+    else if (canOverclock(t)) {
+      const oc = t.oc || 0, cost = ocCost(t), isMiner = def.kind === "miner";
+      upHtml = `${oc ? `<div class="maxed" style="color:${color}">⚡ Overclock ${oc}: ×${(OC_MUL ** oc).toFixed(2)} ${isMiner ? "income" : "damage"}</div>` : ""}
+        <button class="up-card oc-card" data-oc="1" ${S.money >= cost ? "" : "disabled"} style="--c:#ffd166">
+        <span class="oc-icon">⚡${oc + 1}</span>
+        <span><b>Overclock ${oc + 1}</b><small>+25% ${isMiner ? "income" : "damage"} (×${(OC_MUL ** (oc + 1)).toFixed(2)} total). No limit, each level costs more.</small><span class="cost">${cost} cr</span></span></button>`;
+    }
     else upHtml = `<div class="maxed" style="color:${color}">★ Fully upgraded</div>`;
 
     const body = B.bodies[B.rings[B.slots[t.slot].ring].body];
@@ -1160,7 +1191,7 @@
       <div class="info-head">
         <canvas width="64" height="64" data-preview="${t.type}|${t.level}|${t.path || ""}"></canvas>
         <div><h3 style="color:${color}">${st.name}</h3>
-        <div class="sub">${def.name} · Tier ${t.level + 1}/5${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} orbit</div></div>
+        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} orbit</div></div>
         <button class="close" data-act="close" aria-label="Close">✕</button>
       </div>
       <div class="stats">${statRows(t, st, next)}</div>
@@ -1168,6 +1199,7 @@
       <div class="actions">${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
+      if (paint3D(c)) return;
       const [type, lvl, path] = c.dataset.preview.split("|");
       const g = c.getContext("2d"), s = c.width / 64;
       g.setTransform(1.15 * s, 0, 0, 1.15 * s, c.width / 2, c.height / 2);
@@ -1178,6 +1210,7 @@
   ui.info.addEventListener("click", ev => {
     const t = S && S.selectedTower;
     if (!t) return;
+    if (ev.target.closest("[data-oc]") && !ev.target.closest("[data-oc]").disabled) return overclockTower(t);
     const up = ev.target.closest("[data-up]");
     const act = ev.target.closest("[data-act]");
     if (up && !up.disabled) upgradeTower(t, up.dataset.up || null);
@@ -1205,8 +1238,25 @@
     ringFx(p.x, p.y, 30, "#ffd166", 0.4, false, p.z);
     sfx(nextLevel === 3 ? "path" : "upgrade");
     if (nextLevel >= 3) toast(`${tier.name}!`);
-    if (nextLevel === 4) unlock("tier5");
+    if (nextLevel === 4) { unlock("tier5"); if (S.endless || S.freeplay) toast("Fully upgraded! Tap it again to ⚡ Overclock for even more power.", 3000); }
     if (nextLevel === 3) stats.track(`path/${t.type}/${TOWERS[t.type].paths[usePath].name.toLowerCase().replace(/ /g, "-")}`);
+    if (!S.waveActive) saveRun();
+    renderInfo(); updateUI(true);
+  }
+
+  function overclockTower(t) {
+    if (!canOverclock(t)) return;
+    const cost = ocCost(t);
+    if (S.money < cost) { sfx("deny"); return; }
+    S.money -= cost; t.spent += cost; S.stats.spent += cost;
+    t.oc = (t.oc || 0) + 1;
+    S.stats.overclocks = (S.stats.overclocks || 0) + 1;
+    const p = slotPos(t.slot);
+    burst(p.x, p.y, "#ffd166", 26, 130, 0.8, p.z);
+    ringFx(p.x, p.y, 36, "#ffd166", 0.5, false, p.z);
+    sfx("upgrade");
+    toast(`⚡ Overclock ${t.oc}!`);
+    if (t.oc === 1) stats.track(`overclock/${t.type}`);
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
@@ -1282,6 +1332,8 @@
         const tier = tierOf(S.selectedTower.type, lvl, lvl === 3 ? b.dataset.up : S.selectedTower.path);
         b.disabled = S.money < tier.cost;
       });
+      const oc = ui.info.querySelector("[data-oc]");
+      if (oc) oc.disabled = S.money < ocCost(S.selectedTower);
     }
   }
 
@@ -1837,7 +1889,7 @@
   // Test hook (used by automated playtests).
   window.__od = {
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
-    setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, mainMenu, saveRun, loadRun, getAch,
+    setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 

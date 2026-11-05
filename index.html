@@ -67,7 +67,7 @@
     display: none; font-size: 13px; }
   #info.open { display: block; }
   .info-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
-  .info-head canvas { width: 52px; height: 52px; background: #0a0d1f; border-radius: 10px; flex: none; }
+  .info-head canvas { width: 60px; height: 60px; background: #0a0d1f; border-radius: 10px; flex: none; }
   .info-head h3 { margin: 0; font-size: 16px; }
   .info-head .sub { color: var(--muted); font-size: 12px; }
   .info-head .close { margin-left: auto; padding: 4px 10px; align-self: flex-start; }
@@ -92,7 +92,9 @@
   #shop { display: flex; gap: 6px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: var(--panel);
     border-top: 1px solid #222750; overflow-x: auto; scrollbar-width: thin; }
   .tower-btn { position: relative; display: flex; align-items: center; gap: 6px; min-width: 168px; text-align: left; padding: 5px 8px 5px 4px; flex: none; }
-  .tower-btn canvas { width: 40px; height: 40px; flex: none; }
+  .tower-btn canvas { width: 52px; height: 52px; flex: none; }
+  .mode-3d .tower-btn canvas { background: radial-gradient(circle, #1d2a5c 0%, #0a0d1f00 70%); border-radius: 10px; }
+  .oc-icon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 8px; background: #2a2208; color: #ffd166; font-weight: 800; font-size: 15px; }
   .tower-btn .tb-text { display: flex; flex-direction: column; }
   .tower-btn b { font-size: 13px; }
   .tower-btn small { color: var(--muted); font-size: 11px; }
@@ -243,7 +245,7 @@
     .controls #waveBtn { flex: 2; }
     #shop { padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); gap: 5px; }
     .tower-btn { min-width: 0; flex-direction: column; gap: 0; padding: 4px 6px; width: 74px; text-align: center; }
-    .tower-btn canvas { width: 36px; height: 36px; }
+    .tower-btn canvas { width: 46px; height: 46px; }
     .tower-btn .tb-text { align-items: center; }
     .tower-btn b { font-size: 10.5px; line-height: 1.15; }
     .tower-btn small, .tower-btn kbd { display: none; }

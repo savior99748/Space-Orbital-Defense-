@@ -284,8 +284,53 @@ const geo = {
 function buildSat(t) {
   const g = buildSatellite({ type: t.type, level: t.level, path: t.path });
   g.scale.setScalar(SAT * g.userData.baseScale);
+  if (t.oc) { // Overclock: golden sparks orbit the satellite, one per level (up to 6)
+    const ring = new THREE.Group(), n = Math.min(6, t.oc), sparks = [];
+    const sm = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+    for (let i = 0; i < n; i++) { const s = new THREE.Mesh(new THREE.OctahedronGeometry(2.2), sm); ring.add(s); sparks.push(s); }
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(20, 0.5, 6, 48), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.45 }));
+    hoop.rotation.x = Math.PI / 2; ring.add(hoop); g.add(ring);
+    const base = g.userData.update;
+    g.userData.update = (time, fire, dt) => {
+      base(time, fire, dt);
+      sparks.forEach((s, i) => { const a = time * 1.6 + i * Math.PI * 2 / n; s.position.set(Math.cos(a) * 20, Math.sin(time * 2 + i) * 3, Math.sin(a) * 20); s.rotation.y = time * 3; });
+    };
+  }
   return g;
 }
+
+// ---------- satellite icons for the build bar and upgrade panel ----------
+// Rendered once per model on a small offscreen renderer and cached as 2D canvases.
+let thumbR = null, thumbScene, thumbCam;
+const thumbs = new Map();
+function satThumb(type, level, path) {
+  const key = `${type}|${level}|${path}`;
+  if (thumbs.has(key)) return thumbs.get(key);
+  try {
+    if (!thumbR) {
+      thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      thumbR.setPixelRatio(1); thumbR.setSize(192, 192, false); thumbR.outputColorSpace = THREE.SRGBColorSpace; thumbR.setClearColor(0x000000, 0);
+      thumbScene = new THREE.Scene();
+      thumbScene.add(new THREE.AmbientLight(0x8090c0, 2.2));
+      const k = new THREE.DirectionalLight(0xfff1dc, 3); k.position.set(60, 80, 70); thumbScene.add(k);
+      const r = new THREE.DirectionalLight(0x6c8bff, 1.6); r.position.set(-80, -20, -60); thumbScene.add(r);
+      thumbCam = new THREE.PerspectiveCamera(30, 1, 1, 2000);
+    }
+    const m = buildSatellite({ type, level, path });
+    m.userData.update(1.3, true, 0);
+    thumbScene.add(m);
+    const box = new THREE.Box3().setFromObject(m), ctr = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
+    const d = size * 1.15 + 6, yaw = 0.75, pitch = 0.42;
+    thumbCam.position.set(ctr.x + Math.cos(yaw) * Math.cos(pitch) * d, ctr.y + Math.sin(pitch) * d, ctr.z + Math.sin(yaw) * Math.cos(pitch) * d);
+    thumbCam.lookAt(ctr);
+    thumbR.render(thumbScene, thumbCam);
+    const c = document.createElement("canvas"); c.width = c.height = 192;
+    c.getContext("2d").drawImage(thumbR.domElement, 0, 0);
+    thumbScene.remove(m);
+    thumbs.set(key, c); return c;
+  } catch (err) { console.warn("satellite icon failed", err); thumbs.set(key, null); return null; }
+}
+window.OD.satThumb = satThumb;
 
 // ---------- enemies ----------
 // invader models live in js/aliens3d.js
@@ -358,7 +403,7 @@ function sync() {
   const seen = new Set();
   if (S) for (const tw of S.towers) {
     seen.add(tw.id);
-    const key = `${tw.type}|${tw.level}|${tw.path}`;
+    const key = `${tw.type}|${tw.level}|${tw.path}|${tw.oc || 0}`;
     let m = satMeshes.get(tw.id);
     if (!m || m.userData.key !== key) { if (m) scene.remove(m); m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
     const p = OD.slotPos(tw.slot), ring = B.rings[B.slots[tw.slot].ring], body = B.bodies[ring.body];
@@ -477,4 +522,5 @@ function project(x, y, z = 0) {
   _v.set(x - C.x, H + z, y - C.y).project(camera);
   return { x: (_v.x + 1) / 2 * r.width, y: (1 - _v.y) / 2 * r.height, behind: _v.z > 1 };
 }
-window.__view3d = { cam, camera, scene, renderer, project };
+window.__view3d = { cam, camera, scene, renderer, project, satThumb };
+if (window.__od && window.__od.repaintIcons) window.__od.repaintIcons();
