@@ -42,6 +42,7 @@ Bump `version` in `package.json` before each release; it is shown on the main me
 2. Upload `dist/orbital-defense-crazygames.zip` in the CrazyGames developer portal.
 3. The build already loads their SDK v3 and uses it for: rewarded ads (+credits between waves, one revive after losing), midgame ads (only when leaving an end-of-game screen), `gameplayStart`/`gameplayStop`, `loadingStop`, `happytime` on a win, and cloud saves through the `data` module.
 4. Use their QA preview to check the ads. Audio is muted and the game paused while an ad plays.
+5. Covers, preview videos and all listing text: see [business/CRAZYGAMES.md](business/CRAZYGAMES.md); `node tools/crazygames-media.mjs` renders the media from the real game.
 
 ### Poki and others
 Add another adapter in `js/platform.js` (copy the CrazyGames block) and a target in `tools/build.mjs`.
