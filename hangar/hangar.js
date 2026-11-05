@@ -1,6 +1,6 @@
 // Satellite Hangar: preview every satellite model at every tier (dev / design review page).
 import * as THREE from "../vendor/three/three.module.js";
-import { buildSatellite, SAT_NAMES, spaceEnvironment } from "../js/sat3d.js";
+import { buildSatellite, SAT_NAMES } from "../js/sat3d.js";
 import { buildAlien, ALIEN_NAMES } from "../js/aliens3d.js";
 const ENEMY = { drone: [9, "#ff5c7a"], swarm: [5, "#ff9fb2"], comet: [7, "#9ad7ff"], asteroid: [16, "#a68a6d"], rock: [9, "#8f7a64"], cruiser: [13, "#5c9dff"], mother: [30, "#ff3df2"], dread: [44, "#ff2d55"] };
 
@@ -29,7 +29,6 @@ renderer.setPixelRatio(Math.min(2, devicePixelRatio));
 renderer.setScissorTest(true);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.environment = spaceEnvironment(renderer);
 scene.add(new THREE.AmbientLight(0x6070a0, 1.2));
 const key = new THREE.DirectionalLight(0xfff1dc, 2.8); key.position.set(60, 80, 70); scene.add(key);
 const rim = new THREE.DirectionalLight(0x6c8bff, 1.4); rim.position.set(-80, -20, -60); scene.add(rim);

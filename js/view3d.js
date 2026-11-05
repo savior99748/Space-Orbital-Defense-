@@ -1,7 +1,7 @@
 // 3D view: draws the running game with Three.js (the default view since v3; Classic 2D uses game.js drawing). The game logic, UI and balance are the
 // same as the 2D game; this file only replaces the drawing and turns taps into slot selections.
 import * as THREE from "../vendor/three/three.module.js";
-import { buildSatellite, spaceEnvironment } from "./sat3d.js";
+import { buildSatellite, setReflections } from "./sat3d.js";
 import { buildAlien } from "./aliens3d.js";
 
 const od = () => window.__od;
@@ -20,14 +20,14 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05060f);
-scene.environment = spaceEnvironment(renderer); // reflections for metal (planets opt out)
 const camera = new THREE.PerspectiveCamera(40, 1, 1, 8000);
 
-const ambient = new THREE.AmbientLight(0x334466, 0.9);
+const ambient = new THREE.AmbientLight(0x434a58, 0.8); // near-neutral: a blue ambient turned beige planets teal
+const rim = new THREE.DirectionalLight(0x4f8dff, 1.1); // cool blue back light from behind the scene (follows the camera): outlines hulls and planets
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
 sun.position.set(-700, 520, -420);
 const sunPoint = new THREE.PointLight(0xffe2b0, 3, 0, 0);
-scene.add(ambient, sun, sunPoint);
+scene.add(ambient, sun, sunPoint, rim);
 
 // stars
 {
@@ -52,6 +52,7 @@ function placeCamera() {
   const cp = Math.cos(cam.pitch);
   camera.position.set(cam.tx + cam.dist * cp * Math.sin(cam.yaw), cam.dist * Math.sin(cam.pitch), cam.tz + cam.dist * cp * Math.cos(cam.yaw));
   camera.lookAt(cam.tx, 0, cam.tz);
+  rim.position.set(cam.tx - camera.position.x, -camera.position.y * 0.25, cam.tz - camera.position.z); // always behind the scene
 }
 function resize() {
   const r = stage.getBoundingClientRect();
@@ -136,25 +137,34 @@ const hex = h => { const n = parseInt(h.slice(1), 7 === h.length ? 16 : 16); ret
 const parseColor = c => { if (c.startsWith("#")) return hex(c); const m = c.match(/[\d.]+/g).map(Number); return [m[0], m[1], m[2]]; };
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
-function equirect(w, h, fn) {
-  const c = document.createElement("canvas"); c.width = w; c.height = h;
-  const g = c.getContext("2d"), img = g.createImageData(w, h), d = img.data;
+// Paints an equirectangular texture. fn(x, y, z, lat, u, v, out) returns a color; it may also set out.h (height,
+// 0-1, for a bump map) and out.r (roughness, 0-1; saved inverted as a specular map). Returns the color texture with
+// .bump / .rough attached when used.
+function equirect(w, h, fn, { bump = false, rough = false } = {}) {
+  const mk = () => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); return { c, g, img: g.createImageData(w, h) }; };
+  const C = mk(), Bm = bump && mk(), Rm = rough && mk(), d = C.img.data, out = { h: 0, r: 1 };
   for (let y = 0; y < h; y++) {
     const lat = (y / h - 0.5) * Math.PI;
     for (let x = 0; x < w; x++) {
       const lon = (x / w) * TAU, cl = Math.cos(lat);
-      const col = fn(Math.cos(lon) * cl, Math.sin(lat), Math.sin(lon) * cl, lat, x / w, y / h);
+      out.h = 0; out.r = 1;
+      const col = fn(Math.cos(lon) * cl, Math.sin(lat), Math.sin(lon) * cl, lat, x / w, y / h, out);
       const i = (y * w + x) * 4; d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = col[3] ?? 255;
+      if (Bm) { const v = Math.max(0, Math.min(255, out.h * 255)); Bm.img.data[i] = Bm.img.data[i + 1] = Bm.img.data[i + 2] = v; Bm.img.data[i + 3] = 255; }
+      if (Rm) { const v = Math.max(0, Math.min(255, (1 - out.r) * 255)); Rm.img.data[i] = Rm.img.data[i + 1] = Rm.img.data[i + 2] = v; Rm.img.data[i + 3] = 255; } // specular map: bright = glossy
     }
   }
-  g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const tex = ({ c, g, img }, srgb) => { g.putImageData(img, 0, 0); const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  const t = tex(C, true);
+  if (Bm) t.bump = tex(Bm, false);
+  if (Rm) t.rough = tex(Rm, false);
   return t;
 }
 
 const texCache = {};
-function bodyTexture(style) {
-  if (texCache[style]) return texCache[style];
+function bodyTexture(style, big = false) {
+  const ck = style + (big ? "|big" : "");
+  if (texCache[ck]) return texCache[ck];
   const ST = (window.OD.BODY_STYLE || {})[style] || { c: ["#dddddd", "#999999", "#444444"] };
   let seed = 0; for (const ch of style) seed = seed * 31 + ch.charCodeAt(0);
   const o = (seed % 97) * 1.7;
@@ -162,20 +172,22 @@ function bodyTexture(style) {
   let fn;
   if (style === "earth") {
     const deep = [16, 48, 120], shallow = [36, 102, 196], green = [62, 140, 72], brown = [140, 118, 70], ice = [235, 240, 248];
-    fn = (x, y, z, lat) => {
+    fn = (x, y, z, lat, u, v, out) => {
       const n = fbm(x * 2.2 + o, y * 2.2, z * 2.2, 6);
-      if (Math.abs(lat) > 1.22 + (n - 0.5) * 0.3) return ice;
-      if (n > 0.53) return mix(green, brown, Math.min(1, (n - 0.53) * 5 + Math.abs(lat) * 0.3));
+      if (Math.abs(lat) > 1.22 + (n - 0.5) * 0.3) { out.h = 0.6; out.r = 0.7; return ice; }
+      if (n > 0.53) { out.h = 0.45 + (n - 0.53) * 2.5; out.r = 0.92; return mix(green, brown, Math.min(1, (n - 0.53) * 5 + Math.abs(lat) * 0.3)); }
+      out.h = 0.3; out.r = 0.32; // glossy oceans catch the sun
       return mix(deep, shallow, Math.max(0, (n - 0.3) * 4));
     };
   } else {
     const bands = ST.bands ? ST.bands.map(parseColor) : null;
-    fn = (x, y, z, lat) => {
+    fn = (x, y, z, lat, u, v, out) => {
       const n = fbm(x * 3 + o, y * 3, z * 3, 5);
+      out.h = n;
       let col = mix(base[2], base[0], 0.35 + n * 0.55);
       if (bands) { const t = (y * 0.5 + 0.5) * bands.length + (n - 0.5) * 0.9; col = mix(col, bands[Math.max(0, Math.min(bands.length - 1, Math.floor(t)))], 0.7); }
       if (ST.swirl) col = mix(col, [255, 240, 200], Math.max(0, Math.sin(y * 9 + n * 6)) * 0.35);
-      if (ST.craters) { const c = fbm(x * 9 + o, y * 9, z * 9, 2); if (c > 0.62) col = mix(col, [0, 0, 0], (c - 0.62) * 1.6); }
+      if (ST.craters) { const c = fbm(x * 9 + o, y * 9, z * 9, 2); if (c > 0.62) { col = mix(col, [0, 0, 0], (c - 0.62) * 1.6); out.h -= (c - 0.62) * 2.2; } else if (c > 0.56) out.h += (c - 0.56) * 3; }
       if (ST.volcano && fbm(x * 7 + 3, y * 7, z * 7, 2) > 0.66) col = mix(col, [255, 140, 40], 0.6);
       if (ST.cracks && Math.abs(fbm(x * 4 + 9, y * 4, z * 4, 3) - 0.5) < 0.015) col = mix(col, [150, 90, 60], 0.7);
       if (ST.cap && y < -0.82) col = mix(col, [250, 250, 255], 0.85);
@@ -183,7 +195,8 @@ function bodyTexture(style) {
       return col;
     };
   }
-  return (texCache[style] = equirect(512, 256, fn));
+  const gas = !!ST.bands || style === "venus" || style === "uranus";
+  return (texCache[ck] = equirect(big ? 1024 : 512, big ? 512 : 256, fn, { bump: !gas, rough: style === "earth" }));
 }
 let cloudTex = null;
 function clouds() {
@@ -209,31 +222,86 @@ function textSprite(text, color = "#9aa3d6", size = 26) {
   return s;
 }
 
+// ---------- atmospheres, ring bands, the sun ----------
+// Fresnel glow on the planet's limb, brighter on the sunlit side. One cheap shader, shared geometry.
+const ATMOS = { earth: ["#4aa8ff", 1.0], venus: ["#ffd27a", 0.9], mars: ["#ff8a5a", 0.45], jupiter: ["#ffe0b0", 0.35], saturn: ["#ffe6a8", 0.35],
+  uranus: ["#9ef2ff", 0.6], neptune: ["#5f8cff", 0.65], titan: ["#ffb050", 0.9], triton: ["#cfe4ff", 0.3], io: ["#fff3a0", 0.25], europa: ["#cfe8ff", 0.2] };
+const atmoMeshes = [];
+function atmosphere(r, color, strength) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color(color) }, strength: { value: strength }, sunDir: { value: new THREE.Vector3(-0.7, 0.5, -0.4).normalize() } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; varying vec3 vW;
+      void main() { vec4 wp = modelMatrix * vec4(position, 1.0); vW = normalize(mat3(modelMatrix) * normal);
+        vN = normalize(normalMatrix * normal); vV = normalize(-(viewMatrix * wp).xyz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
+    fragmentShader: `uniform vec3 color; uniform float strength; uniform vec3 sunDir; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+      void main() { float rimF = pow(1.0 - max(dot(vN, vV), 0.0), 2.6); float lit = clamp(dot(vW, sunDir) * 0.7 + 0.45, 0.12, 1.0);
+        gl_FragColor = vec4(color * rimF * lit * strength * 1.6, 1.0); }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r * 1.045, 48, 32), mat); m.name = "atmosphere";
+  atmoMeshes.push(m); return m;
+}
+function ringBands() { // Saturn: banded, gapped, translucent
+  const c = document.createElement("canvas"); c.width = 512; c.height = 4;
+  const g = c.getContext("2d");
+  for (let x = 0; x < 512; x++) {
+    const t = x / 512, n = fbm(t * 40, 0.5, 0.5, 3);
+    let a = 0.25 + n * 0.55; if (t > 0.62 && t < 0.67) a *= 0.12; if (t < 0.05) a *= t / 0.05; if (t > 0.95) a *= (1 - t) / 0.05; // Cassini gap + soft edges
+    const b = 190 + n * 55; g.fillStyle = `rgba(${b + 20 | 0},${b | 0},${b * 0.78 | 0},${a.toFixed(3)})`; g.fillRect(x, 0, 1, 4);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function radialRing(inner, outer) { // RingGeometry with u running from the inner to the outer edge
+  const geo = new THREE.RingGeometry(inner, outer, 128, 1), p = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) { const r = Math.hypot(p.getX(i), p.getY(i)); uv.setXY(i, (r - inner) / (outer - inner), 0.5); }
+  return geo;
+}
+let sunTex = null;
+function sunSurface() {
+  return sunTex || (sunTex = equirect(512, 256, (x, y, z) => { const n = fbm(x * 6, y * 6, z * 6, 4), m = fbm(x * 20 + 5, y * 20, z * 20, 2); const k = n * 0.75 + m * 0.35; return mix([255, 120, 20], [255, 236, 160], Math.min(1, k)); }));
+}
+
+// ---------- nebula backdrop ----------
+const nebula = equirect(512, 256, (x, y, z) => {
+  const n = fbm(x * 1.6 + 7, y * 1.6, z * 1.6, 5), m = fbm(x * 3 + 2, y * 3 + 9, z * 3, 4);
+  const k = Math.max(0, n - 0.45) * 2.2, j = Math.max(0, m - 0.5) * 2;
+  return [6 + k * 46 + j * 12, 8 + k * 22 + j * 30, 18 + k * 70 + j * 60];
+});
+nebula.mapping = THREE.EquirectangularReflectionMapping;
+scene.background = nebula;
+
 // ---------- the board: bodies, rings, slots ----------
 let world = null; // rebuilt when the map changes
 function buildWorld(B) {
   if (world) { scene.remove(world.group); world.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  atmoMeshes.length = 0;
   const group = new THREE.Group(), MAP = od().map();
   const bodies = B.bodies.map(b => {
     const g = new THREE.Group();
     if (b.style === "sun") {
-      g.add(new THREE.Mesh(new THREE.SphereGeometry(b.r, 48, 32), new THREE.MeshBasicMaterial({ color: 0xffc04d })));
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture("rgba(255,170,60,0.85)"), blending: THREE.AdditiveBlending, depthWrite: false }));
-      glow.scale.set(b.r * 6, b.r * 6, 1); g.add(glow);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(b.r, 48, 32), new THREE.MeshBasicMaterial({ map: sunSurface() })); core.name = "surface"; g.add(core);
+      for (const [col, k] of [["rgba(255,200,110,0.95)", 3.2], ["rgba(255,140,40,0.55)", 6.5], ["rgba(255,110,30,0.22)", 11]]) {
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(col), blending: THREE.AdditiveBlending, depthWrite: false }));
+        glow.scale.set(b.r * k, b.r * k, 1); g.add(glow);
+      }
     } else {
       // the globe sits in a "tilt" group so its equator faces the camera (we look down on the orbital plane)
       const tilt = new THREE.Group(); tilt.name = "tilt"; tilt.rotation.order = "YXZ"; g.add(tilt);
-      const m = new THREE.Mesh(new THREE.SphereGeometry(b.r, 64, 40), new THREE.MeshStandardMaterial({ map: bodyTexture(b.style), roughness: 0.95, metalness: 0, envMapIntensity: 0 }));
+      const tex = bodyTexture(b.style, b.root);
+      // Phong, not Standard: planets must ignore the metal-reflection environment (it tinted them blue)
+      const m = new THREE.Mesh(new THREE.SphereGeometry(b.r, 64, 40), new THREE.MeshPhongMaterial({ map: tex, shininess: tex.rough ? 28 : 4,
+        specular: tex.rough ? 0x6f8fb0 : 0x111111, specularMap: tex.rough || null, bumpMap: tex.bump || null, bumpScale: tex.bump ? (b.root ? 1.6 : 1.1) : 1 }));
       m.name = "surface"; tilt.add(m);
+      if (ATMOS[b.style]) g.add(atmosphere(b.r, ...ATMOS[b.style]));
       if (b.style === "earth") {
-        const cl = new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.015, 64, 40), new THREE.MeshStandardMaterial({ map: clouds(), transparent: true, depthWrite: false, roughness: 1, envMapIntensity: 0 }));
+        const cl = new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.015, 64, 40), new THREE.MeshLambertMaterial({ map: clouds(), transparent: true, depthWrite: false }));
         cl.name = "clouds"; tilt.add(cl);
-        g.add(new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.07, 48, 32), new THREE.MeshBasicMaterial({ color: 0x4aa8ff, transparent: true, opacity: 0.14, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })));
+        g.add(new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.09, 48, 32), new THREE.MeshBasicMaterial({ color: 0x4aa8ff, transparent: true, opacity: 0.1, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })));
       }
       const ST = (window.OD.BODY_STYLE || {})[b.style] || {};
       if (ST.rings || (b.root && b.belt)) {
         const inner = b.belt ? b.belt.inner : b.r * 1.4, outer = b.belt ? b.belt.outer : b.r * 2.2;
-        const ring = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 96, 1), new THREE.MeshStandardMaterial({ color: 0xe8d6a8, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 1, depthWrite: false, envMapIntensity: 0 }));
+        const ring = new THREE.Mesh(radialRing(inner, outer), new THREE.MeshLambertMaterial({ map: ringBands(), transparent: true, side: THREE.DoubleSide, depthWrite: false, emissive: 0x2a2418 }));
         ring.rotation.x = -Math.PI / 2; g.add(ring);
       }
       if (ST.faintRing) { const ring = new THREE.Mesh(new THREE.RingGeometry(b.r * 1.55, b.r * 1.65, 64), new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; g.add(ring); }
@@ -316,7 +384,6 @@ function satThumb(type, level, path) {
       const k = new THREE.DirectionalLight(0xfff1dc, 3); k.position.set(60, 80, 70); thumbScene.add(k);
       const r = new THREE.DirectionalLight(0x6c8bff, 1.6); r.position.set(-80, -20, -60); thumbScene.add(r);
       thumbCam = new THREE.PerspectiveCamera(30, 1, 1, 2000);
-      thumbScene.environment = spaceEnvironment(thumbR);
     }
     const m = buildSatellite({ type, level, path });
     m.userData.update(1.3, true, 0);
@@ -380,6 +447,8 @@ function sync() {
   B.bodies.forEach((b, i) => {
     const g = world.bodies[i]; g.position.set(b.x - C.x, 0, b.y - C.y);
     const surf = g.getObjectByName("surface"); if (surf) surf.rotation.y = t * (b.root ? 0.05 : 0.12);
+    const atm = g.getObjectByName("atmosphere");
+    if (atm) { const d = atm.material.uniforms.sunDir.value; if (od().map().final) d.set(-(b.x - C.x), 0, -(b.y - C.y)).normalize(); else d.copy(sun.position).normalize(); }
     const cl = g.getObjectByName("clouds"); if (cl) cl.rotation.y = t * 0.07;
     const tilt = g.getObjectByName("tilt"); if (tilt) tilt.rotation.set(-(cam.pitch - 0.35), cam.yaw, 0);
   });
@@ -517,7 +586,8 @@ const quality = { level: 0, frames: 0, time: 0, last: performance.now() };
 const QUALITY_STEPS = [
   () => renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)),
   () => { renderer.setPixelRatio(1); },
-  () => { scene.environment = null; },
+  () => { setReflections(false); },
+  () => { scene.background = new THREE.Color(0x05060f); },
 ];
 function trackQuality() {
   const now = performance.now(), dt = now - quality.last; quality.last = now;
@@ -549,5 +619,5 @@ function project(x, y, z = 0) {
   _v.set(x - C.x, H + z, y - C.y).project(camera);
   return { x: (_v.x + 1) / 2 * r.width, y: (1 - _v.y) / 2 * r.height, behind: _v.z > 1 };
 }
-window.__view3d = { cam, camera, scene, renderer, project, satThumb, quality };
+window.__view3d = { cam, camera, scene, renderer, project, satThumb, quality, lights: { ambient, sun, rim, sunPoint } };
 if (window.__od && window.__od.repaintIcons) window.__od.repaintIcons();

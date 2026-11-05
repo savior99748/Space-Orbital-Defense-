@@ -4,7 +4,7 @@
 //   buildSatellite({ type, level, path }) → THREE.Group
 //     - child "turret" is aimed by the game (its +X axis points at the target)
 //     - group.userData.update(time, firing, dt) animates moving parts
-//   spaceEnvironment(renderer) → a reflection map for metal (use as scene.environment)
+//   setReflections(on) → switch the metal reflections on or off (used by the automatic quality steps)
 // Local frame: +X points away from the body it orbits, +Y is "up" from the orbit, +Z runs along the orbit.
 // Sizes: the main body is ~20 units across, like the 2D art.
 //
@@ -15,6 +15,24 @@ import * as THREE from "../vendor/three/three.module.js";
 
 const TAU = Math.PI * 2, H = Math.PI / 2;
 
+// ---------- reflection environment for metal ----------
+// A small painted sky (navy, a blue horizon band, a warm sun, a cyan rim). Set per material (not as
+// scene.environment, which would also tint the planets); three.js prefilters it for each renderer.
+const ENV = (() => {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+  const g = c.getContext("2d");
+  const sky = g.createLinearGradient(0, 0, 0, 128);
+  sky.addColorStop(0, "#0b1426"); sky.addColorStop(0.45, "#1c3a66"); sky.addColorStop(0.55, "#0f2240"); sky.addColorStop(1, "#04070f");
+  g.fillStyle = sky; g.fillRect(0, 0, 256, 128);
+  const sun = g.createRadialGradient(60, 46, 0, 60, 46, 40); sun.addColorStop(0, "rgba(255,236,200,1)"); sun.addColorStop(0.2, "rgba(255,190,120,0.6)"); sun.addColorStop(1, "rgba(255,190,120,0)");
+  g.fillStyle = sun; g.fillRect(0, 0, 256, 128);
+  const rim = g.createRadialGradient(190, 70, 0, 190, 70, 60); rim.addColorStop(0, "rgba(90,200,255,0.9)"); rim.addColorStop(1, "rgba(90,200,255,0)");
+  g.fillStyle = rim; g.fillRect(0, 0, 256, 128);
+  const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+let reflections = true;
+
 // ---------- materials ----------
 const mats = new Map();
 function M(color, { metal = 0.85, rough = 0.34, emissive = null, glow = 0, opacity = 1, side, flat = false, envI = 1 } = {}) {
@@ -22,8 +40,10 @@ function M(color, { metal = 0.85, rough = 0.34, emissive = null, glow = 0, opaci
   if (!mats.has(key)) {
     mats.set(key, new THREE.MeshStandardMaterial({
       color, metalness: metal, roughness: rough, emissive: emissive || 0x000000, emissiveIntensity: glow,
-      transparent: opacity < 1, opacity, side: side || THREE.FrontSide, depthWrite: opacity >= 1, flatShading: flat, envMapIntensity: envI,
+      transparent: opacity < 1, opacity, side: side || THREE.FrontSide, depthWrite: opacity >= 1, flatShading: flat,
+      envMap: envI > 0 && reflections ? ENV : null, envMapIntensity: envI,
     }));
+    mats.get(key).userData.env = envI > 0;
   }
   return mats.get(key);
 }
@@ -79,7 +99,7 @@ const cellTex = (() => {
 })();
 function panelMat(tint) {
   const k = "panel|" + tint;
-  if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({ map: cellTex, color: tint || 0xffffff, metalness: 0.2, roughness: 0.3, emissive: tint || 0x3b6dff, emissiveMap: cellTex, emissiveIntensity: tint ? 0.35 : 0.3 }));
+  if (!mats.has(k)) { mats.set(k, new THREE.MeshStandardMaterial({ map: cellTex, color: tint || 0xffffff, metalness: 0.2, roughness: 0.3, emissive: tint || 0x3b6dff, emissiveMap: cellTex, emissiveIntensity: tint ? 0.35 : 0.3, envMap: reflections ? ENV : null })); mats.get(k).userData.env = true; }
   return mats.get(k);
 }
 
@@ -473,24 +493,9 @@ function bake(root, key, stop = []) {
 // moving groups (a spinning pod, a gatling) merge their own contents once and then turn as one piece
 function bakeGroup(group) { const p = group.parent; group.removeFromParent(); bake(group, null); if (p) p.add(group); }
 
-// ---------- reflection environment for metal ----------
-const envCache = new WeakMap();
-export function spaceEnvironment(renderer) {
-  if (envCache.has(renderer)) return envCache.get(renderer);
-  const c = document.createElement("canvas"); c.width = 256; c.height = 128;
-  const g = c.getContext("2d");
-  const sky = g.createLinearGradient(0, 0, 0, 128);
-  sky.addColorStop(0, "#0b1426"); sky.addColorStop(0.45, "#1c3a66"); sky.addColorStop(0.55, "#0f2240"); sky.addColorStop(1, "#04070f");
-  g.fillStyle = sky; g.fillRect(0, 0, 256, 128);
-  const sun = g.createRadialGradient(60, 46, 0, 60, 46, 40); sun.addColorStop(0, "rgba(255,236,200,1)"); sun.addColorStop(0.2, "rgba(255,190,120,0.6)"); sun.addColorStop(1, "rgba(255,190,120,0)");
-  g.fillStyle = sun; g.fillRect(0, 0, 256, 128);
-  const rim = g.createRadialGradient(190, 70, 0, 190, 70, 60); rim.addColorStop(0, "rgba(90,200,255,0.9)"); rim.addColorStop(1, "rgba(90,200,255,0)");
-  g.fillStyle = rim; g.fillRect(0, 0, 256, 128);
-  const tex = new THREE.CanvasTexture(c); tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace;
-  const pm = new THREE.PMREMGenerator(renderer);
-  const env = pm.fromEquirectangular(tex).texture;
-  pm.dispose(); tex.dispose();
-  envCache.set(renderer, env); return env;
+export function setReflections(on) {
+  reflections = on;
+  for (const m of mats.values()) if (m.userData.env) { m.envMap = on ? ENV : null; m.needsUpdate = true; }
 }
 
 // Codenames for the hangar / shop (kept with the models so art and names stay together).
