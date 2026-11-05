@@ -1082,6 +1082,8 @@
     return true;
   }
   function repaintIcons() {
+    // the 3D module loads after the first menu is drawn: redraw the menu so it gains the 3D planet art
+    if (!S && document.body.classList.contains("in-menu") && ui.overlay.querySelector("[data-map]")) mainMenu();
     ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
     if (ui.shop.children.length) buildShop();
     if (S && S.selectedTower) renderInfo();
@@ -1415,6 +1417,7 @@
       </div>
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
+        ${OD.is3D && OD.planetThumb ? `<canvas class="map-globe" width="220" height="220" data-globe="${m.body.style}" aria-hidden="true"></canvas>` : ""}
         <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
         <p>${m.desc}</p>
         <p class="feature">✦ ${m.feature}</p>
@@ -1450,6 +1453,22 @@
       </details>
       <p class="muted small version">v${P.version}${P.name !== "web" ? ` · ${P.name}` : ""} · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>`, true);
     ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
+    spinGlobe();
+  }
+  // mission panel: a large planet that turns slowly (3D view only; reduced motion keeps it still)
+  let globeRaf = 0;
+  function spinGlobe() {
+    cancelAnimationFrame(globeRaf);
+    const c = ui.overlay.querySelector("canvas[data-globe]");
+    if (!c || !OD.planetThumb) return;
+    const still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let last = 0;
+    const tick = now => {
+      if (!c.isConnected) return;
+      if (now - last > 66) { last = now; const img = OD.planetThumb(c.dataset.globe, still ? 0 : now / 1000 * 0.35); if (img) { const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); g.drawImage(img.canvas, 0, 0, c.width, c.height); } }
+      if (!still) globeRaf = requestAnimationFrame(tick);
+    };
+    globeRaf = requestAnimationFrame(tick);
   }
 
   function showLeaderboards() {

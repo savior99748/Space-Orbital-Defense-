@@ -334,6 +334,8 @@ button.on,.diff-btn.selected,.mode-btn.selected{box-shadow:inset 0 0 0 1px curre
 #overlay .map-detail{border:1px solid rgba(94,161,215,.28);background:linear-gradient(90deg,rgba(23,51,86,.45),rgba(8,18,36,.2));border-radius:12px}
 .tower-btn.selected{border-color:#76e8ff;box-shadow:inset 0 0 0 1px #76e8ff,0 0 17px rgba(45,189,247,.3)}
 #overlay .card{animation:rwIn .28s ease-out}
+.map-globe{float:right;width:132px;height:132px;margin:-6px -4px 0 12px;shape-outside:circle(50%)}
+@media(max-width:560px){.map-globe{width:96px;height:96px}}
 @keyframes rwIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){#overlay .card{animation:none}#overlay button,.tower-btn,button{transition:none}#overlay button:hover:not(:disabled),.tower-btn:hover:not(:disabled){transform:none}}
 </style>

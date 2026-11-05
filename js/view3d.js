@@ -444,7 +444,28 @@ window.OD.satThumb = satThumb;
 // Same textures, atmosphere and rings as the battlefield, lit from the upper left; rendered once and cached.
 let planetScene = null, planetCam, planetLight;
 const planetThumbs = new Map();
-function planetThumb(style) {
+function buildPortrait(style) {
+  const g = new THREE.Group(), ST = (window.OD.BODY_STYLE || {})[style] || {};
+  let extent = 1.15;
+  if (style === "sun") {
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshBasicMaterial({ map: sunSurface() })));
+    for (const [col, k] of [["rgba(255,200,110,0.95)", 2.6], ["rgba(255,140,40,0.5)", 4]]) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(col), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); sp.scale.set(k, k, 1); g.add(sp); }
+    extent = 1.7;
+  } else {
+    const tex = bodyTexture(style);
+    const surf = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshPhongMaterial({ map: tex, shininess: tex.rough ? 28 : 4, specular: tex.rough ? 0x6f8fb0 : 0x111111, specularMap: tex.rough || null, bumpMap: tex.bump || null, bumpScale: 0.04 })); g.add(surf); g.userData.surface = surf;
+    if (ATMOS[style]) { const a = atmosphere(1, ...ATMOS[style]); atmoMeshes.pop(); a.material.uniforms.sunDir.value.copy(planetLight.position).normalize(); g.add(a); }
+    if (ST.rings) { const ring = new THREE.Mesh(radialRing(1.4, 2.25), new THREE.MeshLambertMaterial({ map: ringBands(), transparent: true, side: THREE.DoubleSide, depthWrite: false, emissive: 0x2a2418 })); ring.rotation.x = -Math.PI / 2 + 0.42; ring.rotation.y = 0.2; g.add(ring); extent = 2.35; }
+    if (ST.faintRing) { const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.65, 64), new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.3, side: THREE.DoubleSide })); ring.rotation.x = 0.3; g.add(ring); extent = 1.7; }
+    g.rotation.z = 0.15;
+  }
+  g.userData.extent = extent;
+  return g;
+}
+const globeCanvas = document.createElement("canvas"); globeCanvas.width = globeCanvas.height = 192;
+let globeModel = null;
+function planetThumb(style, spin) {
+  if (spin !== undefined) return spinningPlanet(style, spin);
   if (planetThumbs.has(style)) return planetThumbs.get(style);
   try {
     if (!thumbR) satThumb("laser", 0, null); // creates the shared offscreen renderer
@@ -455,20 +476,8 @@ function planetThumb(style) {
       const back = new THREE.DirectionalLight(0x4f8dff, 1.2); back.position.set(3, -1, -2); planetScene.add(back);
       planetCam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
     }
-    const g = new THREE.Group(), ST = (window.OD.BODY_STYLE || {})[style] || {};
-    let extent = 1.15;
-    if (style === "sun") {
-      g.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshBasicMaterial({ map: sunSurface() })));
-      for (const [col, k] of [["rgba(255,200,110,0.95)", 2.6], ["rgba(255,140,40,0.5)", 4]]) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(col), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); sp.scale.set(k, k, 1); g.add(sp); }
-      extent = 1.7;
-    } else {
-      const tex = bodyTexture(style);
-      g.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshPhongMaterial({ map: tex, shininess: tex.rough ? 28 : 4, specular: tex.rough ? 0x6f8fb0 : 0x111111, specularMap: tex.rough || null, bumpMap: tex.bump || null, bumpScale: 0.04 })));
-      if (ATMOS[style]) { const a = atmosphere(1, ...ATMOS[style]); atmoMeshes.pop(); a.material.uniforms.sunDir.value.copy(planetLight.position).normalize(); g.add(a); }
-      if (ST.rings) { const ring = new THREE.Mesh(radialRing(1.4, 2.25), new THREE.MeshLambertMaterial({ map: ringBands(), transparent: true, side: THREE.DoubleSide, depthWrite: false, emissive: 0x2a2418 })); ring.rotation.x = -Math.PI / 2 + 0.42; ring.rotation.y = 0.2; g.add(ring); extent = 2.35; }
-      if (ST.faintRing) { const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.65, 64), new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.3, side: THREE.DoubleSide })); ring.rotation.x = 0.3; g.add(ring); extent = 1.7; }
-      g.rotation.z = 0.15;
-    }
+    const g = buildPortrait(style), extent = g.userData.extent;
+    planetScene.children.forEach(o => { if (o.isGroup) o.visible = false; }); // only this planet in the shot
     planetScene.add(g);
     planetCam.position.set(0, 0, extent / Math.tan(THREE.MathUtils.degToRad(15)) * 1.04); planetCam.lookAt(0, 0, 0);
     thumbR.render(planetScene, planetCam);
@@ -479,6 +488,24 @@ function planetThumb(style) {
     const out = { canvas: c, extent };
     planetThumbs.set(style, out); return out;
   } catch (err) { console.warn("planet portrait failed", err); planetThumbs.set(style, null); return null; }
+}
+// the mission panel's turning globe: the same portrait model, kept in the scene and re-rendered at a new angle
+function spinningPlanet(style, spin) {
+  try {
+    if (!globeModel || globeModel.style !== style) {
+      if (globeModel) { planetScene.remove(globeModel.g); globeModel.g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+      planetThumb(style); // makes sure the scene, camera and textures exist
+      const keep = planetThumbs.get(style); if (!keep) return null;
+      const g = buildPortrait(style); planetScene.add(g);
+      globeModel = { style, g, extent: keep.extent };
+    }
+    planetScene.children.forEach(o => { if (o.isGroup) o.visible = o === globeModel.g; });
+    const surf = globeModel.g.userData.surface; if (surf) surf.rotation.y = spin;
+    planetCam.position.set(0, 0, globeModel.extent / Math.tan(THREE.MathUtils.degToRad(15)) * 1.04); planetCam.lookAt(0, 0, 0);
+    thumbR.render(planetScene, planetCam);
+    const g2 = globeCanvas.getContext("2d"); g2.clearRect(0, 0, 192, 192); g2.drawImage(thumbR.domElement, 0, 0);
+    return { canvas: globeCanvas, extent: globeModel.extent };
+  } catch (err) { console.warn("globe failed", err); return null; }
 }
 window.OD.planetThumb = planetThumb;
 
@@ -806,12 +833,74 @@ function trackQuality() {
   }
 }
 
-let inMenu = false;
+// ---------- main menu backdrop ----------
+// While the menu is open the camera slowly orbits the selected world; defense satellites ride its orbits,
+// a few invaders drift in from deep space and the satellites fire at them. Purely decorative: no game state.
+// Respects prefers-reduced-motion (a still scene).
+let inMenu = false, menuSet = null;
+const reducedMotion = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+function buildMenuSet(B) {
+  const g = new THREE.Group(), sats = [], foes = [];
+  const types = ["laser", "rail", "missile", "emp", "tractor", "carrier", "laser", "rail"];
+  B.rings.slice(0, 3).forEach((ring, ri) => {
+    const n = ri === 0 ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      const type = types[(ri * 3 + i) % types.length], m = buildSatellite({ type, level: 2 + (i % 3), path: i % 3 === 2 ? (ri % 2 ? "B" : "A") : null });
+      m.scale.setScalar(1.15); g.add(m);
+      sats.push({ m, ring, a: (i / n) * TAU + ri, type });
+    }
+  });
+  for (let i = 0; i < 5; i++) {
+    const type = i === 0 ? "mother" : i === 1 ? "cruiser" : "drone", def = window.OD.ENEMIES[type];
+    const m = buildAlien(type, def.size, def.color); g.add(m);
+    foes.push({ m, type, size: def.size, color: def.color, a: i * 1.3 + 0.4, h: (i % 2 ? 1 : -1) * (30 + i * 18), r0: B.extent * (1.25 + i * 0.12), speed: 0.025 + i * 0.006 });
+  }
+  scene.add(g);
+  return { B, g, sats, foes, shots: [] };
+}
+function menuBackdrop(t) {
+  const B = od().board();
+  if (!B) return;
+  if (!menuSet || menuSet.B !== B) { if (menuSet) scene.remove(menuSet.g); menuSet = buildMenuSet(B); }
+  const still = reducedMotion.matches, C = od().center(), T = still ? 0 : t;
+  for (const s of menuSet.sats) {
+    const p = od().ringPoint(s.ring, s.a + T * s.ring.speed), body = B.bodies[s.ring.body];
+    s.m.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y);
+    _ax.set(p.x - body.x, p.z || 0, p.y - body.y).normalize(); _ay.set(0, 1, 0); _az.crossVectors(_ax, _ay).normalize(); _ay.crossVectors(_az, _ax);
+    s.m.quaternion.setFromRotationMatrix(_m4.makeBasis(_ax, _ay, _az));
+    s.m.userData.update(T, false, 1 / 60);
+  }
+  for (const f of menuSet.foes) { // drift in on a slow spiral, then loop back out
+    const k = (T * f.speed + f.a / TAU) % 1, r = f.r0 * (1.25 - k * 0.55), a = f.a + T * 0.05;
+    f.m.position.set(Math.cos(a) * r, H + f.h * (1 - k * 0.5), Math.sin(a) * r);
+    _dir.set(-Math.cos(a), 0, -Math.sin(a)); f.m.quaternion.setFromUnitVectors(_xAxis, _dir);
+    f.m.userData.flash(false, false); f.m.userData.update(T);
+    const eg = ENGINE[f.type]; if (eg) { _ev.set(-1, 0, 0).applyQuaternion(f.m.quaternion).multiplyScalar(f.size * eg[1]).add(f.m.position); glow(_ev, eg[0], f.size * eg[2], 0.9); }
+  }
+  // satellites fire short bursts at the nearest invader
+  let n = 0;
+  if (!still) menuSet.sats.forEach((s, i) => {
+    const burst = (T * 0.7 + i * 0.37) % 1; if (burst > 0.18) return;
+    let best = null, bd = Infinity; for (const f of menuSet.foes) { const d = f.m.position.distanceToSquared(s.m.position); if (d < bd) { bd = d; best = f; } }
+    if (!best || n >= BEAMS) return;
+    const col = { laser: "#45e3ff", rail: "#7dff9a", missile: "#ffb347", emp: "#fff3a0", tractor: "#b388ff", carrier: "#ff7ad9" }[s.type], fade = 1 - burst / 0.18;
+    const a = s.m.position, b = best.m.position, len = a.distanceTo(b);
+    dummy.position.copy(a).add(b).multiplyScalar(0.5); dummy.lookAt(b); dummy.scale.set(2.2, 2.2, len); dummy.updateMatrix();
+    beamMesh.setMatrixAt(n, dummy.matrix); beamMesh.setColorAt(n, tmpC.set(col).multiplyScalar(0.42 * fade));
+    dummy.scale.set(0.7, 0.7, len); dummy.updateMatrix(); beamCore.setMatrixAt(n, dummy.matrix); beamCore.setColorAt(n, tmpC.set(col).lerp(_white, 0.65).multiplyScalar(fade));
+    glow(b, col, 12, fade); glow(a, col, 7, fade); n++;
+  });
+  beamMesh.count = beamCore.count = n;
+  for (const im of [beamMesh, beamCore]) { upload(im.instanceMatrix, n * 16); if (im.instanceColor) upload(im.instanceColor, n * 3); }
+  gGeo.setDrawRange(0, gN); upload(gGeo.attributes.position, gN * 3); upload(gGeo.attributes.color, gN * 3); upload(gGeo.attributes.size, gN); gN = 0;
+  glowMat.uniforms.scale.value = renderer.domElement.height * 0.9;
+}
 function menuCamera() {
   const menu = !od().state();
   if (menu && !inMenu) { cam.pitch = 0.42; cam.dist = cam.fit * 0.62; cam.tx = 0; cam.tz = 0; }
   if (!menu && inMenu) { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * 0.86; cam.tx = 0; cam.tz = 0; }
-  if (menu) cam.yaw += 0.0012;
+  if (menu && !reducedMotion.matches) cam.yaw += 0.0012;
+  if (menuSet) menuSet.g.visible = menu;
   inMenu = menu;
 }
 
@@ -819,6 +908,7 @@ function loop() {
   if (od()) menuCamera();
   placeCamera();
   sync();
+  if (inMenu) menuBackdrop(performance.now() / 1000); // after sync: its beams and glows replace the (empty) game ones
   renderer.render(scene, camera);
   trackQuality();
   requestAnimationFrame(loop);
