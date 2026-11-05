@@ -1082,6 +1082,7 @@
     return true;
   }
   function repaintIcons() {
+    ui.overlay.querySelectorAll("canvas[data-map-preview]").forEach(c => drawMapPreview(c, c.dataset.mapPreview));
     if (ui.shop.children.length) buildShop();
     if (S && S.selectedTower) renderInfo();
   }
@@ -1363,6 +1364,7 @@
   }
 
   function drawMapPreview(c, key) {
+    if (OD.is3D && OD.planetThumb && c.width < 280) { c.width = 280; c.height = 200; } // sharper for 3D portraits
     const m = MAPS[key], g = c.getContext("2d"), w = c.width, h = c.height;
     g.clearRect(0, 0, w, h);
     const s = (h * 0.92) / m.view;
@@ -1370,13 +1372,17 @@
     for (const moon of m.moons) { g.strokeStyle = "rgba(160,170,220,0.25)"; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, moon.orbit * s, 0, Math.PI * 2); g.stroke(); }
     for (const r of m.rings) { g.strokeStyle = "rgba(108,240,255,0.25)"; g.setLineDash([2, 3]); g.beginPath(); g.arc(0, 0, r.r * s, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
     const rootR = Math.max(m.final ? 9 : 7, m.body.r * s * 1.4);
-    OD.drawBodyRings(g, m.body.style, 0, 0, rootR);
-    OD.drawBody(g, m.body.style, 0, 0, rootR, 0);
+    // 3D view: planet portraits rendered by the 3D engine (same look as the battlefield)
+    const portrait = (style, x, y, r) => {
+      const p = OD.is3D && OD.planetThumb && OD.planetThumb(style);
+      if (!p) return false;
+      const d = r * 2 * p.extent * 1.04; g.drawImage(p.canvas, x - d / 2, y - d / 2, d, d); return true;
+    };
+    if (!portrait(m.body.style, 0, 0, rootR * (m.final ? 1.25 : 1.7))) { OD.drawBodyRings(g, m.body.style, 0, 0, rootR); OD.drawBody(g, m.body.style, 0, 0, rootR, 0); }
     for (const moon of m.moons) {
       const x = Math.cos(moon.phase) * moon.orbit * s, y = Math.sin(moon.phase) * moon.orbit * s;
       const r = Math.max(2.2, moon.r * s * 1.6);
-      OD.drawBodyRings(g, moon.style, x, y, r);
-      OD.drawBody(g, moon.style, x, y, r, 0, -x || -1, -y || -1);
+      if (!portrait(moon.style, x, y, r * 1.15)) { OD.drawBodyRings(g, moon.style, x, y, r); OD.drawBody(g, moon.style, x, y, r, 0, -x || -1, -y || -1); }
     }
     g.restore();
   }

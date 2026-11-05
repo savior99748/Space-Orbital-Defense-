@@ -401,6 +401,48 @@ function satThumb(type, level, path) {
 }
 window.OD.satThumb = satThumb;
 
+// ---------- planet portraits for the map selector ----------
+// Same textures, atmosphere and rings as the battlefield, lit from the upper left; rendered once and cached.
+let planetScene = null, planetCam, planetLight;
+const planetThumbs = new Map();
+function planetThumb(style) {
+  if (planetThumbs.has(style)) return planetThumbs.get(style);
+  try {
+    if (!thumbR) satThumb("laser", 0, null); // creates the shared offscreen renderer
+    if (!planetScene) {
+      planetScene = new THREE.Scene();
+      planetScene.add(new THREE.AmbientLight(0x434a58, 0.55));
+      planetLight = new THREE.DirectionalLight(0xfff1dc, 3); planetLight.position.set(-3, 2, 3); planetScene.add(planetLight);
+      const back = new THREE.DirectionalLight(0x4f8dff, 1.2); back.position.set(3, -1, -2); planetScene.add(back);
+      planetCam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    }
+    const g = new THREE.Group(), ST = (window.OD.BODY_STYLE || {})[style] || {};
+    let extent = 1.15;
+    if (style === "sun") {
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshBasicMaterial({ map: sunSurface() })));
+      for (const [col, k] of [["rgba(255,200,110,0.95)", 2.6], ["rgba(255,140,40,0.5)", 4]]) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(col), blending: THREE.AdditiveBlending, depthWrite: false })); sp.scale.set(k, k, 1); g.add(sp); }
+      extent = 1.7;
+    } else {
+      const tex = bodyTexture(style);
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshPhongMaterial({ map: tex, shininess: tex.rough ? 28 : 4, specular: tex.rough ? 0x6f8fb0 : 0x111111, specularMap: tex.rough || null, bumpMap: tex.bump || null, bumpScale: 0.04 })));
+      if (ATMOS[style]) { const a = atmosphere(1, ...ATMOS[style]); atmoMeshes.pop(); a.material.uniforms.sunDir.value.copy(planetLight.position).normalize(); g.add(a); }
+      if (ST.rings) { const ring = new THREE.Mesh(radialRing(1.4, 2.25), new THREE.MeshLambertMaterial({ map: ringBands(), transparent: true, side: THREE.DoubleSide, depthWrite: false, emissive: 0x2a2418 })); ring.rotation.x = -Math.PI / 2 + 0.42; ring.rotation.y = 0.2; g.add(ring); extent = 2.35; }
+      if (ST.faintRing) { const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.65, 64), new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.3, side: THREE.DoubleSide })); ring.rotation.x = 0.3; g.add(ring); extent = 1.7; }
+      g.rotation.z = 0.15;
+    }
+    planetScene.add(g);
+    planetCam.position.set(0, 0, extent / Math.tan(THREE.MathUtils.degToRad(15)) * 1.04); planetCam.lookAt(0, 0, 0);
+    thumbR.render(planetScene, planetCam);
+    const c = document.createElement("canvas"); c.width = c.height = 192;
+    c.getContext("2d").drawImage(thumbR.domElement, 0, 0);
+    planetScene.remove(g);
+    g.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    const out = { canvas: c, extent };
+    planetThumbs.set(style, out); return out;
+  } catch (err) { console.warn("planet portrait failed", err); planetThumbs.set(style, null); return null; }
+}
+window.OD.planetThumb = planetThumb;
+
 // ---------- enemies ----------
 // invader models live in js/aliens3d.js
 function buildEnemy(e) {
@@ -665,7 +707,17 @@ function trackQuality() {
   }
 }
 
+let inMenu = false;
+function menuCamera() {
+  const menu = !od().state();
+  if (menu && !inMenu) { cam.pitch = 0.42; cam.dist = cam.fit * 0.62; cam.tx = 0; cam.tz = 0; }
+  if (!menu && inMenu) { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * 0.86; cam.tx = 0; cam.tz = 0; }
+  if (menu) cam.yaw += 0.0012;
+  inMenu = menu;
+}
+
 function loop() {
+  if (od()) menuCamera();
   placeCamera();
   sync();
   renderer.render(scene, camera);

@@ -309,6 +309,16 @@ button:not(:disabled):active{transform:scale(.975)}
 @media(max-width:720px){#overlay .card{border-radius:14px}#shop{gap:5px}.tower-btn{border-radius:9px}}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
 #overlay h1 + .subtitle{margin:-6px 0 10px;font-size:13px;font-weight:700;letter-spacing:.42em;color:#7fdcf2}
+/* cinematic 3D menu: the live scene shows through a holographic panel */
+.mode-3d body.in-menu #overlay{background:radial-gradient(ellipse at 50% 45%,rgba(3,9,22,.05),rgba(2,6,16,.62) 78%)}
+.mode-3d body.in-menu #overlay .card{background:linear-gradient(160deg,rgba(12,30,52,.84),rgba(4,12,26,.9));border-color:rgba(98,233,255,.42)}
+#overlay .card{position:relative}
+#overlay .card::before,#overlay .card::after{content:"";position:absolute;width:22px;height:22px;pointer-events:none;border:2px solid #62e9ff;opacity:.8}
+#overlay .card::before{top:-1px;left:-1px;border-right:none;border-bottom:none;border-top-left-radius:16px}
+#overlay .card::after{bottom:-1px;right:-1px;border-left:none;border-top:none;border-bottom-right-radius:16px}
+#overlay h1{font-size:40px;background:linear-gradient(180deg,#ffffff,#9eeeff 55%,#3fc6ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px #2fd0ff66)}
+.map-card canvas{background:radial-gradient(circle at 50% 50%,#13294a 0%,rgba(10,25,48,0) 70%)}
+@media(max-width:720px){#overlay h1{font-size:30px}}
 </style>
 </head>
 <body>

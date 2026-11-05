@@ -1,6 +1,6 @@
 // Offline support for the installable web app.
 // Network-first: players always get the newest version when online, and the cached copy when offline.
-const CACHE = "orbital-defense-v7";
+const CACHE = "orbital-defense-v8";
 const ASSETS = [
   "./", "index.html", "manifest.webmanifest",
   "js/config.js", "js/data.js", "js/maps.js", "js/maps3d.js", "js/mode.js", "js/view3d.js", "js/sat3d.js", "js/aliens3d.js", "vendor/three/three.module.js", "vendor/three/three.core.js", "js/audio.js", "js/platform.js", "js/analytics.js", "js/leaderboard.js", "privacy.html", "js/draw.js", "js/bodies.js", "js/game.js",
