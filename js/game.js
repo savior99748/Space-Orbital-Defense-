@@ -1,4 +1,4 @@
-// Orbital Defense: board (bodies/rings/slots), simulation, rendering, menus and stats.
+// Ringwarden: Orbital Defense: board (bodies/rings/slots), simulation, rendering, menus and stats.
 (function (OD) {
   "use strict";
   const TAU = Math.PI * 2;
@@ -1396,7 +1396,7 @@
     const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun();
     const got = getAch();
     showOverlay(`
-      <h1>ORBITAL DEFENSE</h1>
+      <h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
       ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
       <div class="view-row">

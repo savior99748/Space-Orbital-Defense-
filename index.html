@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#05060f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Orbital Defense</title>
+<title>Ringwarden: Orbital Defense</title>
 <meta name="description" content="A space tower defense game across our Solar System. Build satellites on rotating orbit rings around planets and moons.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
@@ -275,6 +275,40 @@
     .rep-row { grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
     .rep-row canvas { width: 30px; height: 30px; }
   }
+
+/* RINGWARDEN VISUAL REFRESH v1 — non-destructive UI layer.
+   Performance: no backdrop blur, canvas filters or large shadows over the live game view (each costs frame rate). */
+:root {--bg:#030916;--panel:#09172a;--panel-2:#112640;--line:#285477;--text:#ecf8ff;--muted:#91abc4;--accent:#54e7ff;--gold:#ffca62;--danger:#ff527b;--good:#65f5b0}
+html,body{background:#030916;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif} /* plain: a gradient here slows the 3D view; menus keep theirs */
+button{transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:not(:disabled):active{transform:scale(.975)}
+#hud{background:linear-gradient(180deg,rgba(12,30,52,.98),rgba(6,17,32,.96));border-bottom:1px solid rgba(84,231,255,.28)}
+#hud .stat{letter-spacing:.02em;text-shadow:0 1px 9px #0008}
+#hud .stat span{color:#95b3c9}
+#shop{background:linear-gradient(0deg,#081629,#10233c);border-top:1px solid rgba(84,231,255,.28)}
+.tower-btn{background:linear-gradient(145deg,rgba(24,49,76,.95),rgba(8,19,39,.98));border:1px solid #315574;border-radius:12px;box-shadow:inset 0 1px 0 #ffffff12,0 4px 12px #0005}
+.tower-btn:hover{border-color:#60dff5;background:linear-gradient(145deg,#1b4464,#0a2038)}
+.tower-btn.selected{border-color:#ffcf70;box-shadow:0 0 0 1px #ffcf70 inset,0 0 22px #ffb94445,inset 0 1px 0 #fff4}
+.tower-btn .cost{color:#ffcf70}
+#overlay{background:radial-gradient(ellipse at 50% 35%,rgba(12,43,75,.87),rgba(2,7,18,.96) 74%)}
+#overlay .card{background:linear-gradient(155deg,rgba(17,38,65,.98),rgba(6,15,31,.98));border:1px solid #3c7293;border-radius:18px;box-shadow:0 25px 90px #000b,0 0 45px #2b9bc61b,inset 0 1px 0 #ffffff22}
+#overlay h1{color:#e9faff;text-shadow:0 0 25px #3ddcff77;letter-spacing:.12em;font-weight:900}
+#overlay p{color:#afc5d9}
+#overlay .primary,button.primary{background:linear-gradient(115deg,#12658b,#174569);border-color:#62e7ff;color:#f0fcff;box-shadow:inset 0 1px 0 #ffffff40,0 0 15px #21d7ff22;font-weight:800}
+#overlay .primary:hover,button.primary:hover{background:linear-gradient(115deg,#187da6,#205f88);box-shadow:0 0 24px #25d8ff55}
+.map-card{background:linear-gradient(160deg,#152c47,#0a1930);border:1px solid #315577;border-radius:12px;box-shadow:inset 0 1px 0 #ffffff12}
+.map-card:hover{border-color:#65d8ef;background:linear-gradient(160deg,#1b3c5a,#102640)}
+.map-card.selected{border-color:#62e9ff;box-shadow:0 0 0 1px #62e9ff inset,0 0 19px #2bd6ff50}
+.map-card.final{background:linear-gradient(145deg,#382411,#10223c);border-color:#a97635}
+.map-detail{background:linear-gradient(135deg,#10243e,#0b182e);border-color:#345d80;border-radius:12px}
+.diff-btn,.mode-btn,.up-card,.tile{background:linear-gradient(145deg,#162c48,#0a1b32);border-radius:10px}
+#info{background:linear-gradient(145deg,rgba(15,39,65,.98),rgba(6,17,33,.98));border:1px solid #3a7594;box-shadow:0 15px 45px #0009,0 0 25px #00cfff16;border-radius:14px}
+#v3ctl button,#zoomCtl button{background:rgba(13,35,59,.94);border-color:#38708b;box-shadow:0 4px 14px #0008}
+#preview .chip{background:rgba(7,24,42,.92);border-color:#386782} /* no backdrop blur: it re-blurs the moving game view every frame */
+@media(max-width:720px){#overlay .card{border-radius:14px}#shop{gap:5px}.tower-btn{border-radius:9px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}
+#overlay h1 + .subtitle{margin:-6px 0 10px;font-size:13px;font-weight:700;letter-spacing:.42em;color:#7fdcf2}
 </style>
 </head>
 <body>
