@@ -410,7 +410,8 @@ function buildEnemy(e) {
 }
 
 // ---------- pooled effects: beams, missiles, particles, rings, fighters ----------
-const BEAMS = 700, beamMesh = new THREE.InstancedMesh(geo.box, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }), BEAMS);
+const beamGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1, true).rotateX(Math.PI / 2); // round tube along +Z
+const BEAMS = 700, beamMesh = new THREE.InstancedMesh(beamGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }), BEAMS);
 beamMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); beamMesh.frustumCulled = false;
 const SHOTS = 400, shotMesh = new THREE.InstancedMesh(geo.sph, new THREE.MeshBasicMaterial({ color: 0xffe0b0 }), SHOTS);
 shotMesh.frustumCulled = false;
@@ -420,7 +421,8 @@ const PMAX = 2500, pPos = new Float32Array(PMAX * 3), pCol = new Float32Array(PM
 const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute("color", new THREE.BufferAttribute(pCol, 3));
 const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 4, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
 particles.frustumCulled = false;
-const ringPool = Array.from({ length: 40 }, () => { const m = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; return m; });
+const ringThick = new THREE.RingGeometry(0.9, 1, 48), ringThin = new THREE.RingGeometry(0.975, 1, 96); // big pulses get a thin edge
+const ringPool = Array.from({ length: 40 }, () => { const m = new THREE.Mesh(ringThick, new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; return m; });
 const rangeMesh = new THREE.Mesh(new THREE.CircleGeometry(1, 64), new THREE.MeshBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.08, depthWrite: false, side: THREE.DoubleSide }));
 rangeMesh.rotation.x = -Math.PI / 2;
 const rangeEdge = circleLine(1, 0x6cf0ff, 0.6, false);
@@ -428,11 +430,39 @@ const selRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 32), new THREE.Me
 selRing.rotation.x = -Math.PI / 2;
 const rangeSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), new THREE.MeshBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.07, depthWrite: false }));
 rangeSphere.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 10)), new THREE.LineBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.18 })));
-scene.add(beamMesh, shotMesh, craftMesh, particles, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
+// Beam cores: a thin white-hot line inside each colored beam
+const beamCore = new THREE.InstancedMesh(beamGeo, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), BEAMS);
+beamCore.instanceMatrix.setUsage(THREE.DynamicDrawUsage); beamCore.frustumCulled = false;
+// Glow points: soft round additive sprites with their own size and color (sparks, muzzle/impact flashes,
+// fireballs, missile engines and trails). Everything glowing is one draw call.
+const GMAX = 7000, gPos = new Float32Array(GMAX * 3), gCol = new Float32Array(GMAX * 3), gSize = new Float32Array(GMAX);
+const gGeo = new THREE.BufferGeometry();
+gGeo.setAttribute("position", new THREE.BufferAttribute(gPos, 3).setUsage(THREE.DynamicDrawUsage));
+gGeo.setAttribute("color", new THREE.BufferAttribute(gCol, 3).setUsage(THREE.DynamicDrawUsage));
+gGeo.setAttribute("size", new THREE.BufferAttribute(gSize, 1).setUsage(THREE.DynamicDrawUsage));
+const glowMat = new THREE.ShaderMaterial({
+  uniforms: { scale: { value: 600 } },
+  vertexShader: `attribute float size; attribute vec3 color; varying vec3 vC; uniform float scale;
+    void main() { vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(size * scale / -mv.z, 1.5, 256.0); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `varying vec3 vC;
+    void main() { float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard; float a = pow(1.0 - d, 1.8); gl_FragColor = vec4(vC * a + vec3(a * a * a) * 0.6 * length(vC), 1.0); }`,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+});
+const glowPoints = new THREE.Points(gGeo, glowMat); glowPoints.frustumCulled = false;
+let gN = 0;
+const _gc = new THREE.Color();
+function glow(v, color, size, k = 1) { // v: world position, k: brightness 0..1
+  if (gN >= GMAX || k <= 0.01) return;
+  gPos[gN * 3] = v.x; gPos[gN * 3 + 1] = v.y; gPos[gN * 3 + 2] = v.z;
+  _gc.set(color); gCol[gN * 3] = _gc.r * k; gCol[gN * 3 + 1] = _gc.g * k; gCol[gN * 3 + 2] = _gc.b * k;
+  gSize[gN] = size; gN++;
+}
+const trails = new WeakMap(); // missile → recent positions
+scene.add(beamMesh, beamCore, shotMesh, craftMesh, particles, glowPoints, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
 
 // ---------- per-frame sync with the game state ----------
 const satMeshes = new Map(), enemyMeshes = new Map();
-const dummy = new THREE.Object3D(), tmpC = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+const dummy = new THREE.Object3D(), tmpC = new THREE.Color(), up = new THREE.Vector3(0, 1, 0), _white = new THREE.Color(1, 1, 1), _gv = new THREE.Vector3();
 const _ax = new THREE.Vector3(), _ay = new THREE.Vector3(), _az = new THREE.Vector3(), _dir = new THREE.Vector3(), _xAxis = new THREE.Vector3(1, 0, 0);
 const _m4 = new THREE.Matrix4(), _qi = new THREE.Quaternion();
 const W = (x, y, h = 0, z = 0) => { const C = od().center(); return new THREE.Vector3(x - C.x, h + (z || 0), y - C.y); };
@@ -520,17 +550,34 @@ function sync() {
     if (n >= BEAMS) break;
     const a = W(bm.x1, bm.y1, H + 1, bm.z1), b = W(bm.x2, bm.y2, H + 4, bm.z2), len = a.distanceTo(b);
     if (len < 0.5) continue;
+    const fade = Math.min(1, bm.life * 12), wide = Math.max(1.4, bm.w * 1.1);
     dummy.position.copy(a).add(b).multiplyScalar(0.5);
-    dummy.lookAt(b); dummy.scale.set(Math.max(0.8, bm.w * 0.7), Math.max(0.8, bm.w * 0.7), len); dummy.updateMatrix();
+    dummy.lookAt(b); dummy.scale.set(wide, wide, len); dummy.updateMatrix();
     beamMesh.setMatrixAt(n, dummy.matrix);
-    beamMesh.setColorAt(n, tmpC.set(bm.color).multiplyScalar(Math.min(1, bm.life * 12)));
+    beamMesh.setColorAt(n, tmpC.set(bm.color).multiplyScalar(0.42 * fade));
+    dummy.scale.set(Math.max(0.5, bm.w * 0.32), Math.max(0.5, bm.w * 0.32), len); dummy.updateMatrix();
+    beamCore.setMatrixAt(n, dummy.matrix);
+    beamCore.setColorAt(n, tmpC.set(bm.color).lerp(_white, 0.65).multiplyScalar(fade));
+    if (!bm.bolt) { glow(b, bm.color, 10 + bm.w * 3, 0.9 * fade); glow(b, "#ffffff", 4 + bm.w, 0.8 * fade); } // impact flash
     n++;
   }
-  beamMesh.count = n; beamMesh.instanceMatrix.needsUpdate = true; if (beamMesh.instanceColor) beamMesh.instanceColor.needsUpdate = true;
+  beamMesh.count = beamCore.count = n; beamMesh.instanceMatrix.needsUpdate = beamCore.instanceMatrix.needsUpdate = true;
+  if (beamMesh.instanceColor) beamMesh.instanceColor.needsUpdate = true; if (beamCore.instanceColor) beamCore.instanceColor.needsUpdate = true;
 
   // missiles + bomblets
   n = 0;
-  if (S) for (const m of S.shots) { if (n >= SHOTS) break; dummy.position.copy(W(m.x, m.y, H + 3, m.z)); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(m.nova ? 7 : m.kind === "bomblet" ? 2.5 : 4); dummy.updateMatrix(); shotMesh.setMatrixAt(n++, dummy.matrix); }
+  if (S) for (const m of S.shots) {
+    if (n >= SHOTS) break;
+    const p = W(m.x, m.y, H + 3, m.z), big = m.nova ? 2 : m.kind === "bomblet" ? 0.6 : 1;
+    dummy.position.copy(p); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(m.nova ? 7 : m.kind === "bomblet" ? 2.5 : 4); dummy.updateMatrix(); shotMesh.setMatrixAt(n++, dummy.matrix);
+    glow(p, m.nova ? "#ff6a2a" : "#ffb347", 14 * big, 1); // engine
+    let tr = trails.get(m); if (!tr) { tr = []; trails.set(m, tr); }
+    if (!tr.length || tr[tr.length - 1].distanceToSquared(p) > 9) { tr.push(p.clone()); if (tr.length > 14) tr.shift(); }
+    for (let i = tr.length - 1, j = 0; i >= 0; i--, j++) { // hot near the missile, cooling to smoke
+      const k = 1 - j / tr.length;
+      glow(tr[i], j < 3 ? "#ff9a3c" : "#7f8aa3", (6 + j * 0.9) * big, (j < 3 ? 0.8 : 0.32) * k);
+    }
+  }
   shotMesh.count = n; shotMesh.instanceMatrix.needsUpdate = true;
 
   // carrier fighters
@@ -543,14 +590,12 @@ function sync() {
   craftMesh.count = n; craftMesh.instanceMatrix.needsUpdate = true;
 
   // particles
-  n = 0;
+  particles.visible = false;
   if (S) for (const p of S.particles) {
-    if (n >= PMAX) break;
-    pPos[n * 3] = p.x - C.x; pPos[n * 3 + 1] = H + 4 + (p.z || 0); pPos[n * 3 + 2] = p.y - C.y;
-    tmpC.set(p.color).multiplyScalar(Math.max(0, p.life / p.max));
-    pCol[n * 3] = tmpC.r; pCol[n * 3 + 1] = tmpC.g; pCol[n * 3 + 2] = tmpC.b; n++;
+    const k = Math.max(0, p.life / p.max);
+    _gv.set(p.x - C.x, H + 4 + (p.z || 0), p.y - C.y);
+    glow(_gv, p.color, 3 + k * 4, k);
   }
-  pGeo.setDrawRange(0, n); pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
 
   // expanding rings (explosions, pulses)
   ringPool.forEach((m, i) => {
@@ -558,8 +603,19 @@ function sync() {
     if (!r) { m.visible = false; return; }
     const k = 1 - r.life / r.max, rad = Math.max(1, r.r * (r.inward ? 1 - k * 0.8 : 0.3 + k * 0.7));
     m.visible = true; m.position.copy(W(r.x, r.y, H + 2, r.z)); m.scale.setScalar(rad);
-    m.material.color.set(r.color); m.material.opacity = 1 - k;
+    m.geometry = r.r > 70 ? ringThin : ringThick;
+    if (r.r <= 70) m.quaternion.copy(camera.quaternion); // small blasts face the camera, so they read from any angle
+    else m.rotation.set(-Math.PI / 2, 0, 0);              // big area pulses (EMP, novas) stay flat on the orbital plane
+    m.material.color.set(r.color); m.material.opacity = (1 - k) * 0.85;
+    if (!r.inward && k < 0.55) { // fireball: hot white core in a colored bloom, quick to fade
+      const f = 1 - k / 0.55;
+      glow(m.position, r.color, r.r * (0.9 + k * 1.4), f * 0.9);
+      glow(m.position, "#fff2d0", r.r * (0.45 + k * 0.6), f);
+    }
   });
+  gGeo.setDrawRange(0, gN); gN = 0;
+  gGeo.attributes.position.needsUpdate = gGeo.attributes.color.needsUpdate = gGeo.attributes.size.needsUpdate = true;
+  glowMat.uniforms.scale.value = renderer.domElement.height * 0.9;
 
   // selection + range
   const sel = S && S.selectedTower;
