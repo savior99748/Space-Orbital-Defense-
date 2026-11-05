@@ -142,7 +142,7 @@ function halo(parent, color, size) {
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; haloTex.set(color, t);
   }
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex.get(color), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex.get(color), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
   s.scale.set(size, size, 1); parent.add(s); return s;
 }
 // jagged lightning line between two points (rebuilt every frame by its updater)

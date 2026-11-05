@@ -36,9 +36,9 @@ const saucerGeo = new THREE.LatheGeometry([[0, -0.26], [0.45, -0.24], [0.85, -0.
 // shared (non-hull) materials
 const shared = new Map();
 function mat(key, make) { if (!shared.has(key)) shared.set(key, make()); return shared.get(key); }
-const Glow = (c) => mat("glow" + c, () => new THREE.MeshBasicMaterial({ color: c }));
+const Glow = (c) => mat("glow" + c, () => new THREE.MeshBasicMaterial({ color: c, toneMapped: false }));
 const Std = (c, o = {}) => mat("std" + c + JSON.stringify(o), () => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: 0.4, ...o }));
-const Add = (c, op) => mat("add" + c + op, () => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }));
+const Add = (c, op) => mat("add" + c + op, () => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
 
 function part(parent, geom, material, s, p = [0, 0, 0], r = [0, 0, 0]) {
   const m = new THREE.Mesh(geom, material);

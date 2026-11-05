@@ -26,6 +26,7 @@ let current = qs.get("type") || "overview";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
 renderer.setScissorTest(true);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
