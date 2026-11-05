@@ -10,6 +10,9 @@ Each release records the exact git commit it was built from. `git checkout <comm
 - Tutorial works in 3D (arrow follows 3D slots; rotate/zoom tip).
 - Desktop app serves the game from `app://game/` so 3D loads there too.
 - `/proto3d/` now redirects to the main game.
+- **New satellite models** (`js/sat3d.js`): Lancer, Hornet, Gravity Well, Spear, Tesla, Prospector and Hangar, each with a new look at every tier and specialization, with animated parts. The build bar and upgrade panel show 3D renders of them. Preview them all at `/hangar/`.
+- **New invader models** (`js/aliens3d.js`): Stinger drones, Mite swarmers, comets with tails, crystal-infested asteroids, Warden cruisers with hexagon shields, a saucer Mothership and a spined Dreadnought.
+- **⚡ Overclock** (Endless and Freeplay): fully upgraded satellites can be overclocked without limit, +25% damage (or Mining income) per level at a rising price, so late Endless runs always have something to build. Golden sparks orbit overclocked satellites.
 
 ## v2.0.0 (in development)
 - **∞ Endless mode**: pick Campaign or Endless on the menu. Waves never stop and the Dreadnought returns at waves 50, 70, 90…
