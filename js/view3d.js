@@ -1,7 +1,7 @@
 // 3D view: draws the running game with Three.js (the default view since v3; Classic 2D uses game.js drawing). The game logic, UI and balance are the
 // same as the 2D game; this file only replaces the drawing and turns taps into slot selections.
 import * as THREE from "../vendor/three/three.module.js";
-import { buildSatellite } from "./sat3d.js";
+import { buildSatellite, spaceEnvironment } from "./sat3d.js";
 import { buildAlien } from "./aliens3d.js";
 
 const od = () => window.__od;
@@ -20,6 +20,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05060f);
+scene.environment = spaceEnvironment(renderer); // reflections for metal (planets opt out)
 const camera = new THREE.PerspectiveCamera(40, 1, 1, 8000);
 
 const ambient = new THREE.AmbientLight(0x334466, 0.9);
@@ -222,17 +223,17 @@ function buildWorld(B) {
     } else {
       // the globe sits in a "tilt" group so its equator faces the camera (we look down on the orbital plane)
       const tilt = new THREE.Group(); tilt.name = "tilt"; tilt.rotation.order = "YXZ"; g.add(tilt);
-      const m = new THREE.Mesh(new THREE.SphereGeometry(b.r, 64, 40), new THREE.MeshStandardMaterial({ map: bodyTexture(b.style), roughness: 0.95, metalness: 0 }));
+      const m = new THREE.Mesh(new THREE.SphereGeometry(b.r, 64, 40), new THREE.MeshStandardMaterial({ map: bodyTexture(b.style), roughness: 0.95, metalness: 0, envMapIntensity: 0 }));
       m.name = "surface"; tilt.add(m);
       if (b.style === "earth") {
-        const cl = new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.015, 64, 40), new THREE.MeshStandardMaterial({ map: clouds(), transparent: true, depthWrite: false, roughness: 1 }));
+        const cl = new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.015, 64, 40), new THREE.MeshStandardMaterial({ map: clouds(), transparent: true, depthWrite: false, roughness: 1, envMapIntensity: 0 }));
         cl.name = "clouds"; tilt.add(cl);
         g.add(new THREE.Mesh(new THREE.SphereGeometry(b.r * 1.07, 48, 32), new THREE.MeshBasicMaterial({ color: 0x4aa8ff, transparent: true, opacity: 0.14, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false })));
       }
       const ST = (window.OD.BODY_STYLE || {})[b.style] || {};
       if (ST.rings || (b.root && b.belt)) {
         const inner = b.belt ? b.belt.inner : b.r * 1.4, outer = b.belt ? b.belt.outer : b.r * 2.2;
-        const ring = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 96, 1), new THREE.MeshStandardMaterial({ color: 0xe8d6a8, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 1, depthWrite: false }));
+        const ring = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 96, 1), new THREE.MeshStandardMaterial({ color: 0xe8d6a8, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 1, depthWrite: false, envMapIntensity: 0 }));
         ring.rotation.x = -Math.PI / 2; g.add(ring);
       }
       if (ST.faintRing) { const ring = new THREE.Mesh(new THREE.RingGeometry(b.r * 1.55, b.r * 1.65, 64), new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; g.add(ring); }
@@ -315,6 +316,7 @@ function satThumb(type, level, path) {
       const k = new THREE.DirectionalLight(0xfff1dc, 3); k.position.set(60, 80, 70); thumbScene.add(k);
       const r = new THREE.DirectionalLight(0x6c8bff, 1.6); r.position.set(-80, -20, -60); thumbScene.add(r);
       thumbCam = new THREE.PerspectiveCamera(30, 1, 1, 2000);
+      thumbScene.environment = spaceEnvironment(thumbR);
     }
     const m = buildSatellite({ type, level, path });
     m.userData.update(1.3, true, 0);
@@ -508,10 +510,35 @@ function sync() {
   if (S && S.shake) { camera.position.x += (Math.random() - 0.5) * S.shake * 0.6; camera.position.z += (Math.random() - 0.5) * S.shake * 0.6; }
 }
 
+// ---------- automatic quality ----------
+// Slow devices (low-end Chromebooks, older phones) step down: first a lower render resolution, then no metal
+// reflections. Measured only while a game is running and the tab is visible; fast devices keep full quality.
+const quality = { level: 0, frames: 0, time: 0, last: performance.now() };
+const QUALITY_STEPS = [
+  () => renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)),
+  () => { renderer.setPixelRatio(1); },
+  () => { scene.environment = null; },
+];
+function trackQuality() {
+  const now = performance.now(), dt = now - quality.last; quality.last = now;
+  const S = od() && od().state();
+  if (!S || S.paused || S.over || document.hidden || dt > 1000) return; // menus, pauses and tab switches don't count
+  quality.frames++; quality.time += dt;
+  if (quality.time < 4000) return;
+  const fps = quality.frames * 1000 / quality.time;
+  quality.frames = 0; quality.time = 0;
+  if (fps < 40 && quality.level < QUALITY_STEPS.length) {
+    QUALITY_STEPS[quality.level++]();
+    resize();
+    console.info(`[view3d] ${fps.toFixed(0)} fps: quality step ${quality.level}`);
+  }
+}
+
 function loop() {
   placeCamera();
   sync();
   renderer.render(scene, camera);
+  trackQuality();
   requestAnimationFrame(loop);
 }
 resize();
@@ -522,5 +549,5 @@ function project(x, y, z = 0) {
   _v.set(x - C.x, H + z, y - C.y).project(camera);
   return { x: (_v.x + 1) / 2 * r.width, y: (1 - _v.y) / 2 * r.height, behind: _v.z > 1 };
 }
-window.__view3d = { cam, camera, scene, renderer, project, satThumb };
+window.__view3d = { cam, camera, scene, renderer, project, satThumb, quality };
 if (window.__od && window.__od.repaintIcons) window.__od.repaintIcons();
