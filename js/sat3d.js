@@ -448,6 +448,38 @@ const DESIGNS = {
   },
 };
 
+// ---------- shared detailing (from the visual-upgrade ZIP, placed per design so nothing clips) ----------
+// Rear maneuvering thrusters with flickering flames, and tier markings that read at game scale.
+// Positions are hand-fitted to each hull; the ZIP's fixed-position side rails were left out (they cut
+// through or floated beside most hulls, and every design already carries its own armor detail).
+const FLAME = Glow("#67bfff");
+const KIT = {
+  //           thrusters [x, y, z]              thrust   tier marks
+  laser:   L => ({ thr: [[-3.4, -2, -7.4], [3.4, -2, -7.4]], dir: "z", band: { axis: "z", r: 5.15, at: i => -5.6 - i * 0.75 } }),
+  missile: L => ({ thr: [[-4, -3, -9], [4, -3, -9]], dir: "z", plate: (i) => [-4.5, 5.12, -3 + i * 2] }),
+  tractor: L => ({ thr: [[-3, -13.2, 0], [3, -13.2, 0]], dir: "y", band: { axis: "y", r: 2.62, at: i => -6.5 + i * 1.0 } }),
+  rail:    L => ({ thr: [[-3.6, -3, -10], [3.6, -3, -10]], dir: "z", plate: (i) => [-2, 4.12, -9 + i * 1.1] }),
+  emp:     L => ({ thr: [[-4, -7.2, 0], [4, -7.2, 0]], dir: "y", ring: (i) => { const a = 2.75 + i * 0.32; return [Math.cos(a) * 6.1, -1.94, Math.sin(a) * 6.1, a]; } }),
+  miner:   L => ({ thr: [[-2.4, -2.5, -4], [2.4, -2.5, -4]], dir: "z", plate: (i) => [-2.4 + i * 1.6, 4.12, -2.9] }),
+  carrier: (L, P) => ({ thr: [], side: (i) => [(P === "B" ? 13 / 2 + 2.05 : 11 / 2 + 0.05), 0, -(26 + L * 5) / 2 + 3 + i * 1.2] }),
+};
+function addKit(g, type, L, P, anim) {
+  const k = KIT[type](L, P), accent = { laser: "#45e3ff", missile: "#ff9f43", tractor: "#bc83ff", rail: "#74ffa4", emp: "#ffe06a", miner: "#ffd166", carrier: "#ff7ad9" }[type];
+  const lit = Accent(accent);
+  for (const [x, y, z] of k.thr) {
+    // flames flicker through their shared material (see buildSatellite), so they merge: no extra draw calls
+    if (k.dir === "z") { alongZ(g, G.cyl8, DARK, 1.1, 2.4, [x, y, z - 1.2]); add(g, G.sphLo, FLAME, [1.6, 1.6, 2], [x, y, z - 3]); }
+    else { add(g, G.cyl8, DARK, [2.2, 2.4, 2.2], [x, y - 1.2, z]); add(g, G.sphLo, FLAME, [1.6, 2, 1.6], [x, y - 3, z]); }
+  }
+  const n = Math.min(L, 4); // tiers 2-5 show 1-4 marks
+  for (let i = 0; i < n; i++) {
+    if (k.band) { const b = add(g, G.cyl8, lit, [k.band.r * 2, 0.35, k.band.r * 2], [0, 0, 0]); if (k.band.axis === "z") { b.rotation.x = H; b.position.z = k.band.at(i); } else b.position.y = k.band.at(i); }
+    if (k.plate) add(g, G.box, lit, [2.3, 0.22, 0.6], k.plate(i));
+    if (k.ring) { const [x, y, z, a] = k.ring(i); add(g, G.box, lit, [0.6, 0.22, 1.6], [x, y, z], [0, -a, 0]); }
+    if (k.side) add(g, G.box, lit, [0.22, 3, 0.6], k.side(i));
+  }
+}
+
 // ---------- merging static parts ----------
 const geoCache = new Map();
 function mergeList(list) {
@@ -508,6 +540,7 @@ export function buildSatellite({ type, level = 0, path = null }) {
   tur.name = "turret"; g.add(tur);
   const anim = [];
   DESIGNS[type](g, tur, level, path, anim);
+  addKit(g, type, level, path, anim);
   const key = `${type}|${level}|${path}`;
   bake(tur, key + "|t");
   bake(g, key + "|g", [tur]);
@@ -515,7 +548,7 @@ export function buildSatellite({ type, level = 0, path = null }) {
   g.userData.update = (t, fire, dt) => {
     for (const f of anim) f(t, fire, dt);
     const f = Math.floor(t * 60); // blink every beacon together, once per frame
-    if (f !== beaconFrame) { beaconFrame = f; BEACON.emissiveIntensity = (t % 1.6) < 0.18 ? 1.4 : 0.15; }
+    if (f !== beaconFrame) { beaconFrame = f; BEACON.emissiveIntensity = (t % 1.6) < 0.18 ? 1.4 : 0.15; FLAME.emissiveIntensity = 0.75 + 0.2 * Math.sin(t * 23) * Math.sin(t * 7.3); }
   };
   return g;
 }
