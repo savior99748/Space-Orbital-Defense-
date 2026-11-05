@@ -2,6 +2,36 @@
 
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
+## v3.1.0 (visual overhaul, in review)
+Visual only: gameplay, balance, orbital mechanics, saves, achievements, CrazyGames SDK events and Classic 2D
+are unchanged. Built on branch `visual-overhaul`; the uploaded visual-upgrade ZIPs were compared file by file
+and merged selectively (see below).
+- **Name and interface:** Ringwarden: Orbital Defense. Command-console styling: translucent dark panels with
+  cyan edges and corner brackets, gradient title, "Solar System Defense Command" header, hover/pressed/
+  selected/disabled button states, a short panel entrance animation, reduced-motion support.
+- **Satellites** (`js/sat3d.js`): gunmetal hulls with bevelled edges, steel barrels, gold thermal foil,
+  framed solar arrays, blinking beacons, each type's glowing accent, rear thrusters with flickering flames
+  and tier marks (1-4). Static parts merge into one mesh per material.
+- **Invaders** (`js/aliens3d.js`): darker metallic hulls with reflections, glowing seams, engine exhaust,
+  a softer hit flash.
+- **Planets and lighting** (`js/view3d.js`): filmic (ACES) tone mapping, bump relief and glossy oceans,
+  Fresnel atmospheres per world that brighten on the sunlit side, Earth's night-side city lights, banded
+  and gapped Saturn rings, a churning Sun with a corona, a blue rim light, a nebula backdrop and a tinted
+  starfield.
+- **Combat effects:** glowing beams with white-hot cores and impact flashes, missile engines with fire-to-
+  smoke trails, fireballs and shockwaves, sparks, muzzle flashes, railgun charge-up, shield-hit ripples,
+  destruction debris. All glows share one draw call.
+- **Camera shake setting** on the main menu (On / Low / Off).
+- **Main menu:** the live 3D scene behind a translucent panel: satellites orbit the selected world and fire
+  at approaching invaders while the camera circles; map cards show 3D planet portraits; the mission panel
+  has a large rotating globe.
+- **Performance:** automatic quality steps for slow devices (render resolution, then reflections, then the
+  backdrop); dynamic buffers upload only what is used.
+- From the ZIPs: the UI refresh stylesheet and the menu/selector styling (without its backdrop blur and
+  drop-shadow filters, which cost frame rate), the thruster and tier-mark ideas (fitted per hull; the
+  fixed-position side rails were dropped because they clipped), ACES tone mapping, the atmosphere / ring /
+  beam-core / missile-trail ideas (implemented in the shared systems above).
+
 ## v3.0.0: full 3D (CrazyGames release)
 First released to CrazyGames. The exact commit is recorded in the merge of the release pull request on GitHub.
 
