@@ -500,6 +500,8 @@ function glow(v, color, size, k = 1) { // v: world position, k: brightness 0..1
   gSize[gN] = size; gN++;
 }
 const trails = new WeakMap(); // missile → recent positions
+// send only the used part of a dynamic buffer to the GPU (not the whole pool) each frame
+function upload(attr, count) { if (!count) return; attr.clearUpdateRanges(); attr.addUpdateRange(0, count); attr.needsUpdate = true; }
 // invader engine glows: [color, distance behind the centre, size] in units of the invader's size
 const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cruiser: ["#9fe0ff", 1.45, 1.4], dread: ["#ff7a3c", 1.3, 1.1], asteroid: ["#ff9a3c", 1.3, 1.3] };
 const _ev = new THREE.Vector3();
@@ -608,8 +610,8 @@ function sync() {
     if (!bm.bolt) { glow(b, bm.color, 10 + bm.w * 3, 0.9 * fade); glow(b, "#ffffff", 4 + bm.w, 0.8 * fade); } // impact flash
     n++;
   }
-  beamMesh.count = beamCore.count = n; beamMesh.instanceMatrix.needsUpdate = beamCore.instanceMatrix.needsUpdate = true;
-  if (beamMesh.instanceColor) beamMesh.instanceColor.needsUpdate = true; if (beamCore.instanceColor) beamCore.instanceColor.needsUpdate = true;
+  beamMesh.count = beamCore.count = n;
+  for (const im of [beamMesh, beamCore]) { upload(im.instanceMatrix, n * 16); if (im.instanceColor) upload(im.instanceColor, n * 3); }
 
   // missiles + bomblets
   n = 0;
@@ -625,7 +627,7 @@ function sync() {
       glow(tr[i], j < 3 ? "#ff9a3c" : "#7f8aa3", (6 + j * 0.9) * big, (j < 3 ? 0.8 : 0.32) * k);
     }
   }
-  shotMesh.count = n; shotMesh.instanceMatrix.needsUpdate = true;
+  shotMesh.count = n; upload(shotMesh.instanceMatrix, n * 16);
 
   // carrier fighters
   n = 0;
@@ -634,7 +636,7 @@ function sync() {
     dummy.position.copy(W(f.x, f.y, H + 10, f.z)); dummy.rotation.set(0, -f.angle, -Math.PI / 2); dummy.scale.set(3, f.bomber ? 9 : 7, 3); dummy.updateMatrix();
     craftMesh.setMatrixAt(n++, dummy.matrix);
   }
-  craftMesh.count = n; craftMesh.instanceMatrix.needsUpdate = true;
+  craftMesh.count = n; upload(craftMesh.instanceMatrix, n * 16);
 
   // particles
   particles.visible = false;
@@ -660,8 +662,9 @@ function sync() {
       glow(m.position, "#fff2d0", r.r * (0.45 + k * 0.6), f);
     }
   });
-  gGeo.setDrawRange(0, gN); gN = 0;
-  gGeo.attributes.position.needsUpdate = gGeo.attributes.color.needsUpdate = gGeo.attributes.size.needsUpdate = true;
+  gGeo.setDrawRange(0, gN);
+  upload(gGeo.attributes.position, gN * 3); upload(gGeo.attributes.color, gN * 3); upload(gGeo.attributes.size, gN);
+  gN = 0;
   glowMat.uniforms.scale.value = renderer.domElement.height * 0.9;
 
   // selection + range
@@ -732,5 +735,6 @@ function project(x, y, z = 0) {
   _v.set(x - C.x, H + z, y - C.y).project(camera);
   return { x: (_v.x + 1) / 2 * r.width, y: (1 - _v.y) / 2 * r.height, behind: _v.z > 1 };
 }
-window.__view3d = { cam, camera, scene, renderer, project, satThumb, quality, lights: { ambient, sun, rim, sunPoint } };
+window.__view3d = { cam, camera, scene, renderer, project, satThumb, quality, lights: { ambient, sun, rim, sunPoint },
+  setQuality: n => { while (quality.level < Math.min(n, QUALITY_STEPS.length)) QUALITY_STEPS[quality.level++](); resize(); } }; // for tests
 if (window.__od && window.__od.repaintIcons) window.__od.repaintIcons();
