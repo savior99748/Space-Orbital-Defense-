@@ -1,6 +1,6 @@
 # Ringwarden: Orbital Defense — multi-platform architecture and roadmap
 
-Status: **proposal for review.** Nothing in the game has been changed by this document.
+Status: **Phase 1 done** (tests + CI, PR #20). **Phase 2 done** (shared monetization service, platform adapters, per-target builds with forbidden-SDK check). Next: Phase 3 (mobile) or 4 (Steam).
 Audited at commit `20c927e` (main, v3.1.0 — the build submitted to CrazyGames Basic Launch).
 
 Items marked **[verify]** are platform rules or SDK facts that must be confirmed against the vendor's current
@@ -89,14 +89,14 @@ js/
   game.js                     ── core: simulation, UI, progression (4 call sites switch to Monetization)
   view3d.js sat3d.js aliens3d.js draw.js bodies.js audio.js   ── core: presentation (unchanged)
   services/
-    monetization.js      ★    one interface for rewards, interstitials, premium (see §5)
-    entitlements.js      ★    "premium owned?" — stored locally, refreshed from the store
+  monetization.js        ✔    one interface for rewards, interstitials, premium (see §5)
+                              (kept flat in js/ so the one-folder CrazyGames upload stays simple;
+                               "premium owned?" is OD.platform.premium, provided by each adapter)
   platform/
-    platform.js               shared defaults + interface (today's file, trimmed)
-    web.js               ★    split out of platform.js
-    crazygames.js        ★    split out of platform.js (unchanged behavior)
-    capacitor.js         ★    AdMob + store billing + app lifecycle + safe areas
-    electron.js          ★    Steam bridge, cloud saves, display settings
+  platform.js            ✔    shared defaults + interface (web build)
+    crazygames.js        ✔    split out of platform.js (unchanged behavior)
+    capacitor.js         ✔    scaffold; Phase 3 adds AdMob + store billing + lifecycle + safe areas
+    electron.js          ✔    Steam achievements, premium (paid game); Phase 4 adds cloud saves, display settings
 platforms/
   electron/                   Steam / desktop wrapper (exists)
   mobile/                     Capacitor project (exists); android/ and ios/ generated here once ★
@@ -173,18 +173,19 @@ in JavaScript inside the app (stores and ad networks expect the native SDKs).
 
 ```js
 // js/services/monetization.js — the only monetization API gameplay may call
-Monetization.offer(kind)        // → { available, label, method: "ad" | "premium" | "none" }
-Monetization.claim(kind, key)   // → Promise<{ granted: boolean }>, never grants the same key twice
-Monetization.breakAd()          // natural pause point (leaving an end screen); no-op where not allowed
-Monetization.isPremium()        // true on Steam (paid), true on mobile after purchase, false elsewhere
-Monetization.buyPremium()       // mobile only
-Monetization.restore()          // mobile only (Apple requires a visible "Restore Purchases" button) [verify]
+// js/monetization.js (implemented in Phase 2)
+OD.monetization.offer(kind)        // → { available, method: "ad" | "premium" | "none" }
+OD.monetization.claim(kind, once)  // → Promise<boolean>; `once` = the run's own record ({ done, mark })
+OD.monetization.breakAd()          // natural pause point (leaving an end screen); no-op where not allowed
+OD.monetization.isPremium()        // true on Steam (paid), true on mobile after purchase, false elsewhere
+// Phase 3 adds, mobile only: buyPremium(), restore() (Apple requires a visible "Restore Purchases" button) [verify]
 ```
 
-`kind` is `"credits"` (between waves) or `"revive"` (after losing). `key` makes every grant idempotent:
-`credits:<runId>:<wave>` and `revive:<runId>`. A grant is recorded **before** the reward is applied and the
-record is saved with the run, so a double callback, a second tap, an app kill mid-ad or a resumed save cannot pay
-twice. This replaces today's `S.adWave` / `S.revived` checks with the same rules in one place.
+`kind` is `"credits"` (between waves) or `"revive"` (after losing). The grant record is the run's existing
+fields — `S.adWave` (bonus taken this wave) and `S.revived` (revive used) — so save files are unchanged. A grant is
+marked **before** the reward is applied and saved with the run; a claim made while another is running waits and
+returns false. So a double callback, a second tap or a resumed save cannot pay twice (covered by
+`tests/monetization.test.cjs`).
 
 ### Per platform
 

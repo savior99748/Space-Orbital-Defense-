@@ -22,17 +22,26 @@ const VERSION = pkg.version;
 const GAME_FILES = ["index.html", "privacy.html", "js", "vendor", "assets/icons/icon-180.png", "assets/icons/icon-192.png", "assets/icons/icon-512.png"];
 const PWA_FILES = ["manifest.webmanifest", "sw.js"];
 
+// adapters: which js/platform/*.js files this target ships (all others are left out of the build).
+// forbid:   strings that must not appear anywhere in this target's output (the build fails if they do),
+//           so the CrazyGames SDK can't reach a desktop/mobile build and ad code can't reach Steam.
+const CG_SDK = "sdk.crazygames.com", ADMOB = "admob";
 const TARGETS = {
-  web:        { out: "dist/web", platform: "web", pwa: true },
-  itch:       { out: "dist/itch", platform: "web", zip: "dist/orbital-defense-itch.zip" },
-  crazygames: { out: "dist/crazygames", platform: "crazygames", zip: "dist/orbital-defense-crazygames.zip",
+  web:        { out: "dist/web", platform: "web", pwa: true, adapters: [], forbid: [CG_SDK, ADMOB] },
+  itch:       { out: "dist/itch", platform: "web", zip: "dist/orbital-defense-itch.zip", adapters: [], forbid: [CG_SDK, ADMOB] },
+  crazygames: { out: "dist/crazygames", platform: "crazygames", zip: "dist/orbital-defense-crazygames.zip", adapters: ["crazygames"], forbid: [ADMOB],
                 head: `<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>` },
   // Basic Launch: CrazyGames allows no ads until Full Launch, so this build switches every ad off.
-  "crazygames-basic": { out: "dist/crazygames-basic", platform: "crazygames", zip: "dist/orbital-defense-crazygames-basic.zip", noAds: true,
+  "crazygames-basic": { out: "dist/crazygames-basic", platform: "crazygames", zip: "dist/orbital-defense-crazygames-basic.zip", noAds: true, adapters: ["crazygames"], forbid: [ADMOB],
                 head: `<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>` },
-  electron:   { out: "platforms/electron/app", platform: "electron", icon: "platforms/electron/build/icon.png" },
-  mobile:     { out: "platforms/mobile/www", platform: "capacitor", icon: "platforms/mobile/resources/icon.png" },
+  // Steam / desktop: a paid game — no ad code of any kind.
+  electron:   { out: "platforms/electron/app", platform: "electron", icon: "platforms/electron/build/icon.png", adapters: ["electron"], forbid: [CG_SDK, ADMOB, "requestAd"] },
+  // iOS + Android share one Capacitor web bundle; the native projects add the store-specific parts.
+  mobile:     { out: "platforms/mobile/www", platform: "capacitor", icon: "platforms/mobile/resources/icon.png", adapters: ["capacitor"], forbid: [CG_SDK] },
 };
+// Names used in the platform plan (docs/MULTIPLATFORM.md) → build targets
+const ALIASES = { steam: "electron", "mobile-ios": "mobile", "mobile-android": "mobile" };
+const ADAPTER = f => (f.match(/^js[\\/]platform[\\/]([\w-]+)\.js$/) || [])[1];
 
 function listFiles(rel) {
   const abs = path.join(root, rel);
@@ -44,7 +53,8 @@ function build(name) {
   const t = TARGETS[name];
   const out = path.join(root, t.out);
   rmSync(out, { recursive: true, force: true });
-  const files = [...GAME_FILES, ...(t.pwa ? PWA_FILES : [])].flatMap(listFiles);
+  const files = [...GAME_FILES, ...(t.pwa ? PWA_FILES : [])].flatMap(listFiles)
+    .filter(f => !ADAPTER(f) || t.adapters.includes(ADAPTER(f))); // only this target's platform adapter
   for (const f of files) {
     mkdirSync(path.dirname(path.join(out, f)), { recursive: true });
     copyFileSync(path.join(root, f), path.join(out, f));
@@ -54,11 +64,29 @@ function build(name) {
   const inject = `<script>window.OD_PLATFORM = ${JSON.stringify(t.platform)}; window.OD_VERSION = ${JSON.stringify(VERSION)};${t.noAds ? " window.OD_NO_ADS = true;" : ""}</script>${t.head ? "\n" + t.head : ""}`;
   html = html.replace(/<!-- PLATFORM:[^>]*-->/, inject);
   if (!t.pwa) html = html.replace(/<link rel="manifest"[^>]*>\n?/, "");
+  html = html.replace(/<script src="js\/platform\/([\w-]+)\.js"><\/script>\n?/g, (m, a) => (t.adapters.includes(a) ? m : ""));
   writeFileSync(path.join(out, "index.html"), html);
+  if (t.pwa) { // the offline cache list must match the files actually shipped
+    const sw = readFileSync(path.join(out, "sw.js"), "utf8").replace(/"js\/platform\/([\w-]+)\.js",\s*/g, (m, a) => (t.adapters.includes(a) ? m : ""));
+    writeFileSync(path.join(out, "sw.js"), sw);
+  }
+  checkForbidden(name, t, out);
   if (t.icon) { mkdirSync(path.dirname(path.join(root, t.icon)), { recursive: true }); copyFileSync(path.join(root, "assets/icons/icon-1024.png"), path.join(root, t.icon)); }
   let msg = `${name.padEnd(11)} → ${t.out}/ (${files.length} files)`;
   if (t.zip) { const bytes = zipDir(out, path.join(root, t.zip)); msg += `\n${"".padEnd(11)} → ${t.zip} (${(bytes / 1024).toFixed(0)} KB)`; }
   console.log(msg);
+}
+
+// Fail the build if an SDK or ad code reached an edition that must not contain it.
+function checkForbidden(name, t, out) {
+  for (const abs of listFilesAbs(out)) {
+    if (!/\.(html|js|json|webmanifest)$/.test(abs) || abs.includes(`${path.sep}vendor${path.sep}`)) continue;
+    const text = readFileSync(abs, "utf8").toLowerCase();
+    for (const bad of t.forbid || []) if (text.includes(bad.toLowerCase())) {
+      console.error(`✗ ${name}: "${bad}" must not be in this build (found in ${path.relative(out, abs)})`);
+      process.exit(1);
+    }
+  }
 }
 
 // ---------- minimal ZIP writer (deflate), so no zip tool is needed ----------
@@ -102,9 +130,9 @@ function listFilesAbs(dir) {
 
 // ---------- run ----------
 const wanted = process.argv.slice(2);
-const names = wanted.length ? wanted : Object.keys(TARGETS);
+const names = (wanted.length ? wanted : Object.keys(TARGETS)).map(n => ALIASES[n] || n);
 for (const n of names) {
-  if (!TARGETS[n]) { console.error(`Unknown target "${n}". Choose from: ${Object.keys(TARGETS).join(", ")}`); process.exit(1); }
+  if (!TARGETS[n]) { console.error(`Unknown target "${n}". Choose from: ${[...Object.keys(TARGETS), ...Object.keys(ALIASES)].join(", ")}`); process.exit(1); }
   if (!existsSync(path.join(root, "assets/icons/icon-1024.png"))) { console.error("Missing icons: run node tools/make-icons.mjs first"); process.exit(1); }
   build(n);
 }

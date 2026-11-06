@@ -7,7 +7,13 @@
 //   OD.platform.ads             rewardedAvailable(), rewarded() -> Promise<bool>, midgame() -> Promise
 //   OD.platform.gameplayStart() / gameplayStop() / loadingDone() / happy()
 //   OD.platform.achievement(id) unlock a platform achievement (Steam via the desktop wrapper)
+//   OD.platform.premium         owned() → bool: ad-free entitlement (Steam: the game is paid; mobile: $2.99 upgrade)
 //   OD.platform.onAdStart / onAdEnd   set by the game to pause + mute around ads
+//
+// This file holds the shared defaults (the plain web build). Each other platform has an adapter in
+// js/platform/<name>.js that overrides what it needs; the build script ships only the matching adapter,
+// so e.g. the CrazyGames SDK never ends up in a desktop or mobile build. Gameplay never calls ads directly:
+// it goes through js/monetization.js.
 //
 // The build script (tools/build.mjs) sets window.OD_PLATFORM for each target. You can also try a
 // platform locally with ?platform=crazygames, and simulate ads on the web build with ?adtest=1.
@@ -41,7 +47,8 @@ window.OD = window.OD || {};
   P.gameplayStop = () => {};
   P.loadingDone = () => {};
   P.happy = () => {};
-  P.achievement = id => { if (native && native.achievement) native.achievement(id); };
+  P.achievement = () => {};
+  P.premium = { owned: () => false }; // no ad-free entitlement unless an adapter grants one
   P.init = () => Promise.resolve();
 
   // Simulated ad for testing the ad flow without a real ad network (?adtest=1).
@@ -58,71 +65,11 @@ window.OD = window.OD || {};
 
   function adStarted() { if (P.onAdStart) P.onAdStart(); }
   function adEnded() { if (P.onAdEnd) P.onAdEnd(); }
-
-  // ---------- CrazyGames (HTML5 SDK v3) ----------
-  if (name === "crazygames") {
-    let sdk = null;
-    const loadScript = src => new Promise((res, rej) => {
-      const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
-    });
-    P.init = async () => {
-      try {
-        if (!(window.CrazyGames && window.CrazyGames.SDK)) await loadScript("https://sdk.crazygames.com/crazygames-sdk-v3.js");
-        sdk = window.CrazyGames.SDK;
-        // Never let a slow or silent SDK keep the game on a blank screen: start anyway after 6 s.
-        // (Every SDK call below is wrapped, and saves fall back to the device, so a late SDK is harmless.)
-        const ready = await Promise.race([sdk.init().then(() => true), new Promise(r => setTimeout(() => r(false), 6000))]);
-        if (!ready) console.warn("CrazyGames SDK did not answer in 6 s; starting the game anyway");
-        if (sdk.game && sdk.game.loadingStart) sdk.game.loadingStart();
-        // Cloud-synced saves (fall back to localStorage if the data module is unavailable)
-        if (sdk.data && sdk.data.getItem) {
-          P.save = {
-            get(k) { try { const v = sdk.data.getItem(k); return v == null ? local.get(k) : v; } catch { return local.get(k); } },
-            set(k, v) { try { sdk.data.setItem(k, v); } catch { /* ignore */ } local.set(k, v); },
-            remove(k) { try { sdk.data.removeItem(k); } catch { /* ignore */ } local.remove(k); },
-          };
-        }
-      } catch (err) {
-        console.warn("CrazyGames SDK unavailable, running without it", err);
-        sdk = null;
-      }
-    };
-    const call = (mod, fn) => { try { if (sdk && sdk[mod] && sdk[mod][fn]) sdk[mod][fn](); } catch { /* ignore */ } };
-    P.loadingDone = () => call("game", "loadingStop");
-    P.gameplayStart = () => call("game", "gameplayStart");
-    P.gameplayStop = () => call("game", "gameplayStop");
-    P.happy = () => call("game", "happytime");
-    const requestAd = type => new Promise(resolve => {
-      if (!sdk || !sdk.ad) return resolve(false);
-      let started = false;
-      try {
-        sdk.ad.requestAd(type, {
-          adStarted: () => { started = true; adStarted(); },
-          adFinished: () => { if (started) adEnded(); resolve(true); },
-          adError: () => { if (started) adEnded(); resolve(false); },
-        });
-      } catch { resolve(false); }
-    });
-    P.ads = window.OD_NO_ADS ? { // Basic Launch build: no ads at all
-      rewardedAvailable: () => false, rewarded: () => Promise.resolve(false), midgame: () => Promise.resolve(),
-    } : {
-      rewardedAvailable: () => !!(sdk && sdk.ad),
-      rewarded: () => requestAd("rewarded"),
-      midgame: () => requestAd("midgame").then(() => undefined),
-    };
-  }
-
-  // ---------- Capacitor (iOS / Android) ----------
-  // localStorage persists inside the native app. Ads and in-app purchases are added later with
-  // native plugins (e.g. AdMob); wire them into P.ads here when that happens.
-  if (name === "capacitor") {
-    P.init = async () => {
-      try {
-        const sb = window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar;
-        if (sb && sb.hide) await sb.hide();
-      } catch { /* optional plugin */ }
-    };
-  }
+  const loadScript = src => new Promise((res, rej) => {
+    const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+  // Shared helpers for the adapters in js/platform/
+  OD.platformKit = { local, adStarted, adEnded, loadScript, native };
 
   // ---------- installable web app (PWA): offline support on the plain web build ----------
   if (name === "web" && !window.OD_NO_SW && "serviceWorker" in navigator && /^https?:$/.test(location.protocol) && window.top === window.self) {
