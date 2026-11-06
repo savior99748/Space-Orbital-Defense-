@@ -9,6 +9,10 @@
     "build:portals": "node tools/build.mjs itch crazygames",
     "build:desktop": "node tools/build.mjs electron",
     "build:mobile": "node tools/build.mjs mobile",
-    "icons": "node tools/make-icons.mjs"
+    "icons": "node tools/make-icons.mjs",
+    "test": "node tests/run.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
   }
 }
