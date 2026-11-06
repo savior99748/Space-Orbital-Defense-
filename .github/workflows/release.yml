@@ -1,0 +1,36 @@
+# Builds release files when a release tag is pushed, after the tests pass.
+# Tag names: crazygames-v3.1.0, web-v3.1.0, steam-v1.0.0, android-v1.0.0, ios-v1.0.0
+# (create one on GitHub: Releases → Draft a new release → choose a tag).
+name: Release
+on:
+  push:
+    tags: ["*-v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Run tests
+        run: npm test
+      - name: Build release files
+        run: |
+          node tools/build.mjs web itch crazygames crazygames-basic
+          node tools/flatten.mjs crazygames
+          node tools/flatten.mjs crazygames-basic
+          ls -la dist/*.zip
+      - name: Attach to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Built from $GITHUB_SHA. See CHANGELOG.md."
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip --clobber
