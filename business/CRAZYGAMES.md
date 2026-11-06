@@ -9,6 +9,14 @@ node tools/crazygames-media.mjs     # → dist/crazygames-media/ (3 covers + 2 v
 TITLE="New Name" node tools/crazygames-media.mjs covers   # re-render the covers if the name changes
 ```
 
+## Which build
+
+- **Basic Launch:** `ringwarden-crazygames-v3.1.0-BASIC-flat.zip` (or `-BASIC.zip`). CrazyGames allows **no ads** in
+  Basic Launch, so this build has every ad switched off (no bonus-credits ad, no revive ad, no ad between games).
+  Built with `node tools/build.mjs crazygames-basic` (+ `node tools/flatten.mjs crazygames-basic` for the flat copy).
+- **Full Launch** (after CrazyGames promotes the game): re-upload the regular `ringwarden-crazygames-v3.1.0.zip`, which
+  has the rewarded and midgame ads.
+
 ## Files to upload
 
 | Field | File | Size |
