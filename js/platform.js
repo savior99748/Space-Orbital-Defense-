@@ -103,7 +103,9 @@ window.OD = window.OD || {};
         });
       } catch { resolve(false); }
     });
-    P.ads = {
+    P.ads = window.OD_NO_ADS ? { // Basic Launch build: no ads at all
+      rewardedAvailable: () => false, rewarded: () => Promise.resolve(false), midgame: () => Promise.resolve(),
+    } : {
       rewardedAvailable: () => !!(sdk && sdk.ad),
       rewarded: () => requestAd("rewarded"),
       midgame: () => requestAd("midgame").then(() => undefined),

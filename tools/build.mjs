@@ -27,6 +27,9 @@ const TARGETS = {
   itch:       { out: "dist/itch", platform: "web", zip: "dist/orbital-defense-itch.zip" },
   crazygames: { out: "dist/crazygames", platform: "crazygames", zip: "dist/orbital-defense-crazygames.zip",
                 head: `<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>` },
+  // Basic Launch: CrazyGames allows no ads until Full Launch, so this build switches every ad off.
+  "crazygames-basic": { out: "dist/crazygames-basic", platform: "crazygames", zip: "dist/orbital-defense-crazygames-basic.zip", noAds: true,
+                head: `<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>` },
   electron:   { out: "platforms/electron/app", platform: "electron", icon: "platforms/electron/build/icon.png" },
   mobile:     { out: "platforms/mobile/www", platform: "capacitor", icon: "platforms/mobile/resources/icon.png" },
 };
@@ -48,7 +51,7 @@ function build(name) {
   }
   // Point the page at the right platform (and add any SDK tags).
   let html = readFileSync(path.join(root, "index.html"), "utf8");
-  const inject = `<script>window.OD_PLATFORM = ${JSON.stringify(t.platform)}; window.OD_VERSION = ${JSON.stringify(VERSION)};</script>${t.head ? "\n" + t.head : ""}`;
+  const inject = `<script>window.OD_PLATFORM = ${JSON.stringify(t.platform)}; window.OD_VERSION = ${JSON.stringify(VERSION)};${t.noAds ? " window.OD_NO_ADS = true;" : ""}</script>${t.head ? "\n" + t.head : ""}`;
   html = html.replace(/<!-- PLATFORM:[^>]*-->/, inject);
   if (!t.pwa) html = html.replace(/<link rel="manifest"[^>]*>\n?/, "");
   writeFileSync(path.join(out, "index.html"), html);
