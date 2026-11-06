@@ -84,4 +84,7 @@ npm run ios              # same for Xcode
 
 ## App icon
 
-`assets/icons/` is generated from the game's own art: `npm run icons` (needs Playwright). `icon-1024.png` is used for store listings and the desktop and mobile app icons.
+`assets/icons/` holds the app icon made from the icon artwork (satellite firing at a warship): `icon-1024.png`, `icon-512.png` and
+`icon-192.png` (the framed badge with transparent corners), `icon-180.png` (iPhone home screen, full square) and
+`icon-maskable-512.png` (Android adaptive icon, badge inside the safe zone). `icon-1024.png` is also used for the
+desktop and mobile app icons. Note: `npm run icons` renders the old programmatic icon and would overwrite these.
