@@ -17,13 +17,13 @@ if (!files.length) { console.error("No tests match", filters.join(" ")); process
 
 // 1. builds the tests load
 console.log("Building test targets…");
-execFileSync("node", ["tools/build.mjs", "itch", "crazygames", "crazygames-basic"], { cwd: root, stdio: "inherit" });
+execFileSync("node", ["tools/build.mjs", "itch", "crazygames", "crazygames-basic", "steam"], { cwd: root, stdio: "inherit" });
 execFileSync("node", ["tools/flatten.mjs", "crazygames"], { cwd: root, stdio: "inherit" });
 execFileSync("node", ["tools/flatten.mjs", "crazygames-basic"], { cwd: root, stdio: "inherit" });
 
 // 2. static servers on the ports the tests expect
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".json": "application/json", ".webmanifest": "application/manifest+json", ".svg": "image/svg+xml", ".txt": "text/plain" };
-const SERVE = { 8765: ".", 8766: ".", 8768: ".", 8769: ".", 8771: "dist/crazygames", 8774: "dist/crazygames-flat", 8775: "dist/crazygames-basic-flat" };
+const SERVE = { 8765: ".", 8766: ".", 8768: ".", 8769: ".", 8771: "dist/crazygames", 8774: "dist/crazygames-flat", 8775: "dist/crazygames-basic-flat", 8776: "platforms/electron/app" };
 const servers = Object.entries(SERVE).map(([port, dir]) => {
   const base = path.join(root, dir);
   return createServer((req, res) => {

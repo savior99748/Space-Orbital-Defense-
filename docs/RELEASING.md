@@ -19,6 +19,7 @@ its own browser, and prints one line per file. Screenshots land in `tests/.out/`
 | `crazygames-flat.test.cjs` | The one-folder upload build loads the 3D view |
 | `crazygames-sdk-timeout.test.cjs` | Game still starts if the SDK never answers |
 | `crazygames-first-start.test.cjs` | Gameplay Start is sent for a brand-new player (tutorial and skip) |
+| `monetization.test.cjs` | Money system: no bonus on web, rewarded ad pays once (double tap too), premium claims free with the same limits, free revive once per run, Steam build ad-free |
 | `platform.test.cjs` | Web/itch/PWA, simulated ads, saves, manifest |
 | `view3d.test.cjs` | 3D view, Classic 2D switch, per-view records, all maps |
 | `maps-modes.test.cjs` | Every map in 3D and 2D, Endless save/load, pause, game over and retry |

@@ -20,7 +20,7 @@ for (const f of walk(src)) {
   let data = readFileSync(f);
   if (/\.(html|js)$/.test(base)) {
     let s = data.toString("utf8");
-    s = s.replace(/(src|href)="(js|assets\/icons)\//g, '$1="').replace(/import\("\.\/js\//g, 'import("./')
+    s = s.replace(/(src|href)="(?:js|assets\/icons)\/(?:[\w-]+\/)*/g, '$1="').replace(/import\("\.\/js\//g, 'import("./')
       .replace(/from "\.\.\/vendor\/three\//g, 'from "./');
     data = Buffer.from(s);
   }

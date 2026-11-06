@@ -738,18 +738,22 @@
     setTimeout(() => toast(`🏆 Achievement unlocked: ${a.name}`, 2600), 900);
   }
 
-  // ---------- rewarded ads ----------
+  // ---------- rewarded bonuses (through js/monetization.js: an ad, or free for ad-free players) ----------
+  const M = OD.monetization;
   const adReward = () => Math.round((60 + S.wave * 12) * S.diff.reward);
-  function watchAdForCredits() {
-    if (!S || S.waveActive || S.adWave === S.wave || !P.ads.rewardedAvailable()) return;
-    const amount = adReward();
+  // The run itself records each grant (S.adWave, S.revived), so the limits survive saves and never pay twice.
+  const creditsOnce = () => ({ done: () => !S || S.adWave === S.wave, mark: () => { S.adWave = S.wave; } });
+  const reviveOnce = () => ({ done: () => !S || !!S.revived, mark: () => { S.revived = true; } });
+  function claimCredits() {
+    if (!S || S.waveActive || S.adWave === S.wave || !M.offer("credits").available) return;
+    const amount = adReward(), method = M.offer("credits").method, run = S;
     ui.adBtn.disabled = true;
-    P.ads.rewarded().then(ok => {
+    M.claim("credits", creditsOnce()).then(ok => {
       ui.adBtn.disabled = false;
-      if (!ok || !S) return;
-      S.money += amount; S.adWave = S.wave; S.stats.adCredits = (S.stats.adCredits || 0) + amount;
-      stats.track("ad/credits");
-      toast(`+${amount} credits. Thanks for watching!`); sfx("coin");
+      if (!ok || S !== run) return;
+      S.money += amount; S.stats.adCredits = (S.stats.adCredits || 0) + amount;
+      stats.track(method === "ad" ? "ad/credits" : "premium/credits");
+      toast(method === "ad" ? `+${amount} credits. Thanks for watching!` : `+${amount} bonus credits!`); sfx("coin");
       saveRun(); updateUI(true);
     });
   }
@@ -847,7 +851,7 @@
     const btns = mode === "won"
       ? `<button class="primary" data-act="freeplay">Freeplay ▶</button>${nextKey ? `<button class="primary" data-act="next">Next: ${MAPS[nextKey].name} →</button>` : ""}<button data-act="menu">Main Menu</button>`
       : mode === "over"
-        ? `${!S.revived && P.ads.rewardedAvailable() ? `<button class="primary ad" data-act="revive">📺 Watch ad: revive with 5 HP</button>` : ""}<button class="primary" data-act="retry">Try Again</button><button data-act="menu">Main Menu</button>`
+        ? `${!S.revived && M.offer("revive").available ? `<button class="primary ad" data-act="revive">${M.offer("revive").method === "ad" ? "📺 Watch ad: revive with 5 HP" : "🛡 Revive with 5 HP"}</button>` : ""}<button class="primary" data-act="retry">Try Again</button><button data-act="menu">Main Menu</button>`
         : `<button class="primary" data-act="pause">← Back</button>`;
     showOverlay(`
       ${head}
@@ -1297,7 +1301,7 @@
   function updateUI(force) {
     if (!S) return;
     const odState = S.overdrive > 0 ? "on" : S.overdriveCd > 0 ? Math.ceil(S.overdriveCd) : "ready";
-    const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over].join("|");
+    const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over, M.isPremium()].join("|");
     if (key === lastUI && !force) return;
     lastUI = key;
     ui.wave.textContent = S.endless ? `${S.wave} ∞` : S.won || S.freeplay ? `${S.wave}` : `${S.wave}/${OD.WIN_WAVE}`;
@@ -1313,9 +1317,10 @@
     ui.autoBtn.classList.toggle("on", S.auto);
     ui.odBtn.disabled = S.overdriveCd > 0 || S.over;
     ui.odBtn.classList.toggle("on", S.overdrive > 0);
-    const adOk = P.ads.rewardedAvailable() && !S.waveActive && !S.over && S.wave >= 1 && S.adWave !== S.wave;
+    const bonus = M.offer("credits");
+    const adOk = bonus.available && !S.waveActive && !S.over && S.wave >= 1 && S.adWave !== S.wave;
     ui.adBtn.classList.toggle("hidden", !adOk);
-    if (adOk) ui.adBtn.textContent = `📺 +${adReward()}`;
+    if (adOk) { ui.adBtn.textContent = `${bonus.method === "ad" ? "📺" : "🎁"} +${adReward()}`; ui.adBtn.title = bonus.method === "ad" ? "Watch a short ad for bonus credits" : "Claim your bonus credits"; }
     ui.odBtn.innerHTML = S.overdrive > 0 ? "⚡ Overdrive!" : S.overdriveCd > 0 ? `⚡ ${Math.ceil(S.overdriveCd)}s` : "⚡ Overdrive";
     for (const b of ui.shop.children) {
       const def = TOWERS[b.dataset.type];
@@ -1517,7 +1522,7 @@
     if (S && (S.over || (S.won && !S.freeplay)) && ["retry", "menu", "next"].includes(act) && !a.dataset.adDone) {
       a.dataset.adDone = "1";
       ui.overlay.querySelectorAll("button").forEach(b => (b.disabled = true));
-      P.ads.midgame().then(() => { a.disabled = false; a.click(); });
+      M.breakAd().then(() => { a.disabled = false; a.click(); });
       return;
     }
     switch (act) {
@@ -1544,17 +1549,20 @@
       }
       case "continue": { const r = loadRun(); if (r) resumeRun(r); break; }
       case "discard": clearRun(); mainMenu(); break;
-      case "revive":
+      case "revive": {
         a.disabled = true;
-        P.ads.rewarded().then(ok => {
-          if (!ok) { a.textContent = "Ad unavailable"; return; }
-          S.over = false; S.revived = true; S.lives = Math.min(5, S.diff.lives);
-          stats.track("ad/revive");
+        const method = M.offer("revive").method, run = S;
+        M.claim("revive", reviveOnce()).then(ok => {
+          if (!ok) { if (S === run && !S.revived) a.textContent = "Ad unavailable"; return; }
+          if (S !== run) return;
+          S.over = false; S.lives = Math.min(5, S.diff.lives);
+          stats.track(method === "ad" ? "ad/revive" : "premium/revive");
           S.enemies = []; S.shots = [];
           hideOverlay(); P.gameplayStart(); saveRun();
           toast("Revived! The planet holds on with 5 HP"); updateUI(true);
         });
         break;
+      }
       case "resume": S.paused = false; hideOverlay(); P.gameplayStart(); updateUI(true); break;
       case "pause": pauseMenu(); break;
       case "stats": showStats("pause"); break;
@@ -1870,7 +1878,7 @@
   ui.speedBtn.onclick = toggleSpeed;
   ui.menuBtn.onclick = pauseMenu;
   ui.odBtn.onclick = activateOverdrive;
-  ui.adBtn.onclick = watchAdForCredits;
+  ui.adBtn.onclick = claimCredits;
   ui.autoBtn.onclick = () => {
     if (!S) return;
     S.auto = !S.auto; sfx("click");
