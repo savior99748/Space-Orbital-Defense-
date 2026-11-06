@@ -37,16 +37,21 @@ const servers = Object.entries(SERVE).map(([port, dir]) => {
 });
 
 // 3. run each test in its own process
+let hasXvfb = false; try { execFileSync("which", ["xvfb-run"], { stdio: "ignore" }); hasXvfb = true; } catch { /* not installed */ }
 rmSync(OUT, { recursive: true, force: true }); mkdirSync(path.join(OUT, "shots"), { recursive: true });
 const run = f => new Promise(resolve => {
   const t0 = Date.now(), lines = [];
-  const child = spawn(process.execPath, [path.join(here, f)], { cwd: OUT, env: process.env });
+  // the desktop (Electron) test needs a display: use a virtual one on a headless Linux machine
+  const virtual = f.startsWith("steam") && process.platform === "linux" && !process.env.DISPLAY && hasXvfb;
+  const child = virtual ? spawn("xvfb-run", ["-a", process.execPath, path.join(here, f)], { cwd: OUT, env: process.env })
+    : spawn(process.execPath, [path.join(here, f)], { cwd: OUT, env: process.env });
   const timer = setTimeout(() => { lines.push("FAIL timed out after 15 min"); child.kill("SIGKILL"); }, 15 * 60 * 1000);
   const take = d => String(d).split("\n").forEach(l => { if (l.trim()) lines.push(l); });
   child.stdout.on("data", take); child.stderr.on("data", take);
   child.on("close", code => {
     clearTimeout(timer);
     const pass = lines.filter(l => l.startsWith("PASS")).length, fail = lines.filter(l => l.startsWith("FAIL")).length;
+    lines.filter(l => l.startsWith("SKIP")).forEach(l => console.log("    " + l));
     const crashed = code !== 0 && !fail;
     resolve({ f, pass, fail: fail + (crashed ? 1 : 0), crashed, lines, secs: ((Date.now() - t0) / 1000).toFixed(0) });
   });

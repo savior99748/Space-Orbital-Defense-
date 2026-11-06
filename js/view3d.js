@@ -818,6 +818,16 @@ const QUALITY_STEPS = [
   () => { setReflections(false); },
   () => { scene.background = new THREE.Color(0x05060f); },
 ];
+// Player's Graphics setting (main menu): "auto" = the steps above; "high" = full detail, never stepped down;
+// "low" = lower resolution and no reflections from the start.
+const fullDetail = () => { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); setReflections(true); scene.background = nebula; };
+function applyGfx(mode) {
+  if (mode === "low") { renderer.setPixelRatio(1); setReflections(false); scene.background = nebula; quality.level = 99; }
+  else { fullDetail(); quality.level = mode === "high" ? 99 : 0; quality.frames = 0; quality.time = 0; }
+  resize();
+}
+window.OD.applyGfx = applyGfx;
+applyGfx(window.OD.gfx || "auto");
 function trackQuality() {
   const now = performance.now(), dt = now - quality.last; quality.last = now;
   const S = od() && od().state();

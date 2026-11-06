@@ -49,21 +49,46 @@ Add another adapter in `js/platform.js` (copy the CrazyGames block) and a target
 
 ## Steam / desktop (Electron)
 
+**The Steam edition** is the paid version: no ads and no ad code (the build fails if any slips in), and the
+rewarded bonuses are claimed for free with the same limits. It starts fullscreen. **🖥 Fullscreen / 🗗 Windowed** on
+the menu, F11 or Alt+Enter switch modes, and the window size and mode are remembered. **⏻ Quit** is on the main
+menu. **🎨 Graphics** (Auto / High / Low) is on every edition.
+
+**Get a Windows installer without building anything:** GitHub → Actions → **Desktop build** → *Run workflow*.
+When it finishes (~10 min), download **ringwarden-windows-installer** from the run's Artifacts and run
+`Ringwarden-Setup-<version>.exe`. The installer is unsigned for now, so Windows SmartScreen will warn
+("More info → Run anyway"); code signing is a later decision.
+
+Or build on your own PC (needs Node.js):
+
 ```bash
 cd platforms/electron
-npm install
-npm start          # play the desktop build
-npm run dist:win   # Windows installer → release/   (dist:mac on a Mac, dist:linux for AppImage)
+npm ci
+npm start          # play the desktop edition
+npm run dist:win   # Windows installer → release/Ringwarden-Setup-<version>.exe
 ```
 
-Steam setup:
-1. Pay the Steam Direct fee in Steamworks and get your **App ID**.
-2. Put the App ID in `platforms/electron/steam_appid.txt`. The app connects to Steam through `steamworks.js` and shows the overlay.
-3. In Steamworks, create achievements with these API names. They are the game's ids in capitals:
-   `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`, `ENDLESS_50`, `ENDLESS_100`.
-4. Upload the `release/` builds with Valve's SteamPipe tools.
+**Saves and Steam Cloud.** Progress is kept in `saves.json` in the app-data folder
+(Windows: `%APPDATA%\Ringwarden Orbital Defense\`), written safely (temp file + rename). Earlier progress kept in
+browser storage is copied over on first launch. To sync it, turn on **Steam Auto-Cloud** in Steamworks:
+root `WinAppDataRoaming`, subdirectory `Ringwarden Orbital Defense`, pattern `saves.json` **[verify the exact
+Steamworks field names]**. No code change is needed for Auto-Cloud.
 
-macOS builds must be made (and signed) on a Mac. Windows builds can be made on Windows, or on Linux with Wine.
+Steam setup:
+1. Create a Steamworks partner account, pay the Steam Direct app fee **[verify current amount]** and get your
+   **App ID**.
+2. Put the App ID in `platforms/electron/steam_appid.txt`. The app connects to Steam through `steamworks.js` and
+   shows the overlay (Shift+Tab). Test the overlay early: it is known to be fragile with Electron **[verify]**.
+3. In Steamworks, create achievements with these API names (the game's ids in capitals):
+   `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`, `ENDLESS_50`, `ENDLESS_100`.
+4. Set up Auto-Cloud (above).
+5. Put the store page up as **Coming Soon** early: Steam requires it to be visible for a minimum time before
+   release **[verify]**, and wishlists collected meanwhile drive launch visibility.
+6. Upload the build with Valve's SteamPipe tools, or tag `steam-v1.0.0` to get the installer attached to a GitHub
+   release.
+
+macOS builds must be made (and signed) on a Mac. Windows builds: GitHub Actions (above), your Windows PC, or Linux
+with Wine.
 
 ## Mobile (Capacitor)
 

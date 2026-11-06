@@ -1,9 +1,9 @@
 {
   "name": "orbital-defense-desktop",
-  "productName": "Orbital Defense",
-  "version": "3.0.0-dev",
+  "productName": "Ringwarden Orbital Defense",
+  "version": "3.1.0",
   "private": true,
-  "description": "Orbital Defense desktop build (Steam, Windows, macOS, Linux).",
+  "description": "Ringwarden: Orbital Defense \u2014 desktop edition (Steam, Windows, macOS, Linux).",
   "main": "main.js",
   "scripts": {
     "prestart": "node ../../tools/build.mjs electron",
@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "io.github.savior99748.orbitaldefense",
-    "productName": "Orbital Defense",
+    "productName": "Ringwarden Orbital Defense",
     "files": [
       "main.js",
       "preload.js",
@@ -37,7 +37,8 @@
       "node_modules/steamworks.js/**"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "Ringwarden-Setup-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
@@ -47,7 +48,12 @@
       "target": "AppImage",
       "category": "Game"
     },
-    "publish": null
+    "publish": null,
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Ringwarden"
+    }
   },
   "repository": {
     "type": "git",

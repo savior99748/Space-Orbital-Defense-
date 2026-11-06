@@ -1,6 +1,6 @@
 # Ringwarden: Orbital Defense — multi-platform architecture and roadmap
 
-Status: **Phase 1 done** (tests + CI, PR #20). **Phase 2 done** (shared monetization service, platform adapters, per-target builds with forbidden-SDK check). Next: Phase 3 (mobile) or 4 (Steam).
+Status: **Phase 1 done** (tests + CI, PR #20). **Phase 2 done** (shared monetization service, platform adapters, per-target builds with forbidden-SDK check). **Phase 4 (Steam) code done**: file saves for Steam Cloud, fullscreen/windowed, Quit, Graphics setting, Windows installer built by GitHub Actions; publishing needs a Steamworks account. Next: Phase 3 (mobile).
 Audited at commit `20c927e` (main, v3.1.0 — the build submitted to CrazyGames Basic Launch).
 
 Items marked **[verify]** are platform rules or SDK facts that must be confirmed against the vendor's current

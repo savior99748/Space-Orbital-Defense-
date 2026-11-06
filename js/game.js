@@ -1357,9 +1357,15 @@
   const SHAKE_STEPS = [1, 0.4, 0];
   OD.shake = (() => { const v = parseFloat(store.get("od_shake")); if (SHAKE_STEPS.includes(v)) return v; return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.4 : 1; })();
   const shakeLabel = () => `📳 Shake: ${OD.shake === 1 ? "On" : OD.shake ? "Low" : "Off"}`;
+  // graphics quality (3D view): Auto steps down on slow devices; High never does; Low starts at the light setting
+  const GFX_STEPS = ["auto", "high", "low"];
+  OD.gfx = GFX_STEPS.includes(store.get("od_gfx")) ? store.get("od_gfx") : "auto";
+  const gfxLabel = () => `🎨 Graphics: ${OD.gfx === "auto" ? "Auto" : OD.gfx === "high" ? "High" : "Low"}`;
+  // desktop (Steam) only: fullscreen / windowed
+  const displayBtn = () => (P.display ? `<button data-act="display" title="F11 or Alt+Enter">${P.display.get().fullscreen ? "🖥 Fullscreen" : "🗗 Windowed"}</button>` : "");
   function soundButtons() {
     const statBtn = stats.configured ? `<button data-act="stats-toggle" title="Anonymous gameplay stats, no personal data">${stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"}</button>` : "";
-    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button>${statBtn}</div>`;
+    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button>${OD.is3D ? `<button data-act="gfx" title="Auto lowers detail on slow devices">${gfxLabel()}</button>` : ""}${displayBtn()}${statBtn}</div>`;
   }
 
   function mapCard(key) {
@@ -1439,7 +1445,7 @@
         return `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
           <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
       })() : `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
-      <div class="btns"><button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : "Launch Mission ▶"}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button></div>
+      <div class="btns"><button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : "Launch Mission ▶"}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
       ${soundButtons()}
       <details><summary>How to play</summary>
         <ul>
@@ -1572,6 +1578,9 @@
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
+      case "gfx": OD.gfx = GFX_STEPS[(GFX_STEPS.indexOf(OD.gfx) + 1) % GFX_STEPS.length]; store.set("od_gfx", OD.gfx); a.textContent = gfxLabel(); if (OD.applyGfx) OD.applyGfx(OD.gfx); break;
+      case "display": P.display.setFullscreen(!P.display.get().fullscreen); break;
+      case "quit": if (P.quit) { saveRun(); P.quit(); } break;
       case "shake": OD.shake = SHAKE_STEPS[(SHAKE_STEPS.indexOf(OD.shake) + 1) % SHAKE_STEPS.length]; store.set("od_shake", String(OD.shake)); a.textContent = shakeLabel(); break;
       case "stats-toggle": stats.setEnabled(!stats.enabled); a.textContent = stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"; break;
     }
@@ -1931,6 +1940,8 @@
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 
+  // desktop: keep the Fullscreen / Windowed label right when F11 or Alt+Enter switches it
+  if (P.display && P.display.onChange) P.display.onChange(d => document.querySelectorAll('[data-act="display"]').forEach(b => { b.textContent = d.fullscreen ? "🖥 Fullscreen" : "🗗 Windowed"; }));
   // iOS Safari can keep a scroll offset after the phone is rotated: snap back to the top.
   const unscroll = () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); document.body.scrollTop = 0; document.documentElement.scrollTop = 0; };
   window.addEventListener("orientationchange", () => { unscroll(); setTimeout(unscroll, 300); setTimeout(unscroll, 800); });
