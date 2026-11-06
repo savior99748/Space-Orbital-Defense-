@@ -20,11 +20,12 @@ its own browser, and prints one line per file. Screenshots land in `tests/.out/`
 | `crazygames-sdk-timeout.test.cjs` | Game still starts if the SDK never answers |
 | `crazygames-first-start.test.cjs` | Gameplay Start is sent for a brand-new player (tutorial and skip) |
 | `monetization.test.cjs` | Money system: no bonus on web, rewarded ad pays once (double tap too), premium claims free with the same limits, free revive once per run, Steam build ad-free |
+| `steam.test.cjs` | Steam edition in real Electron: saves in `saves.json`, fullscreen/windowed, Quit, settings remembered, free bonuses, no CrazyGames code (needs `npm ci --prefix platforms/electron`; skipped otherwise) |
 | `platform.test.cjs` | Web/itch/PWA, simulated ads, saves, manifest |
 | `view3d.test.cjs` | 3D view, Classic 2D switch, per-view records, all maps |
 | `maps-modes.test.cjs` | Every map in 3D and 2D, Endless save/load, pause, game over and retry |
 | `satellites.test.cjs` | All 7 satellites on both paths at every tier, turret aim, animation, kills |
-| `tutorial.test.cjs`, `endless.test.cjs`, `stats.test.cjs`, `icons-overclock.test.cjs`, `menu.test.cjs`, `shake.test.cjs`, `rotate.test.cjs` | Tutorial, Endless + leaderboards, analytics, 3D icons + Overclock, cinematic menu, shake setting, phone rotation |
+| `tutorial.test.cjs`, `endless.test.cjs`, `stats.test.cjs`, `icons-overclock.test.cjs`, `menu.test.cjs`, `shake.test.cjs`, `rotate.test.cjs` | Tutorial, Endless + leaderboards, analytics, 3D icons + Overclock, cinematic menu, shake + graphics settings, phone rotation |
 
 **Rule:** every change to `js/platform.js`, ads, saves or the build scripts must pass the `crazygames` tests
 before it is merged. Save keys (`od_run`, `od_rec`, `od_lb…`, `od_tut_done`, `od_view`, `od_audio`, `od_shake`) are
@@ -35,6 +36,8 @@ frozen: renaming one wipes players' progress.
 - `.github/workflows/test.yml` runs `npm test` on every pull request and every push to `main`.
   To make it required: GitHub → Settings → Branches → add a rule for `main` → "Require status checks to pass" →
   select **Tests**.
+- `.github/workflows/desktop.yml` builds the Windows installer on a Windows machine: run it from Actions →
+  Desktop build → Run workflow, or tag `steam-v…`.
 - `.github/workflows/release.yml` runs when a release tag is pushed: tests, then builds the web, itch and
   CrazyGames zips (regular, Basic, and flat versions) and attaches them to the GitHub release.
 
