@@ -7,15 +7,15 @@ window.OD = window.OD || {};
 
   OD.DIFFICULTY = {
     easy: {
-      name: "Easy", color: "#7dff9a", money: 450, lives: 50, hp: 0.8, growth: 0.2, late: 0.018, late2: 0.03, speed: 0.95, reward: 1.15,
-      desc: "50 planet HP, extra credits, weaker enemies.",
+      name: "Easy", color: "#7dff9a", money: 300, lives: 50, hp: 1.0, growth: 0.27, late: 0.026, late2: 0.03, speed: 0.95, reward: 1.05,
+      desc: "50 planet HP, weaker enemies.",
     },
     medium: {
-      name: "Medium", color: "#ffd166", money: 325, lives: 25, hp: 1.0, growth: 0.33, late: 0.038, late2: 0.07, speed: 1.03, reward: 1.0,
+      name: "Medium", color: "#ffd166", money: 275, lives: 25, hp: 1.06, growth: 0.33, late: 0.038, late2: 0.07, speed: 1.03, reward: 1.0,
       desc: "25 planet HP. A real fight past wave 15.",
     },
     hard: {
-      name: "Hard", color: "#ff5c7a", money: 300, lives: 15, hp: 1.05, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
+      name: "Hard", color: "#ff5c7a", money: 260, lives: 15, hp: 1.1, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
       desc: "15 planet HP, tough, fast enemies that ramp up hard after wave 10.",
     },
   };
@@ -198,9 +198,23 @@ window.OD = window.OD || {};
     },
   };
 
+  // Each satellite in the unlock order costs more to build than the one before, and hits harder to match:
+  // build price, and a multiplier on damage (or income) for every tier and specialization of that satellite.
+  // Upgrade prices are unchanged.
+  const TUNE = {
+    tractor: { cost: 110, mul: 1.3 }, emp: { cost: 140, mul: 1.2 }, miner: { cost: 160, mul: 1.25 },
+    carrier: { cost: 220, mul: 1.25 }, rail: { cost: 300, mul: 1.5 },
+  };
+  for (const [type, t] of Object.entries(TUNE)) {
+    const def = OD.TOWERS[type];
+    def.tiers[0].cost = t.cost;
+    const all = [...def.tiers, ...Object.values(def.paths).flatMap(p => p.tiers)];
+    for (const tier of all) for (const k of ["dmg", "dps", "income", "clusterDmg", "burn"]) if (tier[k]) tier[k] = k === "income" ? Math.round(tier[k] * t.mul) : Math.round(tier[k] * t.mul * 10) / 10;
+  }
+
   // Like Bloons, satellites unlock as you go: each one appears in the build bar (as a locked "?") once this many
   // waves have been cleared in the current game. The Railgun, the strongest, comes last.
-  OD.UNLOCK_WAVE = { laser: 0, missile: 2, tractor: 4, emp: 6, miner: 8, carrier: 10, rail: 12 };
+  OD.UNLOCK_WAVE = { laser: 0, missile: 3, tractor: 6, emp: 9, miner: 12, carrier: 15, rail: 18 };
 
   OD.tierOf = (type, level, path) => {
     const def = OD.TOWERS[type];

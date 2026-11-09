@@ -3,6 +3,15 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Tougher start, slower unlocks, pricier late satellites:** starting credits 450 / 325 / 300 → 300 / 275 / 260
+  (Beginner / Intermediate / Hard+Expert). Beginner invaders are tougher (health ×1.0 instead of ×0.8, steeper
+  climb, kill rewards ×1.05 instead of ×1.15); Intermediate health ×1.06, Hard ×1.1. Satellites unlock later:
+  Missile Pod after wave 3, Tractor 6, EMP 9, Mining 12, Carrier 15, Railgun 18. Build prices now climb along the
+  unlock order (Laser 50, Missile 90, Tractor 110, EMP 140, Mining 160, Carrier 220, Railgun 300 = double) and
+  those satellites hit harder to match at every tier (damage / income ×1.3 Tractor, ×1.2 EMP, ×1.25 Mining and
+  Carrier, ×1.5 Railgun). Upgrade prices unchanged. Checked with a build/upgrade bot: Beginner maps end between a
+  flawless Mercury and ~30/50 HP on Venus (Earth was a flawless 50/50 before); Mars is a coin flip for the bot at
+  the wave-30 Dreadnought.
 - **Satellites unlock as you play** (like Bloons): Laser at the start, then Missile Pod (after wave 2), Tractor
   Beam (4), EMP Sat (6), Mining Sat (8), Drone Carrier (10) and the Railgun last (12). Locked ones show as "?" with
   their wave; a toast and a glowing card announce each unlock. Build-bar order and number keys follow the new
