@@ -67,7 +67,7 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 | Upgrade / sell / target mode | tap a satellite | |
 | Next wave | **Launch Wave** (or turn on **Auto**) | `Space` |
 | Overdrive (rings spin 5× and fire rate +30% for 6s, 30s cooldown) | **⚡ Overdrive** | `Q` |
-| Speed 1× / 2× / 3× | speed button | `F` |
+| Speed 3× (default) / 1× / 2× | speed button | `F` |
 | Pause / settings | ❚❚ | `P` / `Esc` |
 | Zoom in / out (up to 3×) | pinch, mouse wheel, or the **+ / −** buttons; drag to pan; tap **1×** to reset | `+` / `-` / `0` |
 
@@ -88,7 +88,7 @@ Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves *
 
 ## Tutorial
 
-On your first mission the game offers a short guided tutorial on Earth (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
+A brand-new player goes straight into a short guided first game on Earth (no menu first; the desktop edition opens on its title screen instead) (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
 
 ## Saving, ads and achievements
 

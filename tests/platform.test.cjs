@@ -9,6 +9,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     const ctx = await b.newContext({ viewport: { width: 1280, height: 820 } });
     const pg = await ctx.newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message));
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto('file://' + ROOT + '/dist/itch/index.html?view=2d&adtest=1');
     await pg.waitForSelector('[data-act="start"]');
     await pg.click('[data-map="earth"]'); await pg.click('[data-diff="easy"]'); await pg.evaluate(() => localStorage.setItem('od_tut_done','1')); await pg.click('[data-act="start"]');
@@ -64,6 +65,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
       } };` }));
     const pg = await ctx.newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message));
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto('file://' + ROOT + '/dist/crazygames/index.html?view=2d');
     await pg.waitForSelector('[data-act="start"]');
     await pg.evaluate(() => localStorage.setItem('od_tut_done','1')); await pg.click('[data-act="start"]');
@@ -92,7 +94,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     ok(man === 'Ringwarden: Orbital Defense', 'manifest served');
     await ctx.setOffline(true);
     await pg.reload();
-    await pg.waitForSelector('[data-act="start"]', { timeout: 8000 }).then(() => ok(true, 'game loads offline from cache')).catch(() => ok(false, 'offline load'));
+    await pg.waitForFunction(() => window.__od && (window.__od.tut() || document.querySelector('[data-act="start"]')), null, { timeout: 8000 }).then(() => ok(true, 'game loads offline from cache')).catch(() => ok(false, 'offline load'));
     await ctx.close();
   }
   await b.close();

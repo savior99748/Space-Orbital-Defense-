@@ -7,6 +7,7 @@
   if (P.name !== "electron") return;
   P.achievement = id => { if (native && native.achievement) native.achievement(id); };
   P.premium = { owned: () => true };
+  P.titleFirst = true; // a bought desktop game opens on its title screen
 
   if (native && native.save) {
     let data = {};

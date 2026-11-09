@@ -49,6 +49,7 @@ window.OD = window.OD || {};
   P.happy = () => {};
   P.achievement = () => {};
   P.premium = { owned: () => false }; // no ad-free entitlement unless an adapter grants one
+  P.titleFirst = false; // true = a brand-new player sees the menu first instead of going straight into the tutorial
   P.init = () => Promise.resolve();
 
   // Simulated ad for testing the ad flow without a real ad network (?adtest=1).

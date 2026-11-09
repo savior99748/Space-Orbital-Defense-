@@ -104,7 +104,7 @@
       towers: [], retired: [], enemies: [], shots: [], beams: [], rings: [], particles: [], floaters: [],
       queue: [], spawnTimer: 0, waveActive: false,
       selectedType: null, selectedTower: null, hover: null,
-      speed: 1, paused: false, over: false, won: false, freeplay: false, auto: false,
+      speed: 3, paused: false, over: false, won: false, freeplay: false, auto: false,
       overdrive: 0, overdriveCd: 0, time: 0, realTime: 0, shake: 0,
       stats: { killed: 0, leaked: 0, bosses: 0, earnedKills: 0, earnedBonus: 0, earnedMining: 0, spent: 0, overdrives: 0, hpLost: 0 },
     };
@@ -1955,8 +1955,11 @@
   P.init().finally(() => {
     if (MAP_ORDER.includes(store.get("od_map"))) MAP_KEY = store.get("od_map");
     if (DIFFICULTY[store.get("od_diff")]) DIFF_KEY = store.get("od_diff");
-    mainMenu();
     P.loadingDone();
     stats.sessionStart();
+    // A brand-new player goes straight into the guided first game (aliens within seconds) instead of the
+    // menu; everyone else, and editions that open on a title screen (desktop), gets the menu.
+    if (!P.titleFirst && !tutDone() && !loadRun()) startTutorial();
+    else mainMenu();
   });
 })(window.OD);

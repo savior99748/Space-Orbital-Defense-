@@ -2,6 +2,12 @@
 
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
+## Unreleased
+- **Faster first minute:** a brand-new player skips the menu and lands straight in the guided first game on
+  Earth. Returning players (and anyone with a saved game) still see the menu. The Steam/desktop edition keeps
+  its title screen (`P.titleFirst`). Aimed at CrazyGames' gameplay conversion (players still playing after 1 min).
+- **Games start at 3× speed** (the speed button still cycles 3× → 1× → 2×).
+
 ## v3.1.0 (visual overhaul, in review)
 Visual only: gameplay, balance, orbital mechanics, saves, achievements, CrazyGames SDK events and Classic 2D
 are unchanged. Built on branch `visual-overhaul`; the uploaded visual-upgrade ZIPs were compared file by file

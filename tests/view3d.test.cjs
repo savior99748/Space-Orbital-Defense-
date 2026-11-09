@@ -12,6 +12,7 @@ const BASE = 'http://127.0.0.1:8769/';
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error' && !ign(m.text())) errs.push(m.text()); });
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto(BASE + 'index.html');
     await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_stats_off', '1'); });
     await pg.reload(); await pg.waitForSelector('[data-view="3d"]');
@@ -51,7 +52,7 @@ const BASE = 'http://127.0.0.1:8769/';
     pg.on('pageerror', e => errs.push(e.message));
     await pg.goto(BASE + 'index.html');
     await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('od_stats_off', '1'); });
-    await pg.reload(); await pg.waitForSelector('[data-act="start"]');
+    await pg.reload(); // brand-new player: straight into the tutorial
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
     // the tutorial advances on the next rendered frame; on a slow software renderer that can take a moment
     const step = async (want) => { if (want != null) await pg.waitForFunction(w => window.__od.tut() && window.__od.tut().i === w, want, { timeout: 4000 }).catch(() => {}); else await pg.waitForTimeout(200); return pg.evaluate(() => window.__od.tut() ? window.__od.tut().i : null); };
@@ -60,8 +61,6 @@ const BASE = 'http://127.0.0.1:8769/';
       const box = await pg.locator('#game3d').boundingBox();
       await pg.touchscreen.tap(box.x + s.x, box.y + s.y);
     };
-    await pg.tap('[data-act="start"]');
-    await pg.tap('.card [data-act="tutorial"]');
     await pg.waitForFunction(() => window.__view3d && window.__od.tut(), null, { timeout: 15000 });
     ok(await step(0) === 0, '3D tutorial starts');
     await pg.tap('#coachNext');
