@@ -170,7 +170,10 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     const S = window.__od.state(), wait = ms => new Promise(r => setTimeout(r, ms));
     const ph = S.enemies.find(x => x.type === 'phantom'); if (!ph) return { seen: [] };
     ph.def = Object.assign({}, ph.def, { speed: 0 }); ph.hp = ph.maxHp = 1e9;
-    const seen = new Set(); for (let i = 0; i < 40; i++) { seen.add(!!ph.cloaked); await wait(100); }
+    const C = window.__od.center(); ph.x = C.x + 200; ph.y = C.y; ph.z = 0; ph.r = 200; // well inside the map
+    S.speed = 3;
+    // the cloak cycle runs on game time; keep sampling until both states are seen (slow headless frames)
+    const seen = new Set(); for (let i = 0; i < 200 && seen.size < 2; i++) { seen.add(!!ph.cloaked); await wait(100); }
     return { seen: [...seen] };
   });
   ok(cloak.seen.includes(true) && cloak.seen.includes(false), 'Phase Wraith phases in and out');

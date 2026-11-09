@@ -1,13 +1,16 @@
-// Bloom: bright things (beams, engines, explosions, the Sun, glowing satellite parts) spill a soft halo of
-// light, like a camera lens. Small and self-contained (no Three.js add-on files):
+// Bloom: glowing things (beams, engines, explosions, the Sun) spill a soft halo of light, like a camera lens.
+// Small and self-contained (no Three.js add-on files):
 //   1. the scene is drawn into an HDR buffer (half-float, 4× MSAA) without tone mapping,
-//   2. pixels brighter than a threshold are blurred down a chain of smaller and smaller buffers and back up
+//   1b. only objects on the GLOW layer (effects and the Sun, not lit planets or shiny hulls, which would sparkle)
+//       are drawn again into a second buffer: that is the light that blooms,
+//   2. that light is blurred down a chain of smaller and smaller buffers and back up
 //      (the "dual Kawase" blur: a handful of texture reads per pixel, cheap even on phones),
 //   3. the scene plus the blurred light is tone mapped (ACES) and drawn to the screen.
 // Off (direct rendering, exactly as before) on the Low graphics setting and when a slow device steps down.
 import * as THREE from "../vendor/three/three.module.js";
 
 const LEVELS = 5;
+export const GLOW_LAYER = 1; // obj.layers.enable(GLOW_LAYER) makes an object bloom
 const quadGeo = new THREE.BufferGeometry();
 quadGeo.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3)); // one triangle covering the screen
 quadGeo.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
@@ -45,9 +48,10 @@ const outMat = new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false, toneMapped: true,
 });
 
-export function createBloom(renderer, { threshold = 1.0, knee = 0.6, strength = 0.8, radius = 1.0 } = {}) {
+export function createBloom(renderer, { threshold = 0.15, knee = 0.15, strength = 0.8, radius = 1.0 } = {}) {
   const opts = { type: THREE.HalfFloatType, depthBuffer: false };
   const sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  const glowRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
   const mips = Array.from({ length: LEVELS }, () => new THREE.WebGLRenderTarget(1, 1, opts));
   mips.forEach(m => { m.texture.minFilter = m.texture.magFilter = THREE.LinearFilter; });
   const quad = new THREE.Mesh(quadGeo, downMat); quad.frustumCulled = false;
@@ -60,7 +64,7 @@ export function createBloom(renderer, { threshold = 1.0, knee = 0.6, strength = 
     renderer.getDrawingBufferSize(size);
     if (size.x === w && size.y === h) return;
     w = size.x; h = size.y;
-    sceneRT.setSize(w, h);
+    sceneRT.setSize(w, h); glowRT.setSize(w, h);
     let mw = w, mh = h;
     for (const m of mips) { mw = Math.max(1, mw >> 1); mh = Math.max(1, mh >> 1); m.setSize(mw, mh); }
   }
@@ -73,10 +77,15 @@ export function createBloom(renderer, { threshold = 1.0, knee = 0.6, strength = 
       setSize();
       const auto = renderer.autoClear;
       renderer.setRenderTarget(sceneRT); renderer.clear(); renderer.render(scene, camera);
+      // the light that blooms: only GLOW_LAYER objects, on black
+      const bg = scene.background, mask = camera.layers.mask;
+      scene.background = null; camera.layers.set(GLOW_LAYER);
+      renderer.setRenderTarget(glowRT); renderer.clear(); renderer.render(scene, camera);
+      scene.background = bg; camera.layers.mask = mask;
       renderer.autoClear = false;
       // down the chain
       downMat.uniforms.threshold.value = bloom.threshold; downMat.uniforms.knee.value = bloom.knee;
-      let src = sceneRT.texture;
+      let src = glowRT.texture;
       mips.forEach((m, i) => {
         downMat.uniforms.tex.value = src; downMat.uniforms.first.value = i === 0;
         downMat.uniforms.texel.value.set(1 / src.image.width, 1 / src.image.height);

@@ -3,6 +3,8 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Bloom only on glowing things** (beams, engines, explosions, the Sun): sunlit planets, moons and shiny
+  satellite hulls no longer sparkle or blow out to white.
 - **Graphics default to High** (full detail and bloom, never stepped down). Players on slow devices can pick
   Low or Auto on the main menu.
 - **Difficulty is part of the map** (like Bloons tracks): Beginner (Mercury, Venus, Earth), Intermediate (Mars,
