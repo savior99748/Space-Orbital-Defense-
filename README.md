@@ -78,7 +78,8 @@ Since v3 the game is **3D**: bigger planets, tilted orbits (Earth has LEO, MEO a
 ## Graphics settings
 
 The 3D view adjusts itself: if a device can't keep a smooth frame rate during a game, it lowers the render
-resolution, then turns off metal reflections, then the nebula backdrop. **📳 Shake** on the main menu sets
+resolution, then turns off bloom (the glow around bright things), then metal reflections, then the nebula backdrop.
+**Graphics** on the main menu: Auto, High (never steps down) or Low (no bloom or reflections, lower resolution). **📳 Shake** on the main menu sets
 camera shake to On, Low or Off. Players who ask their system for reduced motion get a still menu scene and
 Low shake by default. Preview every satellite and invader model at `/hangar/`.
 

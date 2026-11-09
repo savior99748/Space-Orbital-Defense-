@@ -7,6 +7,12 @@ Each release records the exact git commit it was built from. `git checkout <comm
   Earth. Returning players (and anyone with a saved game) still see the menu. The Steam/desktop edition keeps
   its title screen (`P.titleFirst`). Aimed at CrazyGames' gameplay conversion (players still playing after 1 min).
 - **Games start at 3× speed** (the speed button still cycles 3× → 1× → 2×).
+- **Bloom** (`js/bloom3d.js`): beams, engines, explosions, the Sun and glowing satellite parts spill a soft halo of
+  light. Small custom post-process (HDR buffer, dual-Kawase blur, ACES output), no extra library. Off on the Low
+  graphics setting, and the first thing a slow device turns off.
+- **Animations** (3D, visual only): new satellites launch from the planet's surface and climb to their slot with
+  an engine trail; arrival and upgrades swell with a burst of light in the satellite's color; sold satellites
+  vanish in a puff of sparks; invaders warp in through a purple rift. Reduced-motion settings skip them.
 
 ## v3.1.0 (visual overhaul, in review)
 Visual only: gameplay, balance, orbital mechanics, saves, achievements, CrazyGames SDK events and Classic 2D

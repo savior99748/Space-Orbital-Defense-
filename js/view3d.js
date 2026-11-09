@@ -3,6 +3,7 @@
 import * as THREE from "../vendor/three/three.module.js";
 import { buildSatellite, setReflections } from "./sat3d.js";
 import { buildAlien } from "./aliens3d.js";
+import { createBloom } from "./bloom3d.js";
 
 const od = () => window.__od;
 const TAU = Math.PI * 2;
@@ -22,6 +23,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 // (beams, sparks, shockwaves, halos) opt out with toneMapped: false so they keep their full brightness.
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
+const bloom = createBloom(renderer); // glow halo around bright things; see js/bloom3d.js
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05060f);
 const camera = new THREE.PerspectiveCamera(40, 1, 1, 8000);
@@ -605,10 +607,29 @@ const _ax = new THREE.Vector3(), _ay = new THREE.Vector3(), _az = new THREE.Vect
 const _m4 = new THREE.Matrix4(), _qi = new THREE.Quaternion();
 const W = (x, y, h = 0, z = 0) => { const C = od().center(); return new THREE.Vector3(x - C.x, h + (z || 0), y - C.y); };
 
+// ---------- animations: satellites launch into orbit, upgrades burst, sells puff, invaders warp in (visual only) ----------
+const LAUNCH = 0.9, POP = 0.6, WARP = 0.5;
+const satKnown = new Set(), satLaunch = new Map(), satPop = new Map(); // tower id → start time (seconds)
+const _from = new THREE.Vector3(), _to = new THREE.Vector3();
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const easeBack = k => { const c = 1.9; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+function towerColor(tw) { const T = window.OD.TOWERS[tw.type]; return (tw.path && T.paths[tw.path].color) || T.color; }
+function burst(pos, color, size, k, spin) { // ring of sparkles + a soft flash, k: 0 → 1 over the animation
+  const f = 1 - k;
+  glow(pos, color, size * (1.2 + k * 1.5), f * 0.9); glow(pos, "#ffffff", size * 0.6, f * f);
+  for (let i = 0; i < 10; i++) {
+    const a = spin + i * TAU / 10, r = size * (0.3 + k * 1.3);
+    _gv.set(pos.x + Math.cos(a) * r, pos.y + Math.sin(a * 2 + spin) * size * 0.25, pos.z + Math.sin(a) * r);
+    glow(_gv, i % 2 ? color : "#fff6d8", size * 0.4, f);
+  }
+}
+
 function sync() {
   const OD = window.__od; if (!OD) return;
   const B = OD.board(); if (!B) return;
-  if (!world || world.B !== B) buildWorld(B);
+  let fresh = false; // a new board: satellites already on it (a resumed game) don't launch
+  if (!world || world.B !== B) { buildWorld(B); fresh = true; satKnown.clear(); satLaunch.clear(); satPop.clear(); }
+  const now = performance.now() / 1000, calm = reducedMotion.matches;
   const S = OD.state(), C = OD.center(), t = B.time;
 
   // bodies: position + slow spin
@@ -646,10 +667,31 @@ function sync() {
     seen.add(tw.id);
     const key = `${tw.type}|${tw.level}|${tw.path}|${tw.oc || 0}`;
     let m = satMeshes.get(tw.id);
-    if (!m || m.userData.key !== key) { if (m) scene.remove(m); m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
+    if (!satKnown.has(tw.id)) { satKnown.add(tw.id); if (!fresh && !calm) satLaunch.set(tw.id, now); }
+    if (!m || m.userData.key !== key) { if (m) { scene.remove(m); if (!calm) satPop.set(tw.id, now); } m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
     const p = OD.slotPos(tw.slot), ring = B.rings[B.slots[tw.slot].ring], body = B.bodies[ring.body];
     m.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y);
     m.scale.setScalar(satScale * m.userData.baseScale);
+    const lt = satLaunch.get(tw.id);
+    if (lt != null) { // launch: lifts off the planet's surface and climbs to its slot on an arc, engine blazing
+      const k = (now - lt) / LAUNCH;
+      if (k >= 1 || k < 0) { satLaunch.delete(tw.id); satPop.set(tw.id, now); }
+      else {
+        const e = easeOut(k);
+        _to.copy(m.position);
+        _from.set(_to.x - (body.x - C.x), 0, _to.z - (body.y - C.y)).normalize().multiplyScalar(body.r * 0.95).add(_gv.set(body.x - C.x, H, body.y - C.y));
+        m.position.lerpVectors(_from, _to, e); m.position.y += Math.sin(k * Math.PI) * body.r * 0.35;
+        m.scale.multiplyScalar(0.35 + 0.65 * e);
+        glow(m.position, "#ffd08a", 70 * satScale, 1 - k * 0.5); glow(m.position, "#ffffff", 26 * satScale, 1 - k); // engine
+        for (let j = 1; j <= 6; j++) { const kk = Math.max(0, e - j * 0.05); _gv.lerpVectors(_from, _to, kk); _gv.y += Math.sin(Math.max(0, k - j * 0.05) * Math.PI) * body.r * 0.35; glow(_gv, j < 3 ? "#ffb070" : "#8fa0c0", (50 - j * 5) * satScale, (1 - j / 7) * (1 - k * 0.7)); }
+      }
+    }
+    const pt = satPop.get(tw.id);
+    if (pt != null) { // arrival / upgrade: a quick swell and a burst of light in the satellite's color
+      const k = (now - pt) / POP;
+      if (k >= 1 || k < 0) satPop.delete(tw.id);
+      else { m.scale.multiplyScalar(1 + 0.35 * (1 - k) * (1 - k)); burst(m.position, towerColor(tw), 60 * satScale, k, now * 4); }
+    }
     m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
     // firing visuals, read from the satellite's cooldown (no gameplay change)
     const st = tw.st, period = st && st.rate ? 1 / st.rate : 0, cd = tw.cd || 0;
@@ -679,20 +721,28 @@ function sync() {
       tur.quaternion.setFromUnitVectors(_xAxis, _dir.normalize());
     }
   }
-  for (const [id, m] of satMeshes) if (!seen.has(id)) { scene.remove(m); satMeshes.delete(id); }
+  for (const [id, m] of satMeshes) if (!seen.has(id)) { // sold: a puff of sparks where it was
+    if (S && !fresh && !calm) spawnDebris({ x: m.position.x, y: m.position.y, z: m.position.z, size: 4, color: "#9fe8ff", boss: false }, t);
+    scene.remove(m); satMeshes.delete(id); satKnown.delete(id); satLaunch.delete(id); satPop.delete(id);
+  }
 
   // enemies
   const eseen = new Set();
   if (S) for (const e of S.enemies) {
     eseen.add(e.id);
     let m = enemyMeshes.get(e.id);
-    if (!m) { m = buildEnemy(e); enemyMeshes.set(e.id, m); scene.add(m); m.userData.px = e.x; m.userData.py = e.y; }
+    if (!m) { m = buildEnemy(e); enemyMeshes.set(e.id, m); scene.add(m); m.userData.px = e.x; m.userData.py = e.y; m.userData.born = calm ? -9 : now; m.userData.bs = m.scale.x; }
     const threeD = od().map().threeD;
     const h = H + (e.z || 0) + (threeD ? 0 : m.userData.hover + Math.sin(t * 2 + e.seed) * 2);
     m.position.set(e.x - C.x, h, e.y - C.y);
     if (e.vx != null && (e.vx || e.vy || e.vz)) { _dir.set(e.vx, e.vz || 0, e.vy).normalize(); m.quaternion.setFromUnitVectors(_xAxis, _dir); }
     if (e.type === "asteroid" || e.type === "rock") m.rotateX(e.spin);
     if (e.type === "mother") m.rotateY(e.spin);
+    const wk = (now - m.userData.born) / WARP;
+    if (wk < 1) { // warp-in: a purple rift flashes open and the invader snaps to full size
+      m.scale.setScalar(m.userData.bs * Math.max(0.05, easeBack(Math.max(0, wk))));
+      glow(m.position, "#b07aff", e.def.size * (12 + wk * 10), (1 - wk) * 0.9); glow(m.position, "#ffffff", e.def.size * 5, (1 - wk) * (1 - wk));
+    } else if (m.userData.bs) { m.scale.setScalar(m.userData.bs); m.userData.bs = 0; }
     m.userData.flash(e.hit > 0, e.frozen > 0);
     m.userData.last = m.userData.last || {};
     const L = m.userData.last; L.x = m.position.x; L.y = m.position.y; L.z = m.position.z; L.size = e.def.size; L.color = e.def.color; L.boss = !!e.def.boss; L.dead = e.dead;
@@ -814,15 +864,16 @@ function sync() {
 const quality = { level: 0, frames: 0, time: 0, last: performance.now() };
 const QUALITY_STEPS = [
   () => renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)),
+  () => { bloom.enabled = false; },
   () => { renderer.setPixelRatio(1); },
   () => { setReflections(false); },
   () => { scene.background = new THREE.Color(0x05060f); },
 ];
 // Player's Graphics setting (main menu): "auto" = the steps above; "high" = full detail, never stepped down;
 // "low" = lower resolution and no reflections from the start.
-const fullDetail = () => { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); setReflections(true); scene.background = nebula; };
+const fullDetail = () => { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); setReflections(true); scene.background = nebula; bloom.enabled = true; };
 function applyGfx(mode) {
-  if (mode === "low") { renderer.setPixelRatio(1); setReflections(false); scene.background = nebula; quality.level = 99; }
+  if (mode === "low") { renderer.setPixelRatio(1); setReflections(false); scene.background = nebula; bloom.enabled = false; quality.level = 99; }
   else { fullDetail(); quality.level = mode === "high" ? 99 : 0; quality.frames = 0; quality.time = 0; }
   resize();
 }
@@ -919,7 +970,7 @@ function loop() {
   placeCamera();
   sync();
   if (inMenu) menuBackdrop(performance.now() / 1000); // after sync: its beams and glows replace the (empty) game ones
-  renderer.render(scene, camera);
+  bloom.render(scene, camera);
   trackQuality();
   requestAnimationFrame(loop);
 }
@@ -931,6 +982,6 @@ function project(x, y, z = 0) {
   _v.set(x - C.x, H + z, y - C.y).project(camera);
   return { x: (_v.x + 1) / 2 * r.width, y: (1 - _v.y) / 2 * r.height, behind: _v.z > 1 };
 }
-window.__view3d = { cam, camera, scene, renderer, project, satThumb, quality, lights: { ambient, sun, rim, sunPoint },
+window.__view3d = { cam, camera, scene, renderer, bloom, project, satThumb, quality, lights: { ambient, sun, rim, sunPoint },
   setQuality: n => { while (quality.level < Math.min(n, QUALITY_STEPS.length)) QUALITY_STEPS[quality.level++](); resize(); } }; // for tests
 if (window.__od && window.__od.repaintIcons) window.__od.repaintIcons();
