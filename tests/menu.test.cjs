@@ -16,11 +16,11 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     if (name === 'reduced') ok(yaw0 === yaw1, `${name}: reduced motion keeps the menu camera still`);
     else ok(yaw1 !== yaw0, `${name}: menu camera orbits`);
     await pg.screenshot({ path: `shots/menuvo-${name}.png` });
-    // the menu still works: pick Mars + Hard, start, confirm the game began on those settings with no menu extras left
-    await pg.click('[data-map="mars"]'); await pg.click('[data-diff="hard"]'); await pg.click('[data-act="start"]');
+    // the menu still works: pick Mars (an Intermediate map), start, confirm the game began on those settings with no menu extras left
+    await pg.click('[data-map="mars"]'); await pg.click('[data-act="start"]');
     await pg.waitForFunction(() => window.__od.state(), null, { timeout: 10000 });
     const st = await pg.evaluate(() => { const S = window.__od.state(); let vis = 0; window.__view3d.scene.traverse(o => { if (o.isGroup && o.children.length > 8 && o.visible && o.parent === window.__view3d.scene && !o.getObjectByName('turret') && o.children.some(c => c.getObjectByName && c.getObjectByName('turret'))) vis++; }); return { map: S.mapKey, diff: S.diffKey, towers: S.towers.length, menuSats: vis }; });
-    ok(st.map === 'mars' && st.diff === 'hard' && st.towers === 0, `${name}: menu buttons work (started ${st.map} / ${st.diff})`);
+    ok(st.map === 'mars' && st.diff === 'medium' && st.towers === 0, `${name}: menu buttons work (started ${st.map} / ${st.diff})`);
     ok(st.menuSats === 0, `${name}: menu backdrop hidden once the game starts`);
     ok(errs.length === 0, `${name}: no errors ${errs.slice(0, 3).join(' | ')}`);
     await ctx.close();

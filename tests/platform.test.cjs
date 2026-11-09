@@ -12,7 +12,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto('file://' + ROOT + '/dist/itch/index.html?view=2d&adtest=1');
     await pg.waitForSelector('[data-act="start"]');
-    await pg.click('[data-map="earth"]'); await pg.click('[data-diff="easy"]'); await pg.evaluate(() => localStorage.setItem('od_tut_done','1')); await pg.click('[data-act="start"]');
+    await pg.click('[data-map="earth"]'); await pg.evaluate(() => localStorage.setItem('od_tut_done','1')); await pg.click('[data-act="start"]');
     await pg.evaluate(() => { const od = window.__od; od.placeTower(0, 'laser'); od.placeTower(3, 'laser'); od.placeTower(9, 'missile'); od.state().speed = 10; od.startWave(); });
     await pg.waitForFunction(() => !window.__od.state().waveActive, null, { timeout: 60000 });
     ok(await pg.isVisible('#adBtn'), 'rewarded-ad button appears between waves');

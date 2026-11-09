@@ -3,6 +3,11 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Difficulty is part of the map** (like Bloons tracks): Beginner (Mercury, Venus, Earth), Intermediate (Mars,
+  Jupiter, Saturn), Hard (Uranus, Neptune), Expert (Solar System). The Easy / Medium / Hard buttons are gone;
+  each map card shows its tier. Records and leaderboards are kept per map + its tier's settings, so existing
+  ones carry over; a game saved on another difficulty still resumes on it.
+- **3D view starts zoomed in** on the planet and its orbits instead of the whole spawn area.
 - **Faster first minute:** a brand-new player skips the menu and lands straight in the guided first game on
   Earth. Returning players (and anyone with a saved game) still see the menu. The Steam/desktop edition keeps
   its title screen (`P.titleFirst`). Aimed at CrazyGames' gameplay conversion (players still playing after 1 min).

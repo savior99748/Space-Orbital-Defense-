@@ -31,7 +31,8 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     ok(hasOc, `${name}: Overclock card shown on a maxed satellite in Endless`);
     const before = await pg.evaluate(() => window.__od.towerAt(0).st.dps);
     await pg.click('#info [data-oc]'); await pg.click('#info [data-oc]');
-    await pg.waitForTimeout(400);
+    // stats refresh on the next game update (slow frames on a software renderer): wait for it
+    await pg.waitForFunction(b => { const t = window.__od.towerAt(0); return t.oc === 2 && Math.abs(t.st.dps / b - 1.5625) < 0.01; }, before, { timeout: 8000 }).catch(() => {});
     const after = await pg.evaluate(() => ({ dps: window.__od.towerAt(0).st.dps, oc: window.__od.towerAt(0).oc }));
     ok(after.oc === 2 && Math.abs(after.dps / before - 1.5625) < 0.01, `${name}: overclock x2 → dps ×1.5625 (${before} → ${after.dps})`);
     await pg.screenshot({ path: `shots/oc-${name}.png` });

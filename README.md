@@ -26,11 +26,14 @@ After each game, a **stats screen** shows your totals (destroyed, leaked, credit
 
 ## Difficulty
 
-| | Planet HP | Start credits | Enemies |
-| --- | --- | --- | --- |
-| Easy | 50 | 450 | weaker, slower |
-| Medium | 25 | 325 | normal |
-| Hard | 10 | 300 | tougher, faster |
+Like the tracks in Bloons, every map has its own difficulty: pick a map and you've picked how hard it is.
+
+| Tier | Maps | Planet HP | Start credits | Enemies |
+| --- | --- | --- | --- | --- |
+| Beginner | Mercury, Venus, Earth | 50 | 450 | weaker, slower |
+| Intermediate | Mars, Jupiter, Saturn | 25 | 325 | normal |
+| Hard | Uranus, Neptune | 15 | 300 | tougher, faster |
+| Expert | Solar System (the Sun) | 15 | 300 | Hard settings on the toughest map |
 
 ## Satellites and upgrades
 
@@ -85,7 +88,7 @@ Low shake by default. Preview every satellite and invader model at `/hangar/`.
 
 ## Endless mode & leaderboards
 
-Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Before that, three **✦ Ascension** tiers (10k / 25k / 50k credits) multiply a maxed satellite's power. From wave 31 new invaders join: Juggernauts, Phase Wraiths, Brood Hives, Aegis Bastions and the Void Titan, and past wave 60 they get tougher every wave. Each map and difficulty keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
+Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Before that, three **✦ Ascension** tiers (10k / 25k / 50k credits) multiply a maxed satellite's power. From wave 31 new invaders join: Juggernauts, Phase Wraiths, Brood Hives, Aegis Bastions and the Void Titan, and past wave 60 they get tougher every wave. Each map keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
 
 ## Tutorial
 

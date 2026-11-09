@@ -12,7 +12,7 @@ window.OD = window.OD || {};
 
   OD.MAPS = {
     mercury: {
-      name: "Mercury", sub: "The Iron Planet", stars: 1, view: 700, hp: 0.9,
+      tier: "beginner", name: "Mercury", sub: "The Iron Planet", stars: 1, view: 700, hp: 0.9,
       desc: "Small and moonless, with three full rings. The best place to learn.",
       feature: "Scorching sunlight: no moons, but plenty of ring slots.",
       body: { style: "mercury", r: 30 },
@@ -21,7 +21,7 @@ window.OD = window.OD || {};
       bg: "#3a2410",
     },
     venus: {
-      name: "Venus", sub: "The Backwards World", stars: 1, view: 700, hp: 0.95,
+      tier: "beginner", name: "Venus", sub: "The Backwards World", stars: 1, view: 700, hp: 0.95,
       desc: "Venus spins backwards, and so do its rings: all three turn the same way.",
       feature: "Retrograde: every ring rotates in the same direction, so your defenses sweep together.",
       body: { style: "venus", r: 44 },
@@ -30,7 +30,7 @@ window.OD = window.OD || {};
       bg: "#3a3010",
     },
     earth: {
-      name: "Earth", sub: "Home", stars: 2, view: 720, hp: 1,
+      tier: "beginner", name: "Earth", sub: "Home", stars: 2, view: 720, hp: 1,
       desc: "Defend home. The Moon orbits with its own turret ring, and its gravity pulls invaders in.",
       feature: "The Moon: a 6-slot ring that travels around Earth, and a gravity well that lures enemies.",
       body: { style: "earth", r: 46 },
@@ -41,7 +41,7 @@ window.OD = window.OD || {};
       bg: "#0e2246",
     },
     mars: {
-      name: "Mars", sub: "The Red Planet", stars: 2, view: 720, hp: 1,
+      tier: "intermediate", name: "Mars", sub: "The Red Planet", stars: 2, view: 720, hp: 1,
       desc: "Two tiny moons: Phobos whips around close to Mars, while Deimos drifts slowly further out.",
       feature: "Phobos orbits fast between the rings, dragging enemies with it.",
       body: { style: "mars", r: 36 },
@@ -53,7 +53,7 @@ window.OD = window.OD || {};
       bg: "#3a1408",
     },
     jupiter: {
-      name: "Jupiter", sub: "King of Planets", stars: 3, view: 830, hp: 1.05,
+      tier: "intermediate", name: "Jupiter", sub: "King of Planets", stars: 3, view: 830, hp: 1.05,
       desc: "A giant planet with four big moons. Invaders reach it fast, but the moons give you lots of room.",
       feature: "Galilean moons: Io, Europa, Ganymede and Callisto each have a ring and strong gravity.",
       body: { style: "jupiter", r: 70 },
@@ -67,7 +67,7 @@ window.OD = window.OD || {};
       bg: "#2e1e10",
     },
     saturn: {
-      name: "Saturn", sub: "Lord of the Rings", stars: 3, view: 800, hp: 1.05,
+      tier: "intermediate", name: "Saturn", sub: "Lord of the Rings", stars: 3, view: 800, hp: 1.05,
       desc: "Saturn's icy rings slow everything that crosses them. Titan is huge, with a big turret ring.",
       feature: "Ice rings: invaders crossing Saturn's rings move 35% slower.",
       body: { style: "saturn", r: 60, belt: { inner: 80, outer: 122, slow: 0.65 } },
@@ -79,7 +79,7 @@ window.OD = window.OD || {};
       bg: "#2e2814",
     },
     uranus: {
-      name: "Uranus", sub: "The Sideways Giant", stars: 4, view: 780, hp: 1.1,
+      tier: "hard", name: "Uranus", sub: "The Sideways Giant", stars: 4, view: 780, hp: 1.1,
       desc: "An ice giant knocked on its side. Its rings spin fast, and its moons share two orbits.",
       feature: "Fast spin: Uranus's rings rotate much faster than any other planet's.",
       body: { style: "uranus", r: 52 },
@@ -92,7 +92,7 @@ window.OD = window.OD || {};
       bg: "#0e2a30",
     },
     neptune: {
-      name: "Neptune", sub: "The Windy World", stars: 4, view: 780, hp: 1.1, enemySpeed: 1.12,
+      tier: "hard", name: "Neptune", sub: "The Windy World", stars: 4, view: 780, hp: 1.1, enemySpeed: 1.12,
       desc: "Supersonic winds push invaders 12% faster. Triton orbits backwards with heavy gravity.",
       feature: "Winds: enemies move 12% faster. Triton orbits in reverse.",
       body: { style: "neptune", r: 50 },
@@ -103,7 +103,7 @@ window.OD = window.OD || {};
       bg: "#0a1640",
     },
     sol: {
-      name: "Solar System", sub: "The Final Stand", stars: 5, view: 830, hp: 0.95, final: true, lifeName: "Sun",
+      tier: "expert", name: "Solar System", sub: "The Final Stand", stars: 5, view: 830, hp: 0.95, final: true, lifeName: "Sun",
       desc: "Invaders are coming for the Sun itself. All eight planets orbit at their own speeds, each with its own turret ring.",
       feature: "Every planet's gravity bends invader paths. Your satellites ride along with their planets.",
       body: { style: "sun", r: 40 },
@@ -122,5 +122,13 @@ window.OD = window.OD || {};
     },
   };
 
+  // Like Bloons tracks, each map has its own difficulty: pick a map, and you've picked how hard it is.
+  // `diff` is the difficulty settings it plays with (js/data.js); records and leaderboards are kept per map + diff.
+  OD.TIERS = {
+    beginner:     { name: "Beginner",     color: "#7dff9a", diff: "easy" },
+    intermediate: { name: "Intermediate", color: "#ffd166", diff: "medium" },
+    hard:         { name: "Hard",         color: "#ff8a5c", diff: "hard" },
+    expert:       { name: "Expert",       color: "#ff4d7a", diff: "hard" },
+  };
   OD.MAP_ORDER = ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune", "sol"];
 })(window.OD);

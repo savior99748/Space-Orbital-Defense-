@@ -2,7 +2,10 @@
 (function (OD) {
   "use strict";
   const TAU = Math.PI * 2;
-  const { TOWERS, ENEMIES, DIFFICULTY, MAPS, MAP_ORDER, tierOf, rgba } = OD;
+  const { TOWERS, ENEMIES, DIFFICULTY, MAPS, MAP_ORDER, TIERS, tierOf, rgba } = OD;
+  // each map has its own difficulty tier (Beginner / Intermediate / Hard / Expert), like Bloons tracks
+  const mapTier = k => TIERS[MAPS[k].tier];
+  const diffOf = k => mapTier(k).diff;
   const audio = OD.audio;
   const sfx = name => audio.play(name);
 
@@ -29,7 +32,7 @@
   // ---------- board: the map's bodies, turret rings and slots ----------
   let W = 1000, H = 700, CX = 500, CY = 350, SPAWN_R = 640, scale = 1;
   let MAP_KEY = MAP_ORDER.includes(store.get("od_map")) ? store.get("od_map") : "earth";
-  let DIFF_KEY = DIFFICULTY[store.get("od_diff")] ? store.get("od_diff") : "medium";
+  let DIFF_KEY = "medium"; // follows the selected map (see diffOf)
   let MODE = store.get("od_mode") === "endless" ? "endless" : "campaign";
   const LB = OD.leaderboard;
   let lbView = null; // { map, diff } while the leaderboard screen is open
@@ -748,7 +751,7 @@
     { id: "tycoon", name: "Space Tycoon", desc: "Mine 2,000 credits in one game." },
     { id: "first_win", name: "Defender", desc: "Win any map." },
     { id: "perfect", name: "Untouchable", desc: "Win a map without a single leak." },
-    { id: "win_hard", name: "Hardened", desc: "Win any map on Hard." },
+    { id: "win_hard", name: "Hardened", desc: "Win a Hard or Expert map." },
     { id: "grand_tour", name: "Grand Tour", desc: "Win on all eight planets." },
     { id: "win_sol", name: "Guardian of the Sun", desc: "Win the Solar System map." },
     { id: "endless_50", name: "Deep Space", desc: "Reach wave 50 in Endless mode." },
@@ -1433,10 +1436,8 @@
 
   function mapCard(key) {
     const m = MAPS[key];
-    const medals = Object.keys(DIFFICULTY).map(d => {
-      const r = getRec(key, d);
-      return `<i class="medal${r && r.won ? " won" : ""}" style="--c:${DIFFICULTY[d].color}" title="${DIFFICULTY[d].name}${r ? `: best wave ${r.wave}` : ""}"></i>`;
-    }).join("");
+    const t = mapTier(key), r = getRec(key, t.diff);
+    const medals = `<span class="tier-tag" style="--c:${t.color}" title="${r ? `Best wave ${r.wave}` : t.name}">${r && r.won ? "★ " : ""}${t.name}</span>`;
     return `<button class="map-card${key === MAP_KEY ? " selected" : ""}${m.final ? " final" : ""}" data-map="${key}">
       <canvas width="140" height="100" data-map-preview="${key}"></canvas>
       <b>${m.name}</b><small>${m.moons.length ? `${m.moons.length} ${m.final ? "planets" : m.moons.length === 1 ? "moon" : "moons"}` : "No moons"}</small>
@@ -1479,7 +1480,8 @@
     document.body.classList.add("in-menu");
     if (!B || B.key !== MAP_KEY) { buildBoard(MAP_KEY); B.key = MAP_KEY; }
     resetCamera();
-    const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun();
+    DIFF_KEY = diffOf(MAP_KEY);
+    const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun(), tier = mapTier(MAP_KEY);
     const got = getAch();
     showOverlay(`
       <div class="rw-eyebrow">SOLAR SYSTEM DEFENSE COMMAND</div><h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
@@ -1492,12 +1494,9 @@
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
         ${OD.is3D && OD.planetThumb ? `<canvas class="map-globe" width="220" height="220" data-globe="${m.body.style}" aria-hidden="true"></canvas>` : ""}
-        <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
+        <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="tier-tag big" style="--c:${tier.color}">${tier.name}</span></h2>
         <p>${m.desc}</p>
         <p class="feature">✦ ${m.feature}</p>
-      </div>
-      <div class="diff-row">
-        ${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === DIFF_KEY ? " selected" : ""}" data-diff="${k}" style="--c:${d.color}"><b>${d.name}</b><small>${d.lives} HP</small></button>`).join("")}
       </div>
       <div class="mode-row">
         <button class="mode-btn${MODE === "campaign" ? " selected" : ""}" data-mode="campaign"><b>Campaign</b><small>Survive 30 waves</small></button>
@@ -1505,9 +1504,9 @@
       </div>
       ${MODE === "endless" ? (() => {
         const lbTop = LB.top(MAP_KEY, DIFF_KEY)[0], bestAll = LB.bestAll();
-        return `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
+        return `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
           <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
-      })() : `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
+      })() : `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
       <div class="btns"><button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : "Launch Mission ▶"}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
       ${soundButtons()}
       <details><summary>How to play</summary>
@@ -1546,13 +1545,13 @@
   }
 
   function showLeaderboards() {
-    lbView = lbView || { map: MAP_KEY, diff: DIFF_KEY };
-    const { map, diff } = lbView;
+    lbView = lbView || { map: MAP_KEY };
+    const map = lbView.map, diff = diffOf(map), tier = mapTier(map);
     showOverlay(`
       <h1>🏆 LEADERBOARDS</h1>
       <p class="muted">Endless mode · your best runs on this device</p>
       <div class="lb-maps">${MAP_ORDER.map(k => `<button class="chip-btn${k === map ? " selected" : ""}" data-lbmap="${k}">${MAPS[k].name}${LB.bestMap(k) ? ` <small>∞${LB.bestMap(k)}</small>` : ""}</button>`).join("")}</div>
-      <div class="diff-row">${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === diff ? " selected" : ""}" data-lbdiff="${k}" style="--c:${d.color}"><b>${d.name}</b></button>`).join("")}</div>
+      <p class="muted small">${MAPS[map].name} · <span class="tier-tag" style="--c:${tier.color}">${tier.name}</span></p>
       ${lbTable(LB.top(map, diff))}
       <p class="muted small">🌍 Worldwide leaderboards are coming soon.</p>
       <div class="btns"><button class="primary" data-act="lb-play">Play Endless here ∞</button><button data-act="menu">← Back</button></div>`, true);
@@ -1575,14 +1574,13 @@
     audio.init();
     const vw = ev.target.closest("[data-view]");
     if (vw) { if ((vw.dataset.view === "3d") !== !!OD.is3D) { sfx("click"); OD.setView(vw.dataset.view); } return; }
-    const lm = ev.target.closest("[data-lbmap]"), ld = ev.target.closest("[data-lbdiff]"), md = ev.target.closest("[data-mode]");
+    const lm = ev.target.closest("[data-lbmap]"), md = ev.target.closest("[data-mode]");
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
-    if (ld) { lbView.diff = ld.dataset.lbdiff; sfx("click"); return showLeaderboards(); }
+
     if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
     const mc = ev.target.closest("[data-map]");
     if (mc) { MAP_KEY = mc.dataset.map; store.set("od_map", MAP_KEY); sfx("click"); return mainMenu(); }
-    const d = ev.target.closest("[data-diff]");
-    if (d) { DIFF_KEY = d.dataset.diff; store.set("od_diff", DIFF_KEY); sfx("click"); return mainMenu(); }
+
     const a = ev.target.closest("[data-act]");
     if (!a) return;
     sfx("click");
@@ -1605,8 +1603,8 @@
         break;
       case "tutorial": startTutorial(); break;
       case "skiptut": store.set(TUT_KEY, "1"); begin(MAP_KEY, DIFF_KEY, false, MODE === "endless"); break;
-      case "leaderboards": lbView = { map: MAP_KEY, diff: DIFF_KEY }; showLeaderboards(); break;
-      case "lb-play": MAP_KEY = lbView.map; DIFF_KEY = lbView.diff; MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_diff", DIFF_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
+      case "leaderboards": lbView = { map: MAP_KEY }; showLeaderboards(); break;
+      case "lb-play": MAP_KEY = lbView.map; DIFF_KEY = diffOf(MAP_KEY); MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
       case "save-nick": {
         const input = document.getElementById("nickInput");
         const name = LB.setNickname(input ? input.value : "");
@@ -1636,7 +1634,7 @@
       case "pause": pauseMenu(); break;
       case "stats": showStats("pause"); break;
       case "retry": begin(S.mapKey, S.diffKey, false, !!S.endless); break;
-      case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, S.diffKey); break; }
+      case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, diffOf(n)); break; }
       case "menu": mainMenu(); break;
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
@@ -1655,6 +1653,8 @@
     buildBoard(mapKey); B.key = mapKey;
     resetCamera();
     S = newState(diffKey);
+    const tier = mapTier(mapKey);
+    if (diffKey === tier.diff) S.diff = Object.assign({}, S.diff, { name: tier.name, color: tier.color }); // saved games from before keep their old difficulty
     S.endless = !!endless;
     P.gameplayStart();
     document.body.classList.remove("in-menu");
@@ -2017,7 +2017,7 @@
   // Load platform SDKs / cloud saves, then show the menu with the saved preferences.
   P.init().finally(() => {
     if (MAP_ORDER.includes(store.get("od_map"))) MAP_KEY = store.get("od_map");
-    if (DIFFICULTY[store.get("od_diff")]) DIFF_KEY = store.get("od_diff");
+    DIFF_KEY = diffOf(MAP_KEY);
     P.loadingDone();
     stats.sessionStart();
     // A brand-new player goes straight into the guided first game (aliens within seconds) instead of the
