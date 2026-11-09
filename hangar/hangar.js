@@ -2,7 +2,8 @@
 import * as THREE from "../vendor/three/three.module.js";
 import { buildSatellite, SAT_NAMES } from "../js/sat3d.js";
 import { buildAlien, ALIEN_NAMES } from "../js/aliens3d.js";
-const ENEMY = { drone: [9, "#ff5c7a"], swarm: [5, "#ff9fb2"], comet: [7, "#9ad7ff"], asteroid: [16, "#a68a6d"], rock: [9, "#8f7a64"], cruiser: [13, "#5c9dff"], mother: [30, "#ff3df2"], dread: [44, "#ff2d55"] };
+const ENEMY = { drone: [9, "#ff5c7a"], swarm: [5, "#ff9fb2"], comet: [7, "#9ad7ff"], asteroid: [16, "#a68a6d"], rock: [9, "#8f7a64"], cruiser: [13, "#5c9dff"], mother: [30, "#ff3df2"], dread: [44, "#ff2d55"],
+  brute: [20, "#ff8a3c"], phantom: [14, "#7affd9"], brood: [28, "#c8ff4a"], aegis: [26, "#4af0ff"], titan: [58, "#9d4dff"] };
 
 const PATHS = {
   laser: ["Prism Array", "Spectrum Cannon", "Solar Lance", "Sunspear"],

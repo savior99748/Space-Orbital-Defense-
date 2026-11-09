@@ -406,6 +406,15 @@ function buildSat(t) {
       sparks.forEach((s, i) => { const a = time * 1.6 + i * Math.PI * 2 / n; s.position.set(Math.cos(a) * 20, Math.sin(time * 2 + i) * 3, Math.sin(a) * 20); s.rotation.y = time * 3; });
     };
   }
+  if (t.asc) { // Ascension: one glowing violet halo per level, each tilted and spinning its own way
+    const halos = [];
+    for (let i = 0; i < t.asc; i++) {
+      const h = new THREE.Mesh(new THREE.TorusGeometry(15 + i * 4, 0.7, 6, 56), new THREE.MeshBasicMaterial({ color: i === 2 ? 0xffffff : 0xc18cff, toneMapped: false, transparent: true, opacity: 0.85 }));
+      h.rotation.set(Math.PI / 2 + (i - 1) * 0.5, i * 1.1, 0); g.add(h); halos.push(h);
+    }
+    const base = g.userData.update;
+    g.userData.update = (time, fire, dt) => { base(time, fire, dt); halos.forEach((h, i) => { h.rotation.z = time * (0.8 + i * 0.5) * (i % 2 ? -1 : 1); }); };
+  }
   return g;
 }
 
@@ -596,7 +605,8 @@ function stepDebris(t) {
 // muzzle flash: brief glow at the turret when a satellite fires (cooldown just reset)
 const MUZZLE = { laser: "#bff8ff", missile: "#ffb347", rail: "#c9ffb0", emp: "#fff3a0", carrier: "#ffc4ee" };
 // invader engine glows: [color, distance behind the centre, size] in units of the invader's size
-const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cruiser: ["#9fe0ff", 1.45, 1.4], dread: ["#ff7a3c", 1.3, 1.1], asteroid: ["#ff9a3c", 1.3, 1.3] };
+const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cruiser: ["#9fe0ff", 1.45, 1.4], dread: ["#ff7a3c", 1.3, 1.1], asteroid: ["#ff9a3c", 1.3, 1.3],
+  brute: ["#ff7a3c", 1.2, 1.3], phantom: ["#7affd9", 1.2, 1.4], brood: ["#c8ff4a", 1.1, 1.0], aegis: ["#9fe0ff", 1.1, 1.1], titan: ["#c58cff", 1.5, 1.2] };
 const _ev = new THREE.Vector3();
 scene.add(beamMesh, beamCore, shotMesh, craftMesh, particles, glowPoints, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
 
@@ -665,7 +675,7 @@ function sync() {
   const seen = new Set();
   if (S) for (const tw of S.towers) {
     seen.add(tw.id);
-    const key = `${tw.type}|${tw.level}|${tw.path}|${tw.oc || 0}`;
+    const key = `${tw.type}|${tw.level}|${tw.path}|${tw.oc || 0}|${tw.asc || 0}`;
     let m = satMeshes.get(tw.id);
     if (!satKnown.has(tw.id)) { satKnown.add(tw.id); if (!fresh && !calm) satLaunch.set(tw.id, now); }
     if (!m || m.userData.key !== key) { if (m) { scene.remove(m); if (!calm) satPop.set(tw.id, now); } m = buildSat(tw); m.userData.key = key; satMeshes.set(tw.id, m); scene.add(m); }
@@ -746,6 +756,8 @@ function sync() {
     m.userData.flash(e.hit > 0, e.frozen > 0);
     m.userData.last = m.userData.last || {};
     const L = m.userData.last; L.x = m.position.x; L.y = m.position.y; L.z = m.position.z; L.size = e.def.size; L.color = e.def.color; L.boss = !!e.def.boss; L.dead = e.dead;
+    m.visible = !e.cloaked;
+    if (e.cloaked) { glow(m.position, e.def.color, e.def.size * 3.5, 0.18 + Math.sin(t * 20 + e.seed) * 0.06); continue; } // phased out: only a faint shimmer
     const sh = m.getObjectByName("shield");
     if (sh) sh.visible = e.shield > 0;
     if (sh && sh.visible) { // shield-hit ripple: the bubble flares and swells for a moment when it absorbs a hit

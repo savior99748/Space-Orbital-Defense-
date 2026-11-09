@@ -85,7 +85,7 @@ Low shake by default. Preview every satellite and invader model at `/hangar/`.
 
 ## Endless mode & leaderboards
 
-Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Each map and difficulty keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
+Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Before that, three **✦ Ascension** tiers (10k / 25k / 50k credits) multiply a maxed satellite's power. From wave 31 new invaders join: Juggernauts, Phase Wraiths, Brood Hives, Aegis Bastions and the Void Titan, and past wave 60 they get tougher every wave. Each map and difficulty keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
 
 ## Tutorial
 

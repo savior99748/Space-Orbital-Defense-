@@ -13,6 +13,20 @@ Each release records the exact git commit it was built from. `git checkout <comm
 - **Animations** (3D, visual only): new satellites launch from the planet's surface and climb to their slot with
   an engine trail; arrival and upgrades swell with a burst of light in the satellite's color; sold satellites
   vanish in a puff of sparks; invaders warp in through a purple rift. Reduced-motion settings skip them.
+- **Fleet Link stacking:** every Command Relay / Fleet Uplink in range now adds its own fire-rate bonus
+  (+20% / +35% each, additive), capped at +140% (four Fleet Uplinks). Range bonuses still don't stack. The
+  combined bonus is recomputed every frame (build, upgrade, sell, rings carrying satellites in/out of range) and
+  shown on the affected satellite's panel ("Fleet Link: +70% fire rate (2 links)"). It changes real fire rates.
+- **Ascension** (Endless / Freeplay): three late-game tiers after tier 5 for 10k / 25k / 50k credits. Each: ×1.6
+  damage (or income), +12% fire rate, +6% range, +1 fighter for carriers. Violet halos mark ascended satellites.
+  Overclock is still available on top.
+- **Five new Endless invaders:** Juggernaut (armored, wave 31+), Phase Wraith (cloaks, can't be targeted while
+  phased out, 35+), Brood Hive (heals, hatches Mites, bursts into 8 on death, 40+), Aegis Bastion (huge shield
+  that regenerates fast, 45+) and the Void Titan boss (waves 55, 70, 85, 100…). By wave 100-120 the big ships
+  come every wave.
+- **Endless difficulty:** past wave 60 invader health climbs an extra 3.5% per wave (compounding), and the
+  swarms of small fry stop growing, so long runs end instead of idling on Auto for hours. Campaign waves 1-30
+  are unchanged.
 
 ## v3.1.0 (visual overhaul, in review)
 Visual only: gameplay, balance, orbital mechanics, saves, achievements, CrazyGames SDK events and Classic 2D

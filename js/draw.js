@@ -338,7 +338,47 @@ window.OD = window.OD || {};
     ctx.save();
     ctx.translate(e.x, e.y);
     const heading = Math.atan2(cy - e.y, cx - e.x) + e.dir * (d.spiral * 1.1);
+    if (e.cloaked) ctx.globalAlpha = 0.18 + 0.08 * Math.sin(time * 20 + e.seed); // Phase Wraith out of phase
     switch (e.type) {
+      case "brute": { // Juggernaut: armored ram with a furnace grille
+        ctx.rotate(heading);
+        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(s, 0); ctx.lineTo(s * 0.4, -s * 0.8); ctx.lineTo(-s, -s * 0.7); ctx.lineTo(-s, s * 0.7); ctx.lineTo(s * 0.4, s * 0.8); ctx.closePath(); ctx.fill();
+        rect(ctx, -s * 0.7, -s * 0.85, s * 1.2, s * 0.25, "#4a3a34"); rect(ctx, -s * 0.7, s * 0.6, s * 1.2, s * 0.25, "#4a3a34");
+        for (let i = 0; i < 3; i++) rect(ctx, s * 0.2 - i * s * 0.22, -s * 0.35, s * 0.08, s * 0.7, "#ffe0b0");
+        glow(ctx, -s, 0, s * 0.45, "#ff7a3c", 0.6);
+        break;
+      }
+      case "phantom": { // Phase Wraith: crescent blade
+        ctx.rotate(heading);
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, s, -1.2, 1.2); ctx.arc(-s * 0.35, 0, s * 0.8, 1.0, -1.0, true); ctx.closePath(); ctx.fill();
+        glow(ctx, s * 0.2, 0, s * 0.5, "#ffffff", 0.7);
+        break;
+      }
+      case "brood": { // Brood Hive: bloated sac with pulsing eggs
+        ctx.rotate(heading);
+        ctx.fillStyle = "#5d7a24"; ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.75, 0, 0, TAU); ctx.fill();
+        for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + 0.4; circle(ctx, Math.cos(a) * s * 0.45, Math.sin(a) * s * 0.35, s * (0.18 + 0.04 * Math.sin(time * 5 + i)), col); }
+        circle(ctx, s * 0.7, 0, s * 0.18, "#f4ffd0");
+        break;
+      }
+      case "aegis": { // Aegis Bastion: fortress ring + heavy shield
+        ctx.rotate(time * 0.8);
+        ctx.fillStyle = "#2c4258"; poly(ctx, 8, s, 0); ctx.fill();
+        circle(ctx, 0, 0, s * 0.5, col);
+        for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; circle(ctx, Math.cos(a) * s * 0.8, Math.sin(a) * s * 0.8, s * 0.12, "#bff6ff"); }
+        if (e.shield > 0) circle(ctx, 0, 0, s + 9, "rgba(74,240,255,0.1)", `rgba(140,250,255,${0.3 + 0.5 * e.shield / e.maxShield})`, 2.5);
+        break;
+      }
+      case "titan": { // Void Titan: violet world-breaker
+        ctx.rotate(heading);
+        ctx.fillStyle = "#3a2450";
+        ctx.beginPath(); ctx.moveTo(s, 0); ctx.lineTo(s * 0.2, -s * 0.9); ctx.lineTo(-s * 0.9, -s * 0.8); ctx.lineTo(-s, 0); ctx.lineTo(-s * 0.9, s * 0.8); ctx.lineTo(s * 0.2, s * 0.9); ctx.closePath(); ctx.fill();
+        rect(ctx, -s * 0.8, -s * 0.06, s * 1.5, s * 0.12, col);
+        circle(ctx, s * 0.35, 0, s * 0.2, col); circle(ctx, s * 0.4, 0, s * 0.08, "#fff");
+        glow(ctx, -s, 0, s * 0.5, "#c58cff", 0.7);
+        if (e.shield > 0) circle(ctx, 0, 0, s + 10, "rgba(157,77,255,0.08)", `rgba(200,150,255,${0.3 + 0.5 * e.shield / e.maxShield})`, 3);
+        break;
+      }
       case "asteroid": case "rock": {
         ctx.rotate(e.spin * 0.4);
         ctx.fillStyle = col; ctx.beginPath();
@@ -401,6 +441,7 @@ window.OD = window.OD || {};
       }
     }
     ctx.restore();
+    if (e.cloaked) return;
     if (e.frozen > 0) circle(ctx, e.x, e.y, s + 3, "rgba(170,235,255,0.25)", "rgba(220,250,255,0.8)", 1);
     else if (e.stun > 0) {
       ctx.strokeStyle = "rgba(255,240,120,0.9)"; ctx.lineWidth = 1;
