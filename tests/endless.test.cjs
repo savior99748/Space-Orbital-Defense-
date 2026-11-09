@@ -44,15 +44,15 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(name.includes('Brandonbf') && !name.includes('<'), 'name saved and cleaned: ' + name.trim().replace(/\s+/g, ' '));
   ok(await pg.evaluate(s0 => window.__od.state().speed === s0, sp0), 'typing "f" did not change game speed');
   // Second worse run → rank 2
-  await pg.evaluate(() => { window.__od.begin('earth', 'medium', false, true); const S = window.__od.state(); S.wave = 12; S.score = 5000; S.lives = 0; });
+  await pg.evaluate(() => { window.__od.begin('earth', 'easy', false, true); const S = window.__od.state(); S.wave = 12; S.score = 5000; S.lives = 0; });
   await pg.waitForSelector('table.lb');
   ok((await pg.textContent('#overlay')).includes('#2 on your'), 'second run ranked #2');
   ok(!(await pg.isVisible('#nickInput')), 'no name prompt once a name is saved');
   // Revive does not duplicate
-  const n0 = await pg.evaluate(() => window.__od.LB.top('earth', 'medium').length);
+  const n0 = await pg.evaluate(() => window.__od.LB.top('earth', 'easy').length);
   await pg.evaluate(() => { const S = window.__od.state(); S.over = false; S.revived = true; document.getElementById('overlay').classList.add('hidden'); S.wave = 15; S.lives = 0; });
   await pg.waitForTimeout(500);
-  const n1 = await pg.evaluate(() => window.__od.LB.top('earth', 'medium').length);
+  const n1 = await pg.evaluate(() => window.__od.LB.top('earth', 'easy').length);
   ok(n1 === n0, `revived run replaces its own entry (${n0} → ${n1})`);
   // Leaderboard screen from menu
   await pg.evaluate(() => window.__od.mainMenu());
