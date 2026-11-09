@@ -147,6 +147,70 @@ const DESIGNS = {
     }
     return { hull: "#2a161c", metal: 0.7, rough: 0.35, shield: "#ff5c7a" };
   },
+  // JUGGERNAUT: a squat armored ram, layered plates, a glowing furnace grille and a battering prow
+  brute(t, color) {
+    part(t, G.box, HULL, [1.6, 0.9, 1.2]);
+    part(t, G.cone4, HULL, [1.1, 0.9, 1.1], [1.15, 0, 0], [H / 2, 0, -H]);
+    for (const s of [-1, 1]) {
+      part(t, G.box, Std("#7a7480", { metalness: 0.55, roughness: 0.4 }), [1.5, 0.5, 0.25], [-0.05, 0.05, s * 0.68], [s * 0.2, 0, 0]); // side armor
+      part(t, G.box, Std("#7a7480", { metalness: 0.55, roughness: 0.4 }), [1.2, 0.2, 0.9], [-0.1, s * 0.55, 0]);                        // top/bottom plates
+      part(t, G.cone, HULL, [0.18, 0.6, 0.18], [0.3, 0.68, s * 0.35], [0, 0, -0.4]);                                                // horns
+    }
+    for (let i = 0; i < 3; i++) part(t, G.box, Glow(color), [0.06, 0.32, 0.9], [0.62 - i * 0.12, 0, 0]); // furnace grille
+    part(t, G.sph, Glow("#ffe0b0"), 0.3, [0.85, 0, 0]);
+    for (const z of [-0.35, 0.35]) { part(t, G.cyl, Std("#1c1c22"), [0.3, 0.3, 0.3], [-0.95, 0, z], [0, 0, H]); part(t, G.sph, Glow("#ff7a3c"), 0.3, [-1.1, 0, z]); }
+    return { hull: "#4a2a1c", metal: 0.85, rough: 0.3 };
+  },
+  // PHASE WRAITH: a ghostly crescent blade with trailing veils; flickers out of phase
+  phantom(t, color) {
+    part(t, G.tor, HULL, [1.1, 1.1, 4.5], [0.1, 0, 0], [H, 0, 0]);
+    part(t, G.cone4, HULL, [0.6, 1.8, 0.3], [0.4, 0, 0], [H, 0, -H]);
+    part(t, G.sph, Glow(color), 0.5, [0.25, 0.05, 0]);
+    part(t, G.sph, Glow("#ffffff"), 0.2, [0.4, 0.08, 0]);
+    const veil = new THREE.Group(); veil.name = "veil"; t.add(veil);
+    for (const s of [-1, 0, 1]) part(veil, G.cone, Add(color, 0.28), [0.5, 2.4, 0.18], [-1.4, s * 0.15, s * 0.55], [0, 0, H]);
+    return { hull: "#16302c", metal: 0.6, rough: 0.2, animate: ["veil"] };
+  },
+  // BROOD HIVE: a bloated organic carrier, ribbed carapace, pulsing egg sacs that hatch Mites
+  brood(t, color) {
+    part(t, G.sph, HULL, [2.0, 1.3, 1.5]);
+    for (let i = 0; i < 5; i++) part(t, G.tor, HULL, [0.62 - Math.abs(i - 2) * 0.1, 0.62 - Math.abs(i - 2) * 0.1, 1], [-0.6 + i * 0.3, 0, 0], [0, H, 0]); // ribs
+    const sacs = new THREE.Group(); sacs.name = "sacs"; t.add(sacs);
+    for (const [x, y, z] of [[0.2, 0.55, 0.4], [-0.3, 0.5, -0.45], [0.5, -0.3, -0.5], [-0.5, -0.4, 0.45], [0, 0.7, -0.05]]) part(sacs, G.sph, Std(color, { emissive: color, emissiveIntensity: 0.9, roughness: 0.3, metalness: 0 }), 0.42, [x, y, z]);
+    part(t, G.sph, Glow(color), 0.35, [1.0, 0.1, 0]);
+    for (const s of [-1, 1]) part(t, G.cone, HULL, [0.15, 0.9, 0.15], [1.05, -0.2, s * 0.3], [0, s * 0.4, -H]); // mandibles
+    return { hull: "#2a3416", metal: 0.25, rough: 0.6, animate: ["sacs"] };
+  },
+  // AEGIS BASTION: a fortress ring of shield emitters around an armored core, under a heavy dome shield
+  aegis(t, color) {
+    part(t, G.cyl, HULL, [1.3, 0.7, 1.3]);
+    part(t, G.sph, Std("#bff6ff", { emissive: color, emissiveIntensity: 0.8, roughness: 0.1, metalness: 0.1 }), [0.9, 0.6, 0.9], [0, 0.35, 0]);
+    part(t, G.tor, Std("#6a7890", { metalness: 0.6, roughness: 0.35 }), [1.15, 1.15, 2.2], [0, 0, 0], [H, 0, 0]);
+    const ring = new THREE.Group(); ring.name = "emitters"; t.add(ring);
+    for (let i = 0; i < 6; i++) { const a = i * TAU / 6; part(ring, G.box, HULL, [0.3, 0.8, 0.3], [Math.cos(a) * 1.15, 0, Math.sin(a) * 1.15]); part(ring, G.sph, Glow(color), 0.2, [Math.cos(a) * 1.15, 0.5, Math.sin(a) * 1.15]); }
+    part(t, G.sph, Glow("#9fe0ff"), 0.35, [-1.0, -0.1, 0]);
+    return { hull: "#1d2c3a", metal: 0.9, rough: 0.25, shield: color, animate: ["emitters"] };
+  },
+  // VOID TITAN: a colossal violet-black world-breaker, crown of spires, a reactor eye and six engines
+  titan(t, color) {
+    part(t, G.sph, HULL, [2.4, 0.9, 1.6]);
+    part(t, G.cone4, HULL, [1.2, 1.4, 1.2], [1.6, 0, 0], [H / 2, 0, -H]);
+    for (const s of [-1, 1]) {
+      part(t, G.box, HULL, [2.2, 0.25, 0.9], [-0.2, 0, s * 1.0], [s * 0.15, 0, 0]);              // wings
+      part(t, G.box, Glow(color), [2.0, 0.05, 0.05], [-0.2, 0.15, s * 1.0]);                     // wing seams
+      part(t, G.cone, HULL, [0.16, 1.4, 0.16], [2.0, 0, s * 0.45], [0, 0, -H]);                   // prongs
+    }
+    for (let i = 0; i < 5; i++) part(t, G.cone, HULL, [0.16, 0.9 - Math.abs(i - 2) * 0.15, 0.16], [0.8 - i * 0.45, 0.65, 0], [0, 0, 0.35]); // spires
+    part(t, G.sph, Glow(color), 0.7, [0.9, 0.2, 0]);          // reactor eye
+    part(t, G.sph, Glow("#ffffff"), 0.3, [1.15, 0.25, 0]);
+    const core = new THREE.Group(); core.name = "core"; t.add(core);
+    part(core, G.tor, Glow(color), [0.9, 0.9, 1], [0, 0.1, 0], [H, 0, 0]);
+    for (const [y, z] of [[0, 0], [0, 0.45], [0, -0.45], [0.3, 0.22], [0.3, -0.22], [-0.3, 0]]) {
+      part(t, G.cyl, Std("#18141f"), [0.25, 0.3, 0.25], [-1.25, y, z], [0, 0, H]);
+      part(t, G.sph, Glow("#c58cff"), 0.24, [-1.42, y, z]);
+    }
+    return { hull: "#1e1428", metal: 0.85, rough: 0.28, shield: color, animate: ["core"] };
+  },
 };
 
 // ---------- bake each design once ----------
@@ -175,7 +239,8 @@ function template(type, color) {
   templates.set(key, t); return t;
 }
 
-export const ALIEN_NAMES = { drone: "Stinger", swarm: "Mite", comet: "Comet", asteroid: "Infested Asteroid", rock: "Rock", cruiser: "Warden", mother: "Mothership", dread: "Dreadnought" };
+export const ALIEN_NAMES = { drone: "Stinger", swarm: "Mite", comet: "Comet", asteroid: "Infested Asteroid", rock: "Rock", cruiser: "Warden", mother: "Mothership", dread: "Dreadnought",
+  brute: "Juggernaut", phantom: "Phase Wraith", brood: "Brood Hive", aegis: "Aegis Bastion", titan: "Void Titan" };
 
 export function buildAlien(type, size, color) {
   if (!DESIGNS[type]) type = "drone";
@@ -209,6 +274,10 @@ export function buildAlien(type, size, color) {
     if (parts.tail) { const k = 1 + Math.sin(t * 9 + seed) * 0.08; parts.tail.scale.set(1, k, k); }
     if (parts.lights) { parts.lights.rotation.y = t * 1.5; }
     if (parts.beam) parts.beam.scale.set(1, 1 + Math.sin(t * 4) * 0.15, 1);
+    if (parts.veil) parts.veil.scale.set(1 + Math.sin(t * 7 + seed) * 0.15, 1, 1);
+    if (parts.sacs) parts.sacs.scale.setScalar(1 + Math.sin(t * 5 + seed) * 0.08);
+    if (parts.emitters) parts.emitters.rotation.y = t * 0.8;
+    if (parts.core) parts.core.rotation.z = t * 1.2;
     const sh = g.getObjectByName("shield"); if (sh) sh.rotation.y = t * 0.4;
   };
   return g;

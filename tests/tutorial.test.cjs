@@ -9,18 +9,16 @@ let lastStep;
   const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
   await pg.goto('file://' + ROOT + '/index.html?view=2d');
-  await pg.waitForSelector('[data-act="start"]');
+  await pg.waitForFunction(() => window.__od && window.__od.tut(), null, { timeout: 15000 });
   const step = async () => { await pg.waitForTimeout(150); return pg.evaluate(() => window.__od.tut() ? window.__od.tut().i : null); };
   const tapWorld = async (x, y) => {
     const s = await pg.evaluate(([x, y]) => window.__od.toScreen(x, y), [x, y]);
     const box = await pg.locator('#game').boundingBox();
     await pg.touchscreen.tap(box.x + s.x, box.y + s.y);
   };
-  // first launch prompt
-  await pg.tap('[data-act="start"]');
-  ok(await pg.isVisible('[data-act="tutorial"]'), 'first launch offers the tutorial');
-  await pg.tap('.card [data-act="tutorial"]');
-  ok(await step() === 0, 'tutorial step 1 (welcome)');
+  // a brand-new player skips the menu and lands straight in the guided first game, at 3× speed
+  ok(await step() === 0 && !(await pg.isVisible('[data-act="start"]')), 'brand-new player goes straight into the tutorial (step 1, no menu)');
+  ok(await pg.evaluate(() => window.__od.state().speed === 3 && document.getElementById('speedBtn').textContent === '3×'), 'game starts at 3× speed');
   await pg.screenshot({ path: 't0.png' });
   await pg.tap('#coachNext');
   ok(await step() === 1, 'step 2: select laser');

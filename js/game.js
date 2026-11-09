@@ -2,7 +2,10 @@
 (function (OD) {
   "use strict";
   const TAU = Math.PI * 2;
-  const { TOWERS, ENEMIES, DIFFICULTY, MAPS, MAP_ORDER, tierOf, rgba } = OD;
+  const { TOWERS, ENEMIES, DIFFICULTY, MAPS, MAP_ORDER, TIERS, tierOf, rgba } = OD;
+  // each map has its own difficulty tier (Beginner / Intermediate / Hard / Expert), like Bloons tracks
+  const mapTier = k => TIERS[MAPS[k].tier];
+  const diffOf = k => mapTier(k).diff;
   const audio = OD.audio;
   const sfx = name => audio.play(name);
 
@@ -29,7 +32,7 @@
   // ---------- board: the map's bodies, turret rings and slots ----------
   let W = 1000, H = 700, CX = 500, CY = 350, SPAWN_R = 640, scale = 1;
   let MAP_KEY = MAP_ORDER.includes(store.get("od_map")) ? store.get("od_map") : "earth";
-  let DIFF_KEY = DIFFICULTY[store.get("od_diff")] ? store.get("od_diff") : "medium";
+  let DIFF_KEY = "medium"; // follows the selected map (see diffOf)
   let MODE = store.get("od_mode") === "endless" ? "endless" : "campaign";
   const LB = OD.leaderboard;
   let lbView = null; // { map, diff } while the leaderboard screen is open
@@ -104,7 +107,7 @@
       towers: [], retired: [], enemies: [], shots: [], beams: [], rings: [], particles: [], floaters: [],
       queue: [], spawnTimer: 0, waveActive: false,
       selectedType: null, selectedTower: null, hover: null,
-      speed: 1, paused: false, over: false, won: false, freeplay: false, auto: false,
+      speed: 3, paused: false, over: false, won: false, freeplay: false, auto: false,
       overdrive: 0, overdriveCd: 0, time: 0, realTime: 0, shake: 0,
       stats: { killed: 0, leaked: 0, bosses: 0, earnedKills: 0, earnedBonus: 0, earnedMining: 0, spent: 0, overdrives: 0, hpLost: 0 },
     };
@@ -122,9 +125,26 @@
   // 3D squared distance between two things with x, y and (optional) z
   const d3 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + ((a.z || 0) - (b.z || 0)) ** 2;
   const towerAt = id => S && S.towers.find(t => t.slot === id);
-  const baseStats = t => tierOf(t.type, t.level, t.path);
   // Overclock (Endless and Freeplay): fully upgraded satellites keep getting stronger, at a rising price.
   const OC_MUL = 1.25, OC_KEYS = ["dmg", "dps", "clusterDmg", "burn", "income"];
+  // Ascension (Endless and Freeplay): three very expensive tiers after tier 5, for the late game. Each one:
+  // ×1.6 damage (or income), ×1.12 fire rate, ×1.06 range (and buff range), +1 fighter for carriers.
+  const ASC = [{ name: "Ascension I", cost: 10000 }, { name: "Ascension II", cost: 25000 }, { name: "Ascension III", cost: 50000 }];
+  const ASC_DMG = 1.6, ASC_RATE = 1.12, ASC_RANGE = 1.06;
+  const canAscend = t => t.level >= 4 && (t.asc || 0) < ASC.length && S && (S.endless || S.freeplay);
+  function applyAsc(st, asc) {
+    const m = ASC_DMG ** asc;
+    for (const k of OC_KEYS) if (st[k]) st[k] = k === "income" ? Math.round(st[k] * m) : Math.round(st[k] * m * 10) / 10;
+    if (st.rate) st.rate = Math.round(st.rate * ASC_RATE ** asc * 100) / 100;
+    if (st.range) st.range = Math.round(st.range * ASC_RANGE ** asc);
+    if (st.buffRange) st.buffRange = Math.round(st.buffRange * ASC_RANGE ** asc);
+    if (st.craft) st.craft += asc;
+    return st;
+  }
+  const baseStats = t => (t.asc ? applyAsc({ ...tierOf(t.type, t.level, t.path) }, t.asc) : tierOf(t.type, t.level, t.path));
+  // Fleet Link (Command Relay / Fleet Uplink): every relay in range adds its own fire-rate bonus (+20% / +35%),
+  // stacking additively up to +140%. Range bonuses don't stack (the best one applies).
+  const LINK_CAP = 1.4;
   const canOverclock = t => t.level >= 4 && S && (S.endless || S.freeplay);
   const applyOc = (st, oc) => { const m = OC_MUL ** oc; for (const k of OC_KEYS) if (st[k]) st[k] = k === "income" ? Math.round(st[k] * m) : Math.round(st[k] * m * 10) / 10; return st; };
   const ocCost = t => Math.round(tierOf(t.type, 4, t.path).cost * 0.6 * 1.6 ** (t.oc || 0) / 10) * 10;
@@ -162,7 +182,7 @@
     let best = null, bestScore = -Infinity;
     const r2 = range * range;
     for (const e of S.enemies) {
-      if (e.dead || e === exclude) continue;
+      if (e.dead || e === exclude || e.cloaked) continue;
       const d = d3(p, e);
       if (d > r2) continue;
       const score = mode === "last" ? e.r : mode === "strong" ? e.hp + (e.shield || 0) : mode === "close" ? -d : -e.r;
@@ -194,7 +214,8 @@
     S.spawnTimer = 0.3;
     S.waveActive = true;
     const boss = groups.some(g => ENEMIES[g.type].boss);
-    if (boss) { toast(S.wave === 30 ? `Wave 30: THE DREADNOUGHT` : `Wave ${S.wave}: MOTHERSHIP INBOUND`, 2600); sfx("alarm"); }
+    const big = ["titan", "dread", "mother"].find(k => groups.some(g => g.type === k));
+    if (boss) { toast(S.wave === 30 ? `Wave 30: THE DREADNOUGHT` : `Wave ${S.wave}: ${ENEMIES[big].name.toUpperCase()} INBOUND`, 2600); sfx("alarm"); }
     else { toast(`Wave ${S.wave}`); sfx("wave"); }
     updateUI(true);
   }
@@ -228,6 +249,7 @@
     const st = src && src.st;
     amount *= e.vuln;
     if (st && st.boss && e.def.boss) amount *= st.boss;
+    if (e.def.armor) amount *= 1 - e.def.armor * (opts.rail ? 0.5 : 1); // armored hulls: railguns punch half way through
     let dealt = 0;
     if (e.shield > 0) {
       const mul = opts.rail ? 2 : 1; // railguns tear through shields
@@ -282,19 +304,22 @@
     for (const t of S.towers) {
       const p = slotPos(t.slot);
       t.x = p.x; t.y = p.y; t.z = p.z; t.ringA = p.a;
-      t.buffRate = 1; t.buffRange = 1;
+      t.linkBonus = 0; t.links = 0; t.buffRange = 1;
     }
     for (const r of S.towers) {
       const rs = baseStats(r);
       if (!rs.buffRange) continue;
       for (const t of S.towers) {
-        if (t === r || t.type === "miner") continue;
+        if (t === r || t.type === "miner") continue; // relays never buff themselves (or other mining sats)
         if (d3(r, t) <= rs.buffRange ** 2) {
-          t.buffRate = Math.max(t.buffRate, rs.buffRate);
+          t.linkBonus += rs.buffRate - 1; t.links++;
           t.buffRange = Math.max(t.buffRange, rs.buffRangeMul);
         }
       }
     }
+    // recomputed from scratch every frame (never added onto last frame's value), so a link built, upgraded,
+    // sold or carried out of range by the rotating rings changes the bonus at once
+    for (const t of S.towers) t.buffRate = 1 + Math.min(LINK_CAP, t.linkBonus);
     for (const t of S.towers) {
       const b = baseStats(t);
       const rateMul = t.buffRate * (odActive ? OVERDRIVE.rateMul : 1);
@@ -338,7 +363,13 @@
       e.spin += dt * 2;
       if (e.hit > 0) e.hit -= dt;
       if (e.burn && e.burn.t > 0) { e.burn.t -= dt; damage(e, e.burn.dps * dt, e.burn.src, { flash: false }); if (e.dead) continue; }
-      if (e.maxShield && e.shield < e.maxShield && S.time - e.shieldHitAt > 3) e.shield = Math.min(e.maxShield, e.shield + e.maxShield * 0.15 * dt);
+      if (e.maxShield && e.shield < e.maxShield && S.time - e.shieldHitAt > (def.regenDelay || 3)) e.shield = Math.min(e.maxShield, e.shield + e.maxShield * (def.regen || 0.15) * dt);
+      if (def.cloak) { // phases in and out: can't be targeted while cloaked (fields and blasts still hit it)
+        e.cloakT = (e.cloakT ?? Math.random() * def.cloak.off) + dt;
+        const cyc = def.cloak.on + def.cloak.off;
+        e.cloaked = e.r < SPAWN_R * 0.95 && e.cloakT % cyc > def.cloak.off;
+      }
+      if (def.heal && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * def.heal * dt);
       if (def.spawn) {
         e.spawnTimer -= dt;
         if (e.spawnTimer <= 0 && e.r < B.spiral) { e.spawnTimer = def.spawn.every; spawnEnemy(def.spawn.type, e.hpScale * 0.8, e); }
@@ -676,7 +707,7 @@
   // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
   const RUN_KEY = `od_run${VIEW_TAG}`;
   const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
-    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0 });
+    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0, asc: t.asc || 0 });
   function saveRun() {
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
@@ -720,7 +751,7 @@
     { id: "tycoon", name: "Space Tycoon", desc: "Mine 2,000 credits in one game." },
     { id: "first_win", name: "Defender", desc: "Win any map." },
     { id: "perfect", name: "Untouchable", desc: "Win a map without a single leak." },
-    { id: "win_hard", name: "Hardened", desc: "Win any map on Hard." },
+    { id: "win_hard", name: "Hardened", desc: "Win a Hard or Expert map." },
     { id: "grand_tour", name: "Grand Tour", desc: "Win on all eight planets." },
     { id: "win_sol", name: "Guardian of the Sun", desc: "Win the Solar System map." },
     { id: "endless_50", name: "Deep Space", desc: "Reach wave 50 in Endless mode." },
@@ -1067,6 +1098,10 @@
   function drawTowerAt(t, p, time) {
     const ring = B.rings[B.slots[t.slot].ring];
     const s = ring.r < 35 ? 0.75 : 1;
+    for (let i = 0; i < (t.asc || 0); i++) { // Ascension halos (Classic 2D)
+      ctx.strokeStyle = i === 2 ? "rgba(255,255,255,0.8)" : "rgba(193,140,255,0.75)"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, (13 + i * 3) * s, (6 + i * 1.5) * s, time * (0.8 + i * 0.5) * (i % 2 ? -1 : 1), 0, Math.PI * 2); ctx.stroke();
+    }
     if (s === 1) return OD.drawTower(ctx, t, p.x, p.y, p.a, time);
     ctx.save(); ctx.translate(p.x, p.y); ctx.scale(s, s);
     OD.drawTower(ctx, t, 0, 0, p.a, time);
@@ -1117,6 +1152,7 @@
     renderInfo(); updateUI(true);
   }
 
+  const fleetText = t => (t.links ? `+${Math.round((t.buffRate - 1) * 100)}% fire rate (${t.links} link${t.links > 1 ? "s" : ""}${t.linkBonus > LINK_CAP + 1e-9 ? ", max" : ""})` : "none in range");
   function statRows(t, st, next) {
     const rows = [];
     const row = (k, v, nv) => rows.push(`<div class="row"><span>${k}</span><b>${v}${nv !== undefined && nv !== null && String(nv) !== String(v) ? ` <em>→ ${nv}</em>` : ""}</b></div>`);
@@ -1157,7 +1193,10 @@
         if (st.splash || n.splash) row("Blast radius", st.splash || 0, n.splash);
         row("Patrol range", st.range, n.range); break;
     }
-    if (TOWERS[t.type].kind !== "miner") { row("Damage dealt", fmt(t.dmg || 0)); row("Kills", t.kills || 0); }
+    if (TOWERS[t.type].kind !== "miner") {
+      rows.push(`<div class="row"><span>Fleet Link</span><b data-fleet>${fleetText(t)}</b></div>`);
+      row("Damage dealt", fmt(t.dmg || 0)); row("Kills", t.kills || 0);
+    }
     return rows.join("");
   }
 
@@ -1184,8 +1223,14 @@
         ${["A", "B"].map(p => `<div class="path-desc" style="color:${def.paths[p].color}">${def.paths[p].name}: <span>${def.paths[p].desc}</span></div>${upgradeCard(t, 3, p)}`).join("")}`;
     } else if (t.level === 3) { next = tierOf(t.type, 4, t.path); upHtml = upgradeCard(t, 4, t.path); }
     else if (canOverclock(t)) {
-      const oc = t.oc || 0, cost = ocCost(t), isMiner = def.kind === "miner";
-      upHtml = `${oc ? `<div class="maxed" style="color:${color}">⚡ Overclock ${oc}: ×${(OC_MUL ** oc).toFixed(2)} ${isMiner ? "income" : "damage"}</div>` : ""}
+      const oc = t.oc || 0, cost = ocCost(t), isMiner = def.kind === "miner", asc = t.asc || 0;
+      if (canAscend(t)) {
+        const a = ASC[asc];
+        upHtml += `<button class="up-card asc-card" data-asc="1" ${S.money >= a.cost ? "" : "disabled"} style="--c:#c18cff">
+          <span class="oc-icon">✦${asc + 1}</span>
+          <span><b>${a.name}</b><small>×${ASC_DMG} ${isMiner ? "income" : "damage"}, +12% fire rate, +6% range${def.kind === "carrier" ? ", +1 fighter" : ""}. ${asc + 1} of 3.</small><span class="cost">${fmt(a.cost)} cr</span></span></button>`;
+      } else upHtml += `<div class="maxed" style="color:#c18cff">✦ Ascension III</div>`;
+      upHtml += `${oc ? `<div class="maxed" style="color:${color}">⚡ Overclock ${oc}: ×${(OC_MUL ** oc).toFixed(2)} ${isMiner ? "income" : "damage"}</div>` : ""}
         <button class="up-card oc-card" data-oc="1" ${S.money >= cost ? "" : "disabled"} style="--c:#ffd166">
         <span class="oc-icon">⚡${oc + 1}</span>
         <span><b>Overclock ${oc + 1}</b><small>+25% ${isMiner ? "income" : "damage"} (×${(OC_MUL ** (oc + 1)).toFixed(2)} total). No limit, each level costs more.</small><span class="cost">${cost} cr</span></span></button>`;
@@ -1198,7 +1243,7 @@
       <div class="info-head">
         <canvas width="64" height="64" data-preview="${t.type}|${t.level}|${t.path || ""}"></canvas>
         <div><h3 style="color:${color}">${st.name}</h3>
-        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} orbit</div></div>
+        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.asc ? ` ✦${t.asc}` : ""}${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} orbit</div></div>
         <button class="close" data-act="close" aria-label="Close">✕</button>
       </div>
       <div class="stats">${statRows(t, st, next)}</div>
@@ -1218,6 +1263,7 @@
     const t = S && S.selectedTower;
     if (!t) return;
     if (ev.target.closest("[data-oc]") && !ev.target.closest("[data-oc]").disabled) return overclockTower(t);
+    if (ev.target.closest("[data-asc]") && !ev.target.closest("[data-asc]").disabled) return ascendTower(t);
     const up = ev.target.closest("[data-up]");
     const act = ev.target.closest("[data-act]");
     if (up && !up.disabled) upgradeTower(t, up.dataset.up || null);
@@ -1245,8 +1291,24 @@
     ringFx(p.x, p.y, 30, "#ffd166", 0.4, false, p.z);
     sfx(nextLevel === 3 ? "path" : "upgrade");
     if (nextLevel >= 3) toast(`${tier.name}!`);
-    if (nextLevel === 4) { unlock("tier5"); if (S.endless || S.freeplay) toast("Fully upgraded! Tap it again to ⚡ Overclock for even more power.", 3000); }
+    if (nextLevel === 4) { unlock("tier5"); if (S.endless || S.freeplay) toast("Fully upgraded! Tap it again to ✦ Ascend or ⚡ Overclock for even more power.", 3000); }
     if (nextLevel === 3) stats.track(`path/${t.type}/${TOWERS[t.type].paths[usePath].name.toLowerCase().replace(/ /g, "-")}`);
+    if (!S.waveActive) saveRun();
+    renderInfo(); updateUI(true);
+  }
+
+  function ascendTower(t) {
+    if (!canAscend(t)) return;
+    const a = ASC[t.asc || 0];
+    if (S.money < a.cost) { sfx("deny"); return; }
+    S.money -= a.cost; t.spent += a.cost; S.stats.spent += a.cost;
+    t.asc = (t.asc || 0) + 1;
+    const p = slotPos(t.slot);
+    burst(p.x, p.y, "#c18cff", 40, 170, 1, p.z); burst(p.x, p.y, "#ffffff", 16, 120, 0.7, p.z);
+    ringFx(p.x, p.y, 48, "#c18cff", 0.6, false, p.z);
+    sfx("path");
+    toast(`✦ ${a.name}!`);
+    stats.track(`ascend/${t.type}/${t.asc}`);
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
@@ -1342,6 +1404,10 @@
       });
       const oc = ui.info.querySelector("[data-oc]");
       if (oc) oc.disabled = S.money < ocCost(S.selectedTower);
+      const asc = ui.info.querySelector("[data-asc]");
+      if (asc) asc.disabled = !canAscend(S.selectedTower) || S.money < ASC[S.selectedTower.asc || 0].cost;
+      const fl = ui.info.querySelector("[data-fleet]");
+      if (fl) fl.textContent = fleetText(S.selectedTower);
     }
   }
 
@@ -1370,10 +1436,8 @@
 
   function mapCard(key) {
     const m = MAPS[key];
-    const medals = Object.keys(DIFFICULTY).map(d => {
-      const r = getRec(key, d);
-      return `<i class="medal${r && r.won ? " won" : ""}" style="--c:${DIFFICULTY[d].color}" title="${DIFFICULTY[d].name}${r ? `: best wave ${r.wave}` : ""}"></i>`;
-    }).join("");
+    const t = mapTier(key), r = getRec(key, t.diff);
+    const medals = `<span class="tier-tag" style="--c:${t.color}" title="${r ? `Best wave ${r.wave}` : t.name}">${r && r.won ? "★ " : ""}${t.name}</span>`;
     return `<button class="map-card${key === MAP_KEY ? " selected" : ""}${m.final ? " final" : ""}" data-map="${key}">
       <canvas width="140" height="100" data-map-preview="${key}"></canvas>
       <b>${m.name}</b><small>${m.moons.length ? `${m.moons.length} ${m.final ? "planets" : m.moons.length === 1 ? "moon" : "moons"}` : "No moons"}</small>
@@ -1416,7 +1480,8 @@
     document.body.classList.add("in-menu");
     if (!B || B.key !== MAP_KEY) { buildBoard(MAP_KEY); B.key = MAP_KEY; }
     resetCamera();
-    const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun();
+    DIFF_KEY = diffOf(MAP_KEY);
+    const m = MAPS[MAP_KEY], rec = getRec(MAP_KEY, DIFF_KEY), run = loadRun(), tier = mapTier(MAP_KEY);
     const got = getAch();
     showOverlay(`
       <div class="rw-eyebrow">SOLAR SYSTEM DEFENSE COMMAND</div><h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
@@ -1429,12 +1494,9 @@
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
         ${OD.is3D && OD.planetThumb ? `<canvas class="map-globe" width="220" height="220" data-globe="${m.body.style}" aria-hidden="true"></canvas>` : ""}
-        <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="stars" title="Map difficulty">${"★".repeat(m.stars)}<span class="muted">${"★".repeat(5 - m.stars)}</span></span></h2>
+        <h2>${m.name} <span class="muted">· ${m.sub}</span> <span class="tier-tag big" style="--c:${tier.color}">${tier.name}</span></h2>
         <p>${m.desc}</p>
         <p class="feature">✦ ${m.feature}</p>
-      </div>
-      <div class="diff-row">
-        ${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === DIFF_KEY ? " selected" : ""}" data-diff="${k}" style="--c:${d.color}"><b>${d.name}</b><small>${d.lives} HP</small></button>`).join("")}
       </div>
       <div class="mode-row">
         <button class="mode-btn${MODE === "campaign" ? " selected" : ""}" data-mode="campaign"><b>Campaign</b><small>Survive 30 waves</small></button>
@@ -1442,9 +1504,9 @@
       </div>
       ${MODE === "endless" ? (() => {
         const lbTop = LB.top(MAP_KEY, DIFF_KEY)[0], bestAll = LB.bestAll();
-        return `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
+        return `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
           <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
-      })() : `<p class="muted small">${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
+      })() : `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
       <div class="btns"><button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : "Launch Mission ▶"}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
       ${soundButtons()}
       <details><summary>How to play</summary>
@@ -1483,13 +1545,13 @@
   }
 
   function showLeaderboards() {
-    lbView = lbView || { map: MAP_KEY, diff: DIFF_KEY };
-    const { map, diff } = lbView;
+    lbView = lbView || { map: MAP_KEY };
+    const map = lbView.map, diff = diffOf(map), tier = mapTier(map);
     showOverlay(`
       <h1>🏆 LEADERBOARDS</h1>
       <p class="muted">Endless mode · your best runs on this device</p>
       <div class="lb-maps">${MAP_ORDER.map(k => `<button class="chip-btn${k === map ? " selected" : ""}" data-lbmap="${k}">${MAPS[k].name}${LB.bestMap(k) ? ` <small>∞${LB.bestMap(k)}</small>` : ""}</button>`).join("")}</div>
-      <div class="diff-row">${Object.entries(DIFFICULTY).map(([k, d]) => `<button class="diff-btn${k === diff ? " selected" : ""}" data-lbdiff="${k}" style="--c:${d.color}"><b>${d.name}</b></button>`).join("")}</div>
+      <p class="muted small">${MAPS[map].name} · <span class="tier-tag" style="--c:${tier.color}">${tier.name}</span></p>
       ${lbTable(LB.top(map, diff))}
       <p class="muted small">🌍 Worldwide leaderboards are coming soon.</p>
       <div class="btns"><button class="primary" data-act="lb-play">Play Endless here ∞</button><button data-act="menu">← Back</button></div>`, true);
@@ -1512,14 +1574,13 @@
     audio.init();
     const vw = ev.target.closest("[data-view]");
     if (vw) { if ((vw.dataset.view === "3d") !== !!OD.is3D) { sfx("click"); OD.setView(vw.dataset.view); } return; }
-    const lm = ev.target.closest("[data-lbmap]"), ld = ev.target.closest("[data-lbdiff]"), md = ev.target.closest("[data-mode]");
+    const lm = ev.target.closest("[data-lbmap]"), md = ev.target.closest("[data-mode]");
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
-    if (ld) { lbView.diff = ld.dataset.lbdiff; sfx("click"); return showLeaderboards(); }
+
     if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
     const mc = ev.target.closest("[data-map]");
     if (mc) { MAP_KEY = mc.dataset.map; store.set("od_map", MAP_KEY); sfx("click"); return mainMenu(); }
-    const d = ev.target.closest("[data-diff]");
-    if (d) { DIFF_KEY = d.dataset.diff; store.set("od_diff", DIFF_KEY); sfx("click"); return mainMenu(); }
+
     const a = ev.target.closest("[data-act]");
     if (!a) return;
     sfx("click");
@@ -1542,8 +1603,8 @@
         break;
       case "tutorial": startTutorial(); break;
       case "skiptut": store.set(TUT_KEY, "1"); begin(MAP_KEY, DIFF_KEY, false, MODE === "endless"); break;
-      case "leaderboards": lbView = { map: MAP_KEY, diff: DIFF_KEY }; showLeaderboards(); break;
-      case "lb-play": MAP_KEY = lbView.map; DIFF_KEY = lbView.diff; MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_diff", DIFF_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
+      case "leaderboards": lbView = { map: MAP_KEY }; showLeaderboards(); break;
+      case "lb-play": MAP_KEY = lbView.map; DIFF_KEY = diffOf(MAP_KEY); MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
       case "save-nick": {
         const input = document.getElementById("nickInput");
         const name = LB.setNickname(input ? input.value : "");
@@ -1573,7 +1634,7 @@
       case "pause": pauseMenu(); break;
       case "stats": showStats("pause"); break;
       case "retry": begin(S.mapKey, S.diffKey, false, !!S.endless); break;
-      case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, S.diffKey); break; }
+      case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, diffOf(n)); break; }
       case "menu": mainMenu(); break;
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
@@ -1592,6 +1653,8 @@
     buildBoard(mapKey); B.key = mapKey;
     resetCamera();
     S = newState(diffKey);
+    const tier = mapTier(mapKey);
+    if (diffKey === tier.diff) S.diff = Object.assign({}, S.diff, { name: tier.name, color: tier.color }); // saved games from before keep their old difficulty
     S.endless = !!endless;
     P.gameplayStart();
     document.body.classList.remove("in-menu");
@@ -1936,7 +1999,7 @@
   // Test hook (used by automated playtests).
   window.__od = {
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
-    setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
+    setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
   };
 
@@ -1954,9 +2017,12 @@
   // Load platform SDKs / cloud saves, then show the menu with the saved preferences.
   P.init().finally(() => {
     if (MAP_ORDER.includes(store.get("od_map"))) MAP_KEY = store.get("od_map");
-    if (DIFFICULTY[store.get("od_diff")]) DIFF_KEY = store.get("od_diff");
-    mainMenu();
+    DIFF_KEY = diffOf(MAP_KEY);
     P.loadingDone();
     stats.sessionStart();
+    // A brand-new player goes straight into the guided first game (aliens within seconds) instead of the
+    // menu; everyone else, and editions that open on a title screen (desktop), gets the menu.
+    if (!P.titleFirst && !tutDone() && !loadRun()) startTutorial();
+    else mainMenu();
   });
 })(window.OD);

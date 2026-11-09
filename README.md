@@ -26,11 +26,14 @@ After each game, a **stats screen** shows your totals (destroyed, leaked, credit
 
 ## Difficulty
 
-| | Planet HP | Start credits | Enemies |
-| --- | --- | --- | --- |
-| Easy | 50 | 450 | weaker, slower |
-| Medium | 25 | 325 | normal |
-| Hard | 10 | 300 | tougher, faster |
+Like the tracks in Bloons, every map has its own difficulty: pick a map and you've picked how hard it is.
+
+| Tier | Maps | Planet HP | Start credits | Enemies |
+| --- | --- | --- | --- | --- |
+| Beginner | Mercury, Venus, Earth | 50 | 450 | weaker, slower |
+| Intermediate | Mars, Jupiter, Saturn | 25 | 325 | normal |
+| Hard | Uranus, Neptune | 15 | 300 | tougher, faster |
+| Expert | Solar System (the Sun) | 15 | 300 | Hard settings on the toughest map |
 
 ## Satellites and upgrades
 
@@ -67,7 +70,7 @@ You can set each attacking satellite to target **First / Last / Strong / Close**
 | Upgrade / sell / target mode | tap a satellite | |
 | Next wave | **Launch Wave** (or turn on **Auto**) | `Space` |
 | Overdrive (rings spin 5× and fire rate +30% for 6s, 30s cooldown) | **⚡ Overdrive** | `Q` |
-| Speed 1× / 2× / 3× | speed button | `F` |
+| Speed 3× (default) / 1× / 2× | speed button | `F` |
 | Pause / settings | ❚❚ | `P` / `Esc` |
 | Zoom in / out (up to 3×) | pinch, mouse wheel, or the **+ / −** buttons; drag to pan; tap **1×** to reset | `+` / `-` / `0` |
 
@@ -78,17 +81,18 @@ Since v3 the game is **3D**: bigger planets, tilted orbits (Earth has LEO, MEO a
 ## Graphics settings
 
 The 3D view adjusts itself: if a device can't keep a smooth frame rate during a game, it lowers the render
-resolution, then turns off metal reflections, then the nebula backdrop. **📳 Shake** on the main menu sets
+resolution, then turns off bloom (the glow around bright things), then metal reflections, then the nebula backdrop.
+**Graphics** on the main menu: Auto, High (never steps down) or Low (no bloom or reflections, lower resolution). **📳 Shake** on the main menu sets
 camera shake to On, Low or Off. Players who ask their system for reduced motion get a still menu scene and
 Low shake by default. Preview every satellite and invader model at `/hangar/`.
 
 ## Endless mode & leaderboards
 
-Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Each map and difficulty keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
+Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Before that, three **✦ Ascension** tiers (10k / 25k / 50k credits) multiply a maxed satellite's power. From wave 31 new invaders join: Juggernauts, Phase Wraiths, Brood Hives, Aegis Bastions and the Void Titan, and past wave 60 they get tougher every wave. Each map keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
 
 ## Tutorial
 
-On your first mission the game offers a short guided tutorial on Earth (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
+A brand-new player goes straight into a short guided first game on Earth (no menu first; the desktop edition opens on its title screen instead) (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
 
 ## Saving, ads and achievements
 

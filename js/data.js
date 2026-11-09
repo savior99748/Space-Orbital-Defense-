@@ -166,8 +166,8 @@ window.OD = window.OD || {};
         B: {
           name: "Command Relay", color: "#5cc8ff", desc: "Boosts the fire rate and range of nearby satellites.",
           tiers: [
-            { name: "Command Relay", cost: 300, income: 16, every: 8, buffRange: 150, buffRate: 1.2, buffRangeMul: 1.1, desc: "Nearby: +20% fire rate, +10% range." },
-            { name: "Fleet Uplink", cost: 650, income: 22, every: 8, buffRange: 180, buffRate: 1.35, buffRangeMul: 1.15, desc: "Nearby: +35% fire rate, +15% range." },
+            { name: "Command Relay", cost: 300, income: 16, every: 8, buffRange: 150, buffRate: 1.2, buffRangeMul: 1.1, desc: "Nearby: +20% fire rate, +10% range. Fire-rate bonuses from relays stack (up to +140%)." },
+            { name: "Fleet Uplink", cost: 650, income: 22, every: 8, buffRange: 180, buffRate: 1.35, buffRangeMul: 1.15, desc: "Nearby: +35% fire rate, +15% range. Fire-rate bonuses from relays stack (up to +140%)." },
           ],
         },
       },
@@ -213,6 +213,12 @@ window.OD = window.OD || {};
     cruiser:  { name: "Shield Cruiser", hp: 150,   shield: 130, speed: 36, reward: 16, size: 13, color: "#5c9dff", dmg: 3, spiral: 0.7 },
     mother:   { name: "Mothership",     hp: 1500,  speed: 20,  reward: 150, size: 30, color: "#ff3df2", dmg: 6,  spiral: 0.5, boss: true, spawn: { type: "drone", every: 4 } },
     dread:    { name: "Dreadnought",    hp: 6000, shield: 2200, speed: 13, reward: 600, size: 44, color: "#ff2d55", dmg: 20, spiral: 0.45, boss: true, spawn: { type: "cruiser", every: 6 } },
+    // Endless (wave 31+): bigger, tougher invaders that arrive more and more often
+    brute:    { name: "Juggernaut",     hp: 900,  armor: 0.4, speed: 26, reward: 30, size: 20, color: "#ff8a3c", dmg: 4, spiral: 0.6 },                       // armored: takes 40% less damage
+    phantom:  { name: "Phase Wraith",   hp: 420,  speed: 64, reward: 24, size: 14, color: "#7affd9", dmg: 3, spiral: 0.75, cloak: { on: 1.6, off: 2.6 } },  // phases out of sight: can't be targeted
+    brood:    { name: "Brood Hive",     hp: 3200, speed: 17, reward: 120, size: 28, color: "#c8ff4a", dmg: 8, spiral: 0.55, heal: 0.02, spawn: { type: "swarm", every: 1.4 }, split: { type: "swarm", n: 8 } },
+    aegis:    { name: "Aegis Bastion",  hp: 2600, shield: 4200, armor: 0.25, regen: 0.35, regenDelay: 1.5, speed: 19, reward: 150, size: 26, color: "#4af0ff", dmg: 10, spiral: 0.5 },
+    titan:    { name: "Void Titan",     hp: 32000, shield: 14000, armor: 0.35, regen: 0.12, speed: 11, reward: 2000, size: 58, color: "#9d4dff", dmg: 40, spiral: 0.45, boss: true, spawn: { type: "brute", every: 5 } },
   };
 
   // Returns an ordered list of groups: { type, count, gap }.
@@ -224,7 +230,12 @@ window.OD = window.OD || {};
     if (n >= 4 && n % 2 === 0) add("swarm", 6 + n, 0.12);
     if (n >= 6) add("asteroid", (n - 4) * 0.5, 1.3);
     if (n >= 9) add("cruiser", (n - 7) * 0.55, 1.1);
-    if (n > 30) add("swarm", n, 0.1);
+    if (n > 30) add("swarm", Math.min(n, 90), 0.1);
+    // Endless: the big new invaders join in, earlier and more often as the waves climb
+    if (n > 30) add("brute", Math.min(40, 1 + (n - 30) * 0.4), 0.9);
+    if (n >= 35 && n % 2 === 1) add("phantom", Math.min(36, 2 + (n - 35) * 0.5), 0.6);
+    if (n >= 40 && (n % 3 === 0 || n >= 100)) add("brood", Math.min(8, 1 + (n - 40) / 20), 3);
+    if (n >= 45 && (n % 4 === 1 || n >= 120)) add("aegis", Math.min(10, 1 + (n - 45) / 15), 2.5);
     // light shuffle of the non-boss groups so waves feel different
     for (let i = g.length - 1; i > 0; i--) {
       if (Math.random() < 0.5) { const j = Math.floor(Math.random() * (i + 1)); [g[i], g[j]] = [g[j], g[i]]; }
@@ -233,12 +244,16 @@ window.OD = window.OD || {};
     if (n === 30) add("dread", 1, 1);
     if (n > 30 && n % 5 === 0) add("mother", Math.floor((n - 25) / 5), 3);
     if (n > 30 && n % 20 === 10) add("dread", 1 + Math.floor((n - 30) / 40), 2); // waves 50, 70, 90…
+    if (n >= 55 && n % 15 === 10) add("titan", 1 + Math.floor((n - 55) / 60), 6); // waves 55, 70, 85, 100…
+    // long Endless runs: past wave 60 the swarm of small fry stops growing (the big ships take over)
+    if (n > 60) for (const grp of g) if (["drone", "comet", "asteroid", "cruiser", "swarm"].includes(grp.type)) grp.count = Math.min(grp.count, { drone: 110, comet: 60, asteroid: 40, cruiser: 40, swarm: 60 }[grp.type]);
     return g;
   };
 
   OD.hpScale = function (n, diff) {
     // linear growth, plus a curve from wave 8 that is steeper on harder difficulties
     // and a second, steeper climb from wave 18 so the last stretch stays tense
-    return diff.hp * (1 + (n - 1) * diff.growth + Math.max(0, n - 8) ** 2 * diff.late + Math.max(0, n - 18) ** 2 * diff.late2);
+    // Endless past wave 60: an extra 3.5% per wave on top, compounding, so no defense holds forever
+    return diff.hp * (1 + (n - 1) * diff.growth + Math.max(0, n - 8) ** 2 * diff.late + Math.max(0, n - 18) ** 2 * diff.late2) * 1.035 ** Math.max(0, n - 60);
   };
 })(window.OD);

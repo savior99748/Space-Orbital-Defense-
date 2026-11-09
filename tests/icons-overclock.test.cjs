@@ -7,6 +7,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   for (const [name, opts] of [['desk', { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 }], ['phone', devices['iPhone 13']]]) {
     const ctx = await b.newContext(opts); const pg = await ctx.newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => m.type()==='error' && !/goat|zgo|TUNNEL/.test(m.text()) && errs.push(m.text()));
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto('http://127.0.0.1:8769/index.html?view=3d');
     await pg.evaluate(() => { localStorage.setItem('od_tut_done','1'); localStorage.setItem('od_stats_off','1'); });
     await pg.reload(); await pg.waitForFunction(() => window.__view3d && window.__od, null, { timeout: 20000 });
@@ -30,7 +31,8 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     ok(hasOc, `${name}: Overclock card shown on a maxed satellite in Endless`);
     const before = await pg.evaluate(() => window.__od.towerAt(0).st.dps);
     await pg.click('#info [data-oc]'); await pg.click('#info [data-oc]');
-    await pg.waitForTimeout(400);
+    // stats refresh on the next game update (slow frames on a software renderer): wait for it
+    await pg.waitForFunction(b => { const t = window.__od.towerAt(0); return t.oc === 2 && Math.abs(t.st.dps / b - 1.5625) < 0.01; }, before, { timeout: 8000 }).catch(() => {});
     const after = await pg.evaluate(() => ({ dps: window.__od.towerAt(0).st.dps, oc: window.__od.towerAt(0).oc }));
     ok(after.oc === 2 && Math.abs(after.dps / before - 1.5625) < 0.01, `${name}: overclock x2 → dps ×1.5625 (${before} → ${after.dps})`);
     await pg.screenshot({ path: `shots/oc-${name}.png` });
@@ -39,6 +41,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   }
   // campaign: no overclock
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } }); const pg = await ctx.newPage();
+  await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
   await pg.goto('http://127.0.0.1:8769/index.html?view=3d');
   await pg.evaluate(() => { localStorage.setItem('od_tut_done','1'); localStorage.setItem('od_stats_off','1'); });
   await pg.reload(); await pg.waitForFunction(() => window.__view3d && window.__od, null, { timeout: 20000 });
