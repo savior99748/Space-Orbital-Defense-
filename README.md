@@ -37,17 +37,17 @@ Like the tracks in Bloons, every map has its own difficulty: pick a map and you'
 
 ## Satellites and upgrades
 
-Every satellite has 3 shared tiers. At tier 3 you **choose one of two specializations**, and each specialization has 2 more tiers. The satellite's look changes with every tier.
+Like Bloons, you start with the Laser Sat and the others unlock as you clear waves (shown as "?" until then); the Railgun, the strongest, comes last. Every satellite has 3 shared tiers. At tier 3 you **choose one of two specializations**, and each specialization has 2 more tiers. The satellite's look changes with every tier.
 
-| Satellite | Cost | Path A | Path B |
-| --- | --- | --- | --- |
-| Laser Sat | 50 | **Prism Array** → Spectrum Cannon: beam splits to extra targets | **Solar Lance** → Sunspear: continuous beam that ramps up damage |
-| Missile Pod | 90 | **Cluster Swarm** → Hive Barrage: missile salvos that burst into bomblets | **Nova Warhead** → Supernova: one huge blast that sets enemies burning |
-| Tractor Beam | 70 | **Singularity** → Event Horizon: pushes enemies back out | **Cryo Field** → Absolute Zero: freezes enemies and makes them take more damage |
-| Railgun | 150 | **Mass Driver** → Planet Cracker: boss and shield killer | **Coil Repeater** → Gauss Storm: rapid piercing shots |
-| EMP Sat | 110 | **Shockwave** → Pulsar: big stunning pulses | **Ion Storm** → Tesla Crown: chain lightning |
-| Mining Sat | 120 | **Deep Core Rig** → Stellar Forge: big income | **Command Relay** → Fleet Uplink: boosts nearby satellites |
-| Drone Carrier | 160 | **Strike Wing** → Armada: swarm of fighters | **Bomber Wing** → Siege Wing: splash-bombing bombers |
+| Satellite | Unlocks | Cost | Path A | Path B |
+| --- | --- | --- | --- | --- |
+| Laser Sat | start | 50 | **Prism Array** → Spectrum Cannon: beam splits to extra targets | **Solar Lance** → Sunspear: continuous beam that ramps up damage |
+| Missile Pod | wave 2 | 90 | **Cluster Swarm** → Hive Barrage: missile salvos that burst into bomblets | **Nova Warhead** → Supernova: one huge blast that sets enemies burning |
+| Tractor Beam | wave 4 | 70 | **Singularity** → Event Horizon: pushes enemies back out | **Cryo Field** → Absolute Zero: freezes enemies and makes them take more damage |
+| EMP Sat | wave 6 | 110 | **Shockwave** → Pulsar: big stunning pulses | **Ion Storm** → Tesla Crown: chain lightning |
+| Mining Sat | wave 8 | 120 | **Deep Core Rig** → Stellar Forge: big income | **Command Relay** → Fleet Uplink: boosts nearby satellites |
+| Drone Carrier | wave 10 | 160 | **Strike Wing** → Armada: swarm of fighters | **Bomber Wing** → Siege Wing: splash-bombing bombers |
+| Railgun | wave 12 | Railgun | 150 | **Mass Driver** → Planet Cracker: boss and shield killer | **Coil Repeater** → Gauss Storm: rapid piercing shots |
 
 You can set each attacking satellite to target **First / Last / Strong / Close**. Selling returns 70% of what you spent.
 

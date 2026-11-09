@@ -98,6 +98,14 @@
   .oc-icon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 8px; background: #2a2208; color: #ffd166; font-weight: 800; font-size: 15px; }
   .asc-card .oc-icon { background: #1e1230; color: #d6b4ff; }
   .tower-btn .tb-text { display: flex; flex-direction: column; }
+  .tower-btn .lock { display: none; }
+  .tower-btn.locked { cursor: not-allowed; }
+  .tower-btn.locked > canvas, .tower-btn.locked > .tb-text, .tower-btn.locked > kbd { visibility: hidden; }
+  .tower-btn.locked .lock { display: flex; flex-direction: column; position: absolute; inset: 0; align-items: center; justify-content: center; gap: 2px; color: var(--muted); }
+  .tower-btn.locked .lock small { display: block !important; }
+  .tower-btn.locked .lock b { font-size: 26px; color: #8a93c8; }
+  .tower-btn.locked .lock small { font-size: 12px; }
+  .tower-btn.new { animation: wave-ready 1.1s ease-in-out infinite alternate; }
   .tower-btn b { font-size: 13px; }
   .tower-btn small { color: var(--muted); font-size: 11px; }
   .tower-btn .cost { color: var(--gold); font-size: 12px; font-weight: 700; }

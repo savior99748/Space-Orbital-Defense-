@@ -440,6 +440,7 @@
       unlock("first_wave");
       if ([1, 3, 5, 10, 15, 20, 25, 30].includes(S.wave) || (S.wave > 30 && S.wave % 10 === 0)) stats.track(`wave/${S.mapKey}/${S.wave}`);
       if (S.wave === OD.WIN_WAVE && !S.won && !S.endless) return victory();
+      announceUnlocks();
       if (S.wave === 1) stats.once("first/wave-clear");
       if (S.wave === 3) stats.once("first/wave-3");
       if (S.wave === 5) stats.once("first/wave-5");
@@ -1158,13 +1159,25 @@
     if (S && S.selectedTower) renderInfo();
   }
 
+  // satellites unlock as waves are cleared (OD.UNLOCK_WAVE); built from the game's own wave count, so saved games,
+  // Endless and Freeplay all follow the same schedule and nothing extra is saved
+  const wavesCleared = () => (S ? (S.waveActive ? S.wave - 1 : S.wave) : 0);
+  const unlockWave = type => OD.UNLOCK_WAVE[type] || 0;
+  const isUnlocked = type => wavesCleared() >= unlockWave(type);
+  function announceUnlocks() {
+    const fresh = Object.keys(TOWERS).filter(t => unlockWave(t) && unlockWave(t) === S.wave);
+    if (!fresh.length) return;
+    for (const t of fresh) { const b = ui.shop.querySelector(`[data-type="${t}"]`); if (b) b.classList.add("new"); }
+    setTimeout(() => { if (S && !S.over) { toast(`🔓 New satellite unlocked: ${fresh.map(t => TOWERS[t].name).join(" & ")}!`, 3200); sfx("path"); } }, tut ? 0 : 2200);
+  }
+
   function buildShop() {
     ui.shop.innerHTML = "";
     for (const [type, def] of Object.entries(TOWERS)) {
       const b = document.createElement("button");
       b.className = "tower-btn";
       b.dataset.type = type;
-      b.innerHTML = `<canvas width="72" height="72" data-preview="${type}|0|"></canvas><span class="tb-text"><b style="color:${def.color}">${def.name}</b><small>${def.desc}</small><span class="cost">${def.tiers[0].cost} cr</span></span><kbd>${def.key}</kbd>`;
+      b.innerHTML = `<canvas width="72" height="72" data-preview="${type}|0|"></canvas><span class="tb-text"><b style="color:${def.color}">${def.name}</b><small>${def.desc}</small><span class="cost">${def.tiers[0].cost} cr</span></span><kbd>${def.key}</kbd>${unlockWave(type) ? `<span class="lock"><b>?</b><small>Wave ${unlockWave(type)}</small></span>` : ""}`;
       b.addEventListener("click", () => { sfx("click"); selectType(type); });
       ui.shop.appendChild(b);
       if (paint3D(b.querySelector("canvas"))) continue;
@@ -1176,6 +1189,8 @@
 
   function selectType(type) {
     if (!S || S.over) return;
+    if (!isUnlocked(type)) { toast(`🔒 Unlocks after wave ${unlockWave(type)}`, 1600); sfx("deny"); return; }
+    const nb = ui.shop.querySelector(`[data-type="${type}"]`); if (nb) nb.classList.remove("new");
     S.selectedTower = null;
     S.selectedType = S.selectedType === type ? null : type;
     if (S.selectedType) toast(`Tap a glowing slot to build ${TOWERS[type].name}`, 1400);
@@ -1423,6 +1438,10 @@
       const def = TOWERS[b.dataset.type];
       b.classList.toggle("selected", S.selectedType === b.dataset.type);
       b.classList.toggle("poor", S.money < def.tiers[0].cost);
+      const locked = !isUnlocked(b.dataset.type);
+      b.classList.toggle("locked", locked);
+      b.title = locked ? `Unlocks after wave ${unlockWave(b.dataset.type)}` : "";
+      if (locked) b.classList.remove("new");
     }
     const pv = S.waveActive ? S.wave : S.wave + 1;
     const obj = objective();
