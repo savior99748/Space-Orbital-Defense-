@@ -22,7 +22,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
         od.placeTower(slot, t); const tw = od.towerAt(slot); await frame(); await frame();
         for (let l = 0; l < 4; l++) {
           od.upgradeTower(tw, path); await frame(); await frame();
-          const want = `${t}|${tw.level}|${tw.path}|0`;
+          const want = `${t}|${tw.level}|${tw.path}|0|0`; // type|level|path|overclock|ascension
           if (!models().includes(want)) out.bad.push(want);
         }
         out.keys.push(`${t}|${tw.level}|${tw.path}`);
