@@ -3,7 +3,7 @@
 import * as THREE from "../vendor/three/three.module.js";
 import { buildSatellite, setReflections } from "./sat3d.js";
 import { buildAlien } from "./aliens3d.js";
-import { createBloom } from "./bloom3d.js";
+import { createBloom, GLOW_LAYER } from "./bloom3d.js";
 
 const od = () => window.__od;
 const TAU = Math.PI * 2;
@@ -321,10 +321,10 @@ function buildWorld(B) {
   const bodies = B.bodies.map(b => {
     const g = new THREE.Group();
     if (b.style === "sun") {
-      const core = new THREE.Mesh(new THREE.SphereGeometry(b.r, 48, 32), new THREE.MeshBasicMaterial({ map: sunSurface() })); core.name = "surface"; g.add(core);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(b.r, 48, 32), new THREE.MeshBasicMaterial({ map: sunSurface() })); core.name = "surface"; core.layers.enable(GLOW_LAYER); g.add(core);
       for (const [col, k] of [["rgba(255,200,110,0.95)", 3.2], ["rgba(255,140,40,0.55)", 6.5], ["rgba(255,110,30,0.22)", 11]]) {
         const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(col), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-        glow.scale.set(b.r * k, b.r * k, 1); g.add(glow);
+        glow.scale.set(b.r * k, b.r * k, 1); glow.layers.enable(GLOW_LAYER); g.add(glow);
       }
     } else {
       // the globe sits in a "tilt" group so its equator faces the camera (we look down on the orbital plane)
@@ -611,6 +611,7 @@ const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cru
   brute: ["#ff7a3c", 1.2, 1.3], phantom: ["#7affd9", 1.2, 1.4], brood: ["#c8ff4a", 1.1, 1.0], aegis: ["#9fe0ff", 1.1, 1.1], titan: ["#c58cff", 1.5, 1.2] };
 const _ev = new THREE.Vector3();
 scene.add(beamMesh, beamCore, shotMesh, craftMesh, particles, glowPoints, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
+for (const o of [beamMesh, beamCore, shotMesh, particles, glowPoints, ...ringPool]) o.layers.enable(GLOW_LAYER); // these bloom
 
 // ---------- per-frame sync with the game state ----------
 const satMeshes = new Map(), enemyMeshes = new Map();
