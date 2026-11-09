@@ -13,7 +13,7 @@ const MOCK = `window.__cg=[];window.CrazyGames={SDK:{init:async()=>{},game:{load
     // brand-new player: no menu, the guided first game starts by itself
     await pg.waitForSelector('#coach:not(.hidden)', { timeout: 30000 });
     if (choice === 'skiptut') await pg.click('[data-tut="skip"]');
-    else await pg.click('#coachNext');
+    else await pg.click('[data-type="laser"]');
     await pg.waitForTimeout(800);
     const cg = await pg.evaluate(() => __cg);
     ok(await pg.evaluate(() => !!window.__od.state() && !document.body.classList.contains('in-menu')), `brand-new player, tutorial ${choice === 'tutorial' ? 'played' : 'skipped'}: still in the game, not the menu`);

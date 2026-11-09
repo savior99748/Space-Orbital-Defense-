@@ -166,6 +166,25 @@
     toast.t = setTimeout(() => (ui.toast.style.opacity = 0), ms);
   }
 
+  // ---------- first-session help: one-time tips, a next objective, early-wave celebrations ----------
+  // A tip shows once per device, never during the tutorial, as a normal toast (no pop-up, no pause).
+  function tip(key, text, delay = 1600, ms = 4500) {
+    if (tut || store.get("od_tip_" + key)) return;
+    store.set("od_tip_" + key, "1");
+    setTimeout(() => { if (S && !S.over && !tut) toast(`💡 ${text}`, ms); }, delay);
+  }
+  const GOALS = [3, 5, 10, 15, 20, 25, 30];
+  // the short-term goal shown in the wave bar
+  function objective() {
+    if (!S || S.over || tut) return "";
+    if (!S.towers.length) return "Build a satellite";
+    if (S.wave >= 1 && !S.towers.some(t => t.level >= 1)) return "Upgrade a satellite (tap it)";
+    if (S.endless || S.won) return "";
+    const g = GOALS.find(w => w > S.wave);
+    return g ? `Reach wave ${g}${g === 10 ? " (Mothership)" : g === 30 ? " (Dreadnought)" : ""}` : "";
+  }
+  function flashMoney() { ui.money.classList.remove("flash"); void ui.money.offsetWidth; ui.money.classList.add("flash"); }
+
   function burst(x, y, color, n = 12, spd = 120, life = 0.7, z = 0) {
     if (S.particles.length > 900) n = Math.min(n, 3);
     const up = MAP.threeD ? 1 : 0;
@@ -217,6 +236,10 @@
     const big = ["titan", "dread", "mother"].find(k => groups.some(g => g.type === k));
     if (boss) { toast(S.wave === 30 ? `Wave 30: THE DREADNOUGHT` : `Wave ${S.wave}: ${ENEMIES[big].name.toUpperCase()} INBOUND`, 2600); sfx("alarm"); }
     else { toast(`Wave ${S.wave}`); sfx("wave"); }
+    if (S.wave === 1) stats.once("first/wave-start");
+    if (S.wave === 2 && MAP.moons.length && !MAP.final) tip("moons", `${MAP.moons[0].name}'s gravity pulls invaders in, so satellites on its ring see lots of action.`);
+    if (S.wave === 3) tip("overdrive", "⚡ Overdrive spins the rings fast for a few seconds. Save it for a big wave.");
+    if (S.wave === 4) tip("camera", OD.is3D ? "Drag to rotate the view; pinch or + / − to zoom." : "Pinch or + / − to zoom in; drag to look around.");
     updateUI(true);
   }
 
@@ -417,8 +440,15 @@
       unlock("first_wave");
       if ([1, 3, 5, 10, 15, 20, 25, 30].includes(S.wave) || (S.wave > 30 && S.wave % 10 === 0)) stats.track(`wave/${S.mapKey}/${S.wave}`);
       if (S.wave === OD.WIN_WAVE && !S.won && !S.endless) return victory();
+      if (S.wave === 1) stats.once("first/wave-clear");
+      if (S.wave === 3) stats.once("first/wave-3");
+      if (S.wave === 5) stats.once("first/wave-5");
+      flashMoney(); floater(CX, CY - B.bodies[0].r - 14, `+${bonus}`, "#ffd166");
       if (S.endless && isMilestone(S.wave)) endlessMilestone();
+      else if (S.wave === 1 && !tut) { toast(`🎉 First wave cleared! +${bonus} credits${S.towers.some(t => t.level >= 1) ? "" : " · Tap a satellite to upgrade it"}`, 3200); ringFx(CX, CY, B.bodies[0].r * 2.2, "#ffd166", 0.8); }
+      else if (S.wave === 3 || S.wave === 5) { toast(`⭐ Wave ${S.wave} cleared! +${bonus} credits · Next goal: wave ${S.wave === 3 ? 5 : "10, the Mothership"}`, 3200); ringFx(CX, CY, B.bodies[0].r * 2.2, "#ffd166", 0.8); }
       else toast(`Wave ${S.wave} cleared! +${bonus} credits`);
+      if (S.wave >= 1 && !tut) tip("saved", "Your progress is saved after every wave. Leave anytime and press Continue.", 3400);
       saveRun();
       updateUI(true);
       if (S.auto) setTimeout(() => S && !S.paused && startWave(), 1200);
@@ -1291,6 +1321,8 @@
     ringFx(p.x, p.y, 30, "#ffd166", 0.4, false, p.z);
     sfx(nextLevel === 3 ? "path" : "upgrade");
     if (nextLevel >= 3) toast(`${tier.name}!`);
+    stats.once("first/upgrade");
+    if (nextLevel === 2) tip("paths", "The next upgrade picks one of two specializations. The choice is permanent!", 600);
     if (nextLevel === 4) { unlock("tier5"); if (S.endless || S.freeplay) toast("Fully upgraded! Tap it again to ✦ Ascend or ⚡ Overclock for even more power.", 3000); }
     if (nextLevel === 3) stats.track(`path/${t.type}/${TOWERS[t.type].paths[usePath].name.toLowerCase().replace(/ /g, "-")}`);
     if (!S.waveActive) saveRun();
@@ -1355,6 +1387,7 @@
     sfx("place");
     if (S.money < cost) S.selectedType = null;
     if (S.towers.length >= 20) unlock("armada");
+    stats.once("first/build");
     if (!S.waveActive) saveRun();
     updateUI(true);
   }
@@ -1375,6 +1408,8 @@
     ui.diff.textContent = S.diff.name; ui.diff.style.color = S.diff.color;
     ui.waveBtn.disabled = S.waveActive || S.over;
     ui.waveBtn.innerHTML = S.waveActive ? `Wave ${S.wave}…` : `Launch Wave ${S.wave + 1} ▶`;
+    // early waves: the launch button pulses while it's waiting for the player (never auto-launches)
+    ui.waveBtn.classList.toggle("ready", !S.waveActive && !S.over && !S.auto && !tut && S.towers.length > 0 && S.wave < 5);
     ui.speedBtn.textContent = `${S.speed}×`;
     ui.autoBtn.classList.toggle("on", S.auto);
     ui.odBtn.disabled = S.overdriveCd > 0 || S.over;
@@ -1390,11 +1425,12 @@
       b.classList.toggle("poor", S.money < def.tiers[0].cost);
     }
     const pv = S.waveActive ? S.wave : S.wave + 1;
-    const pvKey = `${pv}|${S.waveActive}`;
+    const obj = objective();
+    const pvKey = `${pv}|${S.waveActive}|${obj}`;
     if (pvKey !== lastPreview) {
       lastPreview = pvKey;
       const nm = S.endless ? nextMilestone(S.wave) : 0;
-      ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${previewText(pv)}${S.endless ? `<span class="chip milestone">🏁 Wave ${nm}: +${Math.round(milestoneReward(nm) * S.diff.reward)}</span>` : ""}`;
+      ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${obj ? `<span class="chip goal">🎯 ${obj}</span>` : ""}${previewText(pv)}${S.endless ? `<span class="chip milestone">🏁 Wave ${nm}: +${Math.round(milestoneReward(nm) * S.diff.reward)}</span>` : ""}`;
     }
     if (S.selectedTower) {
       ui.info.querySelectorAll("[data-up]").forEach(b => {
@@ -1487,7 +1523,7 @@
     showOverlay(`
       <div class="rw-eyebrow">SOLAR SYSTEM DEFENSE COMMAND</div><h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
-      ${run ? `<div class="resume"><button class="primary" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave}${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
+      ${run ? `<div class="resume"><button class="primary big" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave} saved${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
       <div class="view-row">
         <button class="chip-btn${OD.is3D ? " selected" : ""}" data-view="3d"${OD.webgl ? "" : ' disabled title="3D needs WebGL, which this device does not support"'}>🌐 3D</button>
         <button class="chip-btn${OD.is3D ? "" : " selected"}" data-view="2d">▦ Classic 2D</button>
@@ -1690,26 +1726,21 @@
   const slotTarget = () => { const id = tutSlot(); if (id == null) return null; const p = slotPos(id); return { x: p.x, y: p.y, z: p.z, r: 10 }; };
   const laserBtn = () => ui.shop.querySelector('[data-type="laser"]');
 
+  // Five short steps: pick a satellite, place it, Wave 1 launches by itself, clear it, first upgrade. Everything
+  // else (moons, specializations, Overdrive, camera) comes later as one-time tips during play (see `tip`).
+  const TUT_COUNTDOWN = 2500; // ms between placing the first satellite and Wave 1 launching on its own
+  const tutTower = () => S.towers[0] && { x: S.towers[0].x, y: S.towers[0].y, z: S.towers[0].z, r: 14 };
   const TUT_STEPS = [
-    { text: "<b>Welcome, Commander!</b> Alien invaders are spiraling toward Earth. Let's set up your first defenses.", next: "Let's go" },
-    { text: "Tap the <b>Laser Sat</b> in the bar below.", el: laserBtn, done: () => S.selectedType === "laser" || S.towers.length > 0 },
-    { text: "Now tap a <b>glowing slot</b> on the ring to build it. The rings rotate, so satellites sweep around the planet.", world: slotTarget, done: () => S.towers.length > 0 },
-    { text: "Build a <b>second Laser Sat</b> on the other side of Earth. Follow the arrow.",
-      el: () => (S.selectedType === "laser" ? null : laserBtn()), world: () => (S.selectedType === "laser" ? slotTarget() : null), done: () => S.towers.length > 1 },
-    { text: "Press <b>Launch Wave</b> to bring in the first invaders.", el: () => ui.waveBtn, done: () => S.waveActive || S.wave > 0 },
-    { text: "Your satellites fire on their own. Hang tight until the wave is cleared.", done: () => S.wave >= 1 && !S.waveActive },
-    { text: "Wave cleared! Here are <b>+100 bonus credits</b>. Tap one of your satellites to open its upgrades.",
-      enter: () => { S.money += 100; updateUI(true); sfx("coin"); }, world: () => S.towers[0] && { x: S.towers[0].x, y: S.towers[0].y, z: S.towers[0].z, r: 14 }, done: () => !!S.selectedTower },
-    { text: "Tap the <b>upgrade card</b>. Every tier makes the satellite stronger and changes how it looks.",
-      el: () => ui.info.querySelector("[data-up]"), done: () => S.towers.some(t => t.level >= 1) },
-    { text: "At <b>tier 3</b> you pick one of <b>two specializations</b>, like a prism that splits beams or a lance that melts bosses. The choice is permanent!", next: "Got it" },
-    { text: "That's the <b>Moon</b>. It carries its own turret ring, and its gravity pulls invaders toward it, so satellites there see lots of action.",
-      world: () => B.bodies[1] && { x: B.bodies[1].x, y: B.bodies[1].y, r: B.bodies[1].r + 6 }, next: "Next" },
-    { text: OD.is3D
-        ? "<b>Drag</b> to rotate around the planet, and <b>pinch</b> or use <b>+ / −</b> to zoom. Orbits are tilted, so invaders come from every height. <b>⚡ Overdrive</b> spins the rings fast for a few seconds."
-        : "Crowded rings? <b>Pinch</b> or use <b>+ / −</b> to zoom in and drag to look around. <b>⚡ Overdrive</b> spins the rings fast for a few seconds.",
-      el: () => (OD.is3D ? document.getElementById("v3ctl") : ui.zoomCtl), next: "Next" },
-    { text: "<b>You're ready!</b> Survive 30 waves to save Earth. Good luck, Commander.", next: "Start defending" },
+    { text: "<b>Welcome, Commander!</b> Aliens are coming for Earth. Tap the <b>Laser Sat</b> below.",
+      el: laserBtn, done: () => S.selectedType === "laser" || S.towers.length > 0 },
+    { text: "Tap a <b>glowing slot</b> to launch it into orbit.", world: slotTarget, done: () => S.towers.length > 0 },
+    { text: "", countdown: true, enter: () => { tut.launchAt = performance.now() + TUT_COUNTDOWN; },
+      done: () => S.waveActive || S.wave > 0 },
+    { text: "Your satellite fires on its own. <b>Clear the wave!</b>", done: () => S.wave >= 1 && !S.waveActive },
+    { text: "<b>First victory!</b> +100 bonus credits. Tap your satellite, then its <b>upgrade card</b>.",
+      enter: () => { S.money += 100; updateUI(true); sfx("coin"); },
+      el: () => ui.info.querySelector("[data-up]"), world: () => (ui.info.querySelector("[data-up]") ? null : tutTower()),
+      done: () => S.towers.some(t => t.level >= 1) || !S.towers.length },
   ];
 
   function startTutorial() {
@@ -1743,8 +1774,9 @@
     ui.coach.classList.add("hidden");
     ui.coachArrow.classList.add("hidden");
     document.body.classList.remove("tutorial");
+    updateUI(true); // the launch button and next-goal chip come back once the tutorial is out of the way
     if (skipped) toast("Tutorial skipped. You can replay it from the main menu.", 2600);
-    else { toast("Tutorial complete! 🎓", 2200); sfx("clear"); }
+    else { toast(`Tutorial complete! 🎓 Next: launch Wave ${S ? S.wave + 1 : 2} when you're ready`, 3200); sfx("clear"); }
   }
   // Leaving the game mid-tutorial just stops it (it will be offered again next time).
   function abandonTutorial() {
@@ -1764,6 +1796,14 @@
     if (!tut || !S) return;
     const step = TUT_STEPS[tut.i];
     if (step.done && step.done()) return tutGo(tut.i + 1);
+    if (step.countdown) { // Wave 1 launches by itself a moment after the first satellite is placed
+      const now = performance.now();
+      if (S.paused) tut.launchAt = Math.max(tut.launchAt, now + 500);
+      const left = Math.ceil((tut.launchAt - now) / 1000);
+      const txt = `Satellite in orbit! <b>Wave 1</b> launches in <b>${Math.max(1, left)}…</b>`;
+      if (ui.coachText.innerHTML !== txt) ui.coachText.innerHTML = txt;
+      if (now >= tut.launchAt && !S.paused) { startWave(); return tutGo(tut.i + 1); }
+    }
     const el = step.el ? step.el() : null;
     document.querySelectorAll(".coach-glow").forEach(e => { if (e !== el) e.classList.remove("coach-glow"); });
     let x = null, y = null, up = false;

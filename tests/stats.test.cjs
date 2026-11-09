@@ -26,7 +26,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(!ev.includes('return/d1'), 'day-1 return only counted once');
   // Tutorial, game start, wave, path, quit, game over
   await pg.click('.btns [data-act="tutorial"]');
-  await pg.click('#coachNext');
+  await pg.click('[data-type="laser"]');
   await pg.click('[data-tut="skip"]');
   await pg.evaluate(() => { const od = window.__od, S = od.state(); S.money = 5000; od.placeTower(0, 'laser'); od.placeTower(3, 'laser');
     const t = S.towers[0]; od.upgradeTower(t); od.upgradeTower(t); od.upgradeTower(t, 'B'); S.speed = 10; od.startWave(); });
@@ -35,7 +35,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   await pg.evaluate(() => { window.__od.begin('mars', 'hard'); window.__od.state().lives = 0; });
   await pg.waitForTimeout(400);
   ev = await pg.evaluate(() => window.__ev || []);
-  const want = ['tutorial/start', 'tutorial/skip-at-step-2', 'game-start/earth/easy', 'path/laser/solar-lance', 'wave/earth/1', 'quit/earth/w1-4', 'game-start/mars/hard', 'game-over/mars/hard/w1-4'];
+  const want = ['tutorial/start', 'tutorial/skip-at-step-2', 'game-start/earth/easy', 'path/laser/solar-lance', 'wave/earth/1', 'quit/earth/w1-4', 'game-start/mars/hard', 'game-over/mars/hard/w1-4', 'first/build', 'first/upgrade', 'first/wave-start', 'first/wave-clear'];
   for (const w of want) ok(ev.includes(w), 'event ' + w);
   ok(!ev.some(e => e.includes('NOT EVENT')), 'all sent as events (no page views)');
   // Opt out

@@ -3,6 +3,12 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **First 10 minutes** (see `docs/RETENTION.md`): 5-step tutorial (pick Laser, place it, Wave 1 launches by
+  itself after a 2.5 s countdown, clear it, first upgrade); advanced explanations moved to one-time tips during
+  play; pulsing Launch Wave button on waves 1-4; wave-clear celebration (credits pop, +X over the planet, wave 1 /
+  3 / 5 messages with the next goal); 🎯 next-goal chip; "progress saved" tip; bigger Continue button. New
+  once-per-device events (first build / wave / clear / upgrade / wave 3 / wave 5) and session-length buckets.
+  No balance, wave, cost, save-format or SDK changes.
 - **Bloom only on glowing things** (beams, engines, explosions, the Sun): sunlit planets, moons and shiny
   satellite hulls no longer sparkle or blow out to white.
 - **Graphics default to High** (full detail and bloom, never stepped down). Players on slow devices can pick

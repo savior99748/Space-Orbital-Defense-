@@ -92,7 +92,7 @@ Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves *
 
 ## Tutorial
 
-A brand-new player goes straight into a short guided first game on Earth (no menu first; the desktop edition opens on its title screen instead) (build, launch a wave, upgrade, specializations, the Moon, zoom). Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
+A brand-new player goes straight into a short guided first game on Earth (no menu first; the desktop edition opens on its title screen instead): pick a Laser Sat, place it, and Wave 1 launches by itself; after the first victory the tutorial shows the first upgrade and gets out of the way. Moons, specializations, Overdrive and camera controls come up later as one-time tips. Skip it anytime, or replay it from the **🎓 Tutorial** button on the main menu.
 
 ## Saving, ads and achievements
 

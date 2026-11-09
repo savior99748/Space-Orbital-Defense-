@@ -68,6 +68,15 @@ window.OD = window.OD || {};
     const day = today - first;
     for (const d of [1, 3, 7, 30]) if (day === d) A.once(`return/d${d}`);
     A.track(`session/${P.name}${OD.is3D ? "/3d" : "/2d"}`);
+    // session length (and early exits) as a coarse bucket, counted once when the page is closed or hidden for
+    // good. Best effort: browsers may drop requests made while a page unloads.
+    const t0 = Date.now();
+    let sent = false;
+    window.addEventListener("pagehide", () => {
+      if (sent) return; sent = true;
+      const m = (Date.now() - t0) / 60000;
+      A.track(`session-length/${m < 1 ? "under-1m" : m < 3 ? "1-3m" : m < 10 ? "3-10m" : m < 20 ? "10-20m" : "20m-plus"}`);
+    });
   };
 
   const bucket = w => (w >= 100 ? "100+" : w >= 75 ? "75-99" : w >= 50 ? "50-74" : w >= 40 ? "40-49" : w >= 30 ? "30-39" :

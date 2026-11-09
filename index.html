@@ -164,6 +164,13 @@
   .fake-ad span { color: var(--muted); }
   .resume { display: flex; gap: 6px; margin: 12px 0 4px; }
   .resume button.primary { flex: 1; font-size: 15px; padding: 10px; }
+  .resume button.primary.big { font-size: 17px; padding: 14px 10px; box-shadow: 0 0 0 1px #6cf0ff, 0 0 18px rgba(108,240,255,.35); }
+  #waveBtn.ready { animation: wave-ready 1.1s ease-in-out infinite alternate; }
+  @keyframes wave-ready { from { box-shadow: 0 0 0 1px #6cf0ff, 0 0 6px rgba(108,240,255,.35); } to { box-shadow: 0 0 0 2px #bff8ff, 0 0 22px rgba(108,240,255,.85); filter: brightness(1.15); } }
+  #money.flash { display: inline-block; animation: money-flash .9s ease-out; }
+  @keyframes money-flash { 0% { transform: scale(1); } 25% { transform: scale(1.35); text-shadow: 0 0 14px #ffd166; } 100% { transform: scale(1); } }
+  .chip.goal { border-color: #ffd166; color: #ffe6a8; }
+  @media (prefers-reduced-motion: reduce) { #waveBtn.ready, #money.flash { animation: none; } }
   .version a { color: var(--muted); }
   /* ---------- endless + leaderboards ---------- */
   .mode-row { display: flex; gap: 8px; margin-top: 8px; }
