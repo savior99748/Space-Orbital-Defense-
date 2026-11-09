@@ -60,11 +60,13 @@ scene.add(ambient, sun, sunPoint, rim);
 
 // ---------- camera controls: drag to rotate, pinch / wheel to zoom, tap to build ----------
 const cam = { yaw: 0, pitch: 0.95, dist: 900, fit: 900, tx: 0, tz: 0 };
+const HOME = 0.74; // starting zoom (share of the fit distance): the orbits fill the screen with a little margin
 function fitCamera() {
   const B = od().board(); if (!B) return;
   const ext = B.extent + 45, half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-  cam.fit = Math.max(ext / half, ext / (half * camera.aspect)) * 0.98;
-  cam.dist = cam.fit * 0.86; cam.tx = 0; cam.tz = 0;
+  // seen from the default tilt the orbital plane is squashed vertically, so height needs less room than width
+  cam.fit = Math.max(ext * 0.85 / half, ext / (half * camera.aspect)) * 0.98;
+  cam.dist = cam.fit * HOME; cam.tx = 0; cam.tz = 0;
 }
 function placeCamera() {
   const cp = Math.cos(cam.pitch);
@@ -139,7 +141,7 @@ function tap(sx, sy, touch) {
 // view buttons (zoom in / out / reset)
 document.getElementById("v3in").onclick = () => { cam.dist = Math.max(cam.fit * 0.3, cam.dist * 0.75); };
 document.getElementById("v3out").onclick = () => { cam.dist = Math.min(cam.fit * 1.25, cam.dist / 0.75); };
-document.getElementById("v3reset").onclick = () => { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * 0.86; };
+document.getElementById("v3reset").onclick = () => { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * HOME; };
 
 // ---------- procedural planet textures ----------
 function hash(x, y, z) { let h = (x * 374761393 + y * 668265263 + z * 1274126177) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
@@ -971,7 +973,7 @@ function menuBackdrop(t) {
 function menuCamera() {
   const menu = !od().state();
   if (menu && !inMenu) { cam.pitch = 0.42; cam.dist = cam.fit * 0.62; cam.tx = 0; cam.tz = 0; }
-  if (!menu && inMenu) { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * 0.86; cam.tx = 0; cam.tz = 0; }
+  if (!menu && inMenu) { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * HOME; cam.tx = 0; cam.tz = 0; }
   if (menu && !reducedMotion.matches) cam.yaw += 0.0012;
   if (menuSet) menuSet.g.visible = menu;
   inMenu = menu;
