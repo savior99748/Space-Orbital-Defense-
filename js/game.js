@@ -1423,9 +1423,10 @@
   const SHAKE_STEPS = [1, 0.4, 0];
   OD.shake = (() => { const v = parseFloat(store.get("od_shake")); if (SHAKE_STEPS.includes(v)) return v; return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.4 : 1; })();
   const shakeLabel = () => `📳 Shake: ${OD.shake === 1 ? "On" : OD.shake ? "Low" : "Off"}`;
-  // graphics quality (3D view): Auto steps down on slow devices; High never does; Low starts at the light setting
-  const GFX_STEPS = ["auto", "high", "low"];
-  OD.gfx = GFX_STEPS.includes(store.get("od_gfx")) ? store.get("od_gfx") : "auto";
+  // graphics quality (3D view): High (the default) never steps down; Low starts at the light setting; Auto steps
+  // down on slow devices
+  const GFX_STEPS = ["high", "low", "auto"];
+  OD.gfx = GFX_STEPS.includes(store.get("od_gfx")) ? store.get("od_gfx") : "high";
   const gfxLabel = () => `🎨 Graphics: ${OD.gfx === "auto" ? "Auto" : OD.gfx === "high" ? "High" : "Low"}`;
   // desktop (Steam) only: fullscreen / windowed
   const displayBtn = () => (P.display ? `<button data-act="display" title="F11 or Alt+Enter">${P.display.get().fullscreen ? "🖥 Fullscreen" : "🗗 Windowed"}</button>` : "");

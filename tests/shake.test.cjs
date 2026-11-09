@@ -21,15 +21,15 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   const m0 = await measure(); ok(m0 < 0.001, `Off: camera stays still during a big explosion (moved ${m0.toFixed(3)})`);
   await pg.evaluate(() => { window.OD.shake = 1; });
   const m1 = await measure(); ok(m1 > 0.01, `On: camera shakes (moved ${m1.toFixed(2)})`);
-  // Graphics setting (3D): Auto → High → Low, applied to the renderer and remembered
+  // Graphics setting (3D): High (default) → Low → Auto, applied to the renderer and remembered
   await pg.evaluate(() => window.__od.mainMenu()); await pg.waitForSelector('[data-act="gfx"]');
-  ok(/Auto/.test(await pg.textContent('[data-act="gfx"]')), 'graphics setting on the menu, default Auto');
+  ok(/High/.test(await pg.textContent('[data-act="gfx"]')) && await pg.evaluate(() => window.__view3d.quality.level === 99 && window.__view3d.bloom.enabled), 'graphics setting on the menu, default High: full detail with bloom, never stepped down');
   await pg.click('[data-act="gfx"]');
-  ok(/High/.test(await pg.textContent('[data-act="gfx"]')) && await pg.evaluate(() => window.__view3d.quality.level === 99), 'High: full detail, never stepped down');
+  ok(/Low/.test(await pg.textContent('[data-act="gfx"]')) && await pg.evaluate(() => window.__view3d.renderer.getPixelRatio() === 1 && !window.__view3d.bloom.enabled), 'Low: lighter rendering, no bloom');
   await pg.click('[data-act="gfx"]');
-  ok(/Low/.test(await pg.textContent('[data-act="gfx"]')) && await pg.evaluate(() => window.__view3d.renderer.getPixelRatio() === 1), 'Low: lighter rendering');
+  ok(/Auto/.test(await pg.textContent('[data-act="gfx"]')) && await pg.evaluate(() => window.__view3d.quality.level === 0), 'Auto: full detail, steps down only if the device is slow');
   await pg.reload(); await pg.waitForFunction(() => window.__view3d && window.__od, null, { timeout: 20000 });
-  ok(await pg.evaluate(() => window.OD.gfx === 'low' && window.__view3d.renderer.getPixelRatio() === 1), 'graphics setting remembered after reload');
+  ok(await pg.evaluate(() => window.OD.gfx === 'auto'), 'graphics setting remembered after reload');
   await pg.evaluate(() => { localStorage.removeItem('od_gfx'); });
   ok(errs.length === 0, 'no errors ' + errs.join(' | '));
   await b.close();
