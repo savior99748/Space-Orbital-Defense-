@@ -3,6 +3,10 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Satellites unlock as you play** (like Bloons): Laser at the start, then Missile Pod (after wave 2), Tractor
+  Beam (4), EMP Sat (6), Mining Sat (8), Drone Carrier (10) and the Railgun last (12). Locked ones show as "?" with
+  their wave; a toast and a glowing card announce each unlock. Build-bar order and number keys follow the new
+  order (Railgun is now key 7). Satellites already built in a saved game keep working.
 - **First 10 minutes** (see `docs/RETENTION.md`): 5-step tutorial (pick Laser, place it, Wave 1 launches by
   itself after a 2.5 s countdown, clear it, first upgrade); advanced explanations moved to one-time tips during
   play; pulsing Launch Wave button on waves 1-4; wave-clear celebration (credits pop, +X over the planet, wave 1 /

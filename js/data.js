@@ -98,33 +98,8 @@ window.OD = window.OD || {};
       },
     },
 
-    rail: {
-      name: "Railgun", key: "4", color: "#7dff9a", desc: "Huge damage, long reload", kind: "rail", targets: true,
-      tiers: [
-        { name: "Railgun", cost: 150, dmg: 120, range: 320, rate: 0.35 },
-        { name: "Capacitor Bank", cost: 140, dmg: 165, range: 330, rate: 0.45, desc: "Faster charging, harder hits." },
-        { name: "Piercing Slug", cost: 220, dmg: 210, range: 350, rate: 0.5, pierce: true, desc: "Shots pierce every enemy in a line." },
-      ],
-      paths: {
-        A: {
-          name: "Mass Driver", color: "#b6ff6c", desc: "Colossal shots built to crack bosses and shields.",
-          tiers: [
-            { name: "Mass Driver", cost: 420, dmg: 480, range: 380, rate: 0.45, pierce: true, boss: 2.5, desc: "2.5× damage to bosses." },
-            { name: "Planet Cracker", cost: 900, dmg: 1150, range: 420, rate: 0.5, pierce: true, boss: 3, desc: "3× damage to bosses." },
-          ],
-        },
-        B: {
-          name: "Coil Repeater", color: "#39e6a0", desc: "Rotary coil barrels trade raw power for fire rate.",
-          tiers: [
-            { name: "Coil Repeater", cost: 380, dmg: 100, range: 330, rate: 2.5, pierce: true, desc: "Rapid piercing shots." },
-            { name: "Gauss Storm", cost: 850, dmg: 150, range: 350, rate: 5, pierce: true, desc: "A hail of piercing slugs." },
-          ],
-        },
-      },
-    },
-
     emp: {
-      name: "EMP Sat", key: "5", color: "#ffe066", desc: "Pulse stuns everything near", kind: "emp",
+      name: "EMP Sat", key: "4", color: "#ffe066", desc: "Pulse stuns everything near", kind: "emp",
       tiers: [
         { name: "EMP Sat", cost: 110, dmg: 15, range: 120, rate: 0.33, stun: 0.4 },
         { name: "Overcharge", cost: 90, dmg: 24, range: 125, rate: 0.4, stun: 0.5, desc: "Stronger, more frequent pulses." },
@@ -149,7 +124,7 @@ window.OD = window.OD || {};
     },
 
     miner: {
-      name: "Mining Sat", key: "6", color: "#f5c542", desc: "Earns credits during waves", kind: "miner",
+      name: "Mining Sat", key: "5", color: "#f5c542", desc: "Earns credits during waves", kind: "miner",
       tiers: [
         { name: "Mining Sat", cost: 120, income: 8, every: 8 },
         { name: "Ore Drills", cost: 100, income: 12, every: 8, desc: "More credits per cycle." },
@@ -174,7 +149,7 @@ window.OD = window.OD || {};
     },
 
     carrier: {
-      name: "Drone Carrier", key: "7", color: "#ff7ad9", desc: "Launches fighter drones", kind: "carrier", targets: true,
+      name: "Drone Carrier", key: "6", color: "#ff7ad9", desc: "Launches fighter drones", kind: "carrier", targets: true,
       tiers: [
         { name: "Drone Carrier", cost: 160, range: 230, craft: 2, dmg: 7, rate: 3 },
         { name: "Hangar Bay", cost: 130, range: 240, craft: 3, dmg: 8, rate: 3, desc: "A third fighter." },
@@ -197,7 +172,35 @@ window.OD = window.OD || {};
         },
       },
     },
+    rail: {
+      name: "Railgun", key: "7", color: "#7dff9a", desc: "Huge damage, long reload", kind: "rail", targets: true,
+      tiers: [
+        { name: "Railgun", cost: 150, dmg: 120, range: 320, rate: 0.35 },
+        { name: "Capacitor Bank", cost: 140, dmg: 165, range: 330, rate: 0.45, desc: "Faster charging, harder hits." },
+        { name: "Piercing Slug", cost: 220, dmg: 210, range: 350, rate: 0.5, pierce: true, desc: "Shots pierce every enemy in a line." },
+      ],
+      paths: {
+        A: {
+          name: "Mass Driver", color: "#b6ff6c", desc: "Colossal shots built to crack bosses and shields.",
+          tiers: [
+            { name: "Mass Driver", cost: 420, dmg: 480, range: 380, rate: 0.45, pierce: true, boss: 2.5, desc: "2.5× damage to bosses." },
+            { name: "Planet Cracker", cost: 900, dmg: 1150, range: 420, rate: 0.5, pierce: true, boss: 3, desc: "3× damage to bosses." },
+          ],
+        },
+        B: {
+          name: "Coil Repeater", color: "#39e6a0", desc: "Rotary coil barrels trade raw power for fire rate.",
+          tiers: [
+            { name: "Coil Repeater", cost: 380, dmg: 100, range: 330, rate: 2.5, pierce: true, desc: "Rapid piercing shots." },
+            { name: "Gauss Storm", cost: 850, dmg: 150, range: 350, rate: 5, pierce: true, desc: "A hail of piercing slugs." },
+          ],
+        },
+      },
+    },
   };
+
+  // Like Bloons, satellites unlock as you go: each one appears in the build bar (as a locked "?") once this many
+  // waves have been cleared in the current game. The Railgun, the strongest, comes last.
+  OD.UNLOCK_WAVE = { laser: 0, missile: 2, tractor: 4, emp: 6, miner: 8, carrier: 10, rail: 12 };
 
   OD.tierOf = (type, level, path) => {
     const def = OD.TOWERS[type];
