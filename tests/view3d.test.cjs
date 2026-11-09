@@ -50,9 +50,8 @@ const BASE = 'http://127.0.0.1:8769/';
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message));
-    await pg.goto(BASE + 'index.html');
-    await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('od_stats_off', '1'); });
-    await pg.reload(); // brand-new player: straight into the tutorial
+    await pg.addInitScript(() => { try { localStorage.setItem('od_stats_off', '1'); } catch {} });
+    await pg.goto(BASE + 'index.html'); // fresh profile = brand-new player: straight into the tutorial
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
     // the tutorial advances on the next rendered frame; on a slow software renderer that can take a moment
     const step = async (want) => { if (want != null) await pg.waitForFunction(w => window.__od.tut() && window.__od.tut().i === w, want, { timeout: 4000 }).catch(() => {}); else await pg.waitForTimeout(200); return pg.evaluate(() => window.__od.tut() ? window.__od.tut().i : null); };
