@@ -3,6 +3,11 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Solar System: defend every planet.** Each of the 8 planets has 15 HP (shown above it); about half the invaders
+  fly at a random planet, the rest at the Sun. A planet at 0 HP is knocked out: it goes dark, its satellites go
+  offline, nothing more can be built there, and its attackers turn on the Sun. The Sun is still the game.
+  Planets are drawn 1.5× bigger (their gravity reach is unchanged) and satellites on this map are smaller, so the
+  Sun is giant, the planets big and the satellites a fraction of their size.
 - **Starting credits 1,000** on every map tier.
 - **Scarce, Bloons-sized economy:** all money ×5 (start 1,500 / 1,375 / 1,300; kills pay ×6.25), and satellites
   are now expensive enough that you can't build everything: build prices climb along the unlock order (Laser 200,

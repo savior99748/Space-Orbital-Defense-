@@ -273,6 +273,9 @@
       shieldHitAt: -10, spawnTimer: def.spawn ? def.spawn.every : 0, burn: null,
     };
     e.maxShield = e.shield;
+    // Solar System: about half the invaders go for a random planet that's still standing, the rest for the Sun
+    if (at) e.tb = at.tb || 0;
+    else if (S.bodyHp) { const alive = S.bodyHp.map((h, i) => (i && h > 0 ? i : 0)).filter(Boolean); e.tb = alive.length && Math.random() < 0.5 ? alive[Math.floor(Math.random() * alive.length)] : 0; }
     e.r = Math.hypot(e.x - CX, e.y - CY, e.z);
     S.enemies.push(e);
     return e;
@@ -427,7 +430,15 @@
       if (e.frozen > 0) { e.frozen -= dt; continue; }
       if (e.stun > 0) { e.stun -= dt; continue; }
       moveEnemy(e, def.speed * spd * e.slow, dt);
-      if (e.r <= rootR + def.size * 0.4) {
+      if (e.tb && e.r <= B.bodies[e.tb].r + def.size * 0.4) { // hit its planet
+        e.dead = true;
+        S.bodyHp[e.tb] = Math.max(0, S.bodyHp[e.tb] - def.dmg);
+        S.stats.leaked++;
+        burst(e.x, e.y, "#ff5c7a", 14, 140, 0.6, e.z); floater(e.x, e.y, `-${def.dmg}`, "#ff9a8a");
+        S.shake = Math.max(S.shake, def.boss ? 12 : 5); sfx("leak");
+        if (S.bodyHp[e.tb] <= 0) knockOut(e.tb);
+        updateUI(true);
+      } else if (!e.tb && e.r <= rootR + def.size * 0.4) {
         e.dead = true;
         const lost = Math.min(def.dmg, Math.max(0, S.lives));
         S.lives -= def.dmg;
@@ -486,6 +497,8 @@
   // Invaders spiral toward the centre; moons/planets bend their path with gravity.
   // Works in 3D (z = height); on flat maps z stays 0 and this is the classic 2D spiral.
   function moveEnemy(e, v, dt) {
+    if (e.tb && !(S.bodyHp && S.bodyHp[e.tb] > 0)) e.tb = 0; // its planet has fallen: head for the Sun
+    if (e.tb) return movePlanetward(e, v, dt);
     const dx = e.x - CX, dy = e.y - CY, dz = e.z || 0, r = Math.hypot(dx, dy, dz) || 1;
     const ux = dx / r, uy = dy / r, uz = dz / r;
     let vx, vy, vz;
@@ -512,7 +525,7 @@
     e.x += vx * dt; e.y += vy * dt; e.z = dz + vz * dt;
     // invaders can't fly through moons: slide around them
     for (const b of B.bodies) {
-      if (b.root) continue;
+      if (b.root || (S.bodyHp && S.bodyHp[B.bodies.indexOf(b)] <= 0)) continue;
       const bx = e.x - b.x, by = e.y - b.y, bz = e.z, d = Math.hypot(bx, by, bz) || 1, min = b.r + e.def.size * 0.6;
       if (d < min) {
         const nx = bx / d, ny = by / d, nz = bz / d;
@@ -523,6 +536,27 @@
     e.r = Math.hypot(e.x - CX, e.y - CY, e.z);
   }
 
+  // Solar System invaders aimed at a planet: fly at it (it keeps orbiting), circling a little as they close in
+  function movePlanetward(e, v, dt) {
+    const b = B.bodies[e.tb], dx = b.x - e.x, dy = b.y - e.y, dz = -(e.z || 0), d = Math.hypot(dx, dy, dz) || 1;
+    const ux = dx / d, uy = dy / d, uz = dz / d, sp = e.def.spiral * Math.min(1, d / 160) * 0.6, inward = Math.sqrt(1 - sp * sp);
+    const hl = Math.hypot(ux, uy) || 1, tx = (-uy / hl) * e.dir, ty = (ux / hl) * e.dir, fast = 1;
+    const vx = (ux * inward + tx * sp) * v * fast, vy = (uy * inward + ty * sp) * v * fast, vz = uz * inward * v * fast;
+    e.x += vx * dt; e.y += vy * dt; e.z = (e.z || 0) + vz * dt;
+    e.vx = vx; e.vy = vy; e.vz = vz;
+    e.r = Math.hypot(b.x - e.x, b.y - e.y, e.z); // distance to its target ("First" targeting = closest to hitting it)
+  }
+  // a planet at 0 HP is knocked out: it goes dark and its satellites go offline for the rest of the game
+  function knockOut(bi) {
+    const b = B.bodies[bi];
+    S.bodyHp[bi] = 0;
+    for (const t of S.towers) if (B.rings[B.slots[t.slot].ring].body === bi) t.offline = true;
+    for (const e of S.enemies) if (e.tb === bi) e.tb = 0; // its attackers turn on the Sun
+    burst(b.x, b.y, "#ff5c7a", 40, 200, 1, 0); ringFx(b.x, b.y, b.r * 3, "#ff5c7a", 0.8);
+    S.shake = Math.max(S.shake, 14); sfx("nova");
+    toast(`🪐 ${b.name} has fallen! Its satellites are offline.`, 3200);
+  }
+
   function pushOut(e, amount) {
     const dx = e.x - CX, dy = e.y - CY, dz = e.z || 0, r = Math.hypot(dx, dy, dz) || 1;
     const nr = Math.min(B.spiral, r + amount);
@@ -530,6 +564,7 @@
   }
 
   function towerAct(t, dt) {
+    if (t.offline) return; // on a fallen planet
     const st = t.st, kind = TOWERS[t.type].kind;
     if (t.recoil > 0) t.recoil -= dt * 4;
     if (t.flash > 0) t.flash -= dt * 2;
@@ -813,7 +848,7 @@
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
       v: 1, map: S.mapKey, diff: S.diffKey, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
-      stats: S.stats, realTime: S.realTime, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless,
+      stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless,
       towers: S.towers.map(packTower), retired: S.retired.map(packTower),
       board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
     }));
@@ -838,6 +873,10 @@
       return Object.assign({ id: nextId++, cd: 0, aim: p.a, x: p.x, y: p.y, z: p.z, ringA: p.a }, t);
     });
     S.retired = (r.retired || []).filter(t => TOWERS[t.type]).map(t => Object.assign({ id: nextId++ }, t));
+    if (S.bodyHp && Array.isArray(r.bodyHp) && r.bodyHp.length === S.bodyHp.length) {
+      S.bodyHp = r.bodyHp.slice();
+      for (const t of S.towers) if (S.bodyHp[B.rings[B.slots[t.slot].ring].body] <= 0 && B.rings[B.slots[t.slot].ring].body) t.offline = true;
+    }
     lastPreview = -1;
     updateUI(true);
     toast(`Welcome back! ${MAP.name}, wave ${S.wave} cleared`, 2500);
@@ -1116,7 +1155,11 @@
     // body labels (small)
     if (B.bodies.length > 1) {
       ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(200,210,255,0.45)";
-      for (const b of B.bodies) if (!b.root) ctx.fillText(b.name, b.x, b.y + b.r + (B.rings.find(r => B.bodies[r.body] === b)?.r || 0) - b.r + 14);
+      for (const b of B.bodies) if (!b.root) {
+        const bi = B.bodies.indexOf(b), hp = S && S.bodyHp ? S.bodyHp[bi] : null;
+        ctx.fillStyle = hp === 0 ? "rgba(255,92,122,0.7)" : "rgba(200,210,255,0.45)";
+        ctx.fillText(hp == null ? b.name : hp > 0 ? `${b.name} ♥${hp}` : `${b.name} ✖`, b.x, b.y + b.r + (B.rings.find(r => B.bodies[r.body] === b)?.r || 0) - b.r + 14);
+      }
     }
 
     if (!S) { ctx.restore(); return; }
@@ -1208,8 +1251,12 @@
 
   // Satellites on tiny rings (small moons / planets) are drawn smaller so they don't crowd.
   function drawTowerAt(t, p, time) {
+    if (t.offline) { ctx.save(); ctx.globalAlpha = 0.35; drawTowerAt2(t, p, time); ctx.restore(); return; } // on a fallen planet
+    drawTowerAt2(t, p, time);
+  }
+  function drawTowerAt2(t, p, time) {
     const ring = B.rings[B.slots[t.slot].ring];
-    const s = ring.r < 35 ? 0.75 : 1;
+    const s = MAP.satScale ? MAP.satScale + 0.15 : ring.r < 35 ? 0.75 : 1;
     for (let i = 0; i < (t.asc || 0); i++) { // Ascension halos (Classic 2D)
       ctx.strokeStyle = i === 2 ? "rgba(255,255,255,0.8)" : "rgba(193,140,255,0.75)"; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, (13 + i * 3) * s, (6 + i * 1.5) * s, time * (0.8 + i * 0.5) * (i % 2 ? -1 : 1), 0, Math.PI * 2); ctx.stroke();
@@ -1488,6 +1535,7 @@
   function placeTower(slotId) {
     const def = TOWERS[S.selectedType];
     const cost = def.tiers[0].cost;
+    if (S.bodyHp && S.bodyHp[B.rings[B.slots[slotId].ring].body] <= 0 && B.rings[B.slots[slotId].ring].body) { toast("That planet has fallen"); sfx("deny"); return; }
     if (!slotFits(slotId, S.selectedType)) { toast(def.ground ? "Missile Silos go on the ground pads on planets and moons" : "Ground pads are for Missile Silos"); sfx("deny"); return; }
     if (S.money < cost) { toast("Not enough credits"); sfx("deny"); return; }
     S.money -= cost; S.stats.spent += cost;
@@ -1805,6 +1853,8 @@
     buildBoard(mapKey); B.key = mapKey;
     resetCamera();
     S = newState(diffKey);
+    // Solar System: every planet has its own HP (the Sun is still the game)
+    S.bodyHp = MAP.planetHp ? B.bodies.map(b => (b.root ? 0 : MAP.planetHp)) : null;
     const tier = mapTier(mapKey);
     if (diffKey === tier.diff) S.diff = Object.assign({}, S.diff, { name: tier.name, color: tier.color }); // saved games from before keep their old difficulty
     S.endless = !!endless;
@@ -2155,7 +2205,7 @@
   // Test hook (used by automated playtests).
   window.__od = {
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
-    setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
+    bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
   };
 

@@ -61,12 +61,13 @@ scene.add(ambient, sun, sunPoint, rim);
 // ---------- camera controls: drag to rotate, pinch / wheel to zoom, tap to build ----------
 const cam = { yaw: 0, pitch: 0.95, dist: 900, fit: 900, tx: 0, tz: 0 };
 const HOME = 0.74; // starting zoom (share of the fit distance): the orbits fill the screen with a little margin
+const home = () => (od() && od().map && od().map() && od().map().homeZoom) || HOME; // a map can start closer (the Solar System)
 function fitCamera() {
   const B = od().board(); if (!B) return;
   const ext = B.extent + 45, half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   // seen from the default tilt the orbital plane is squashed vertically, so height needs less room than width
   cam.fit = Math.max(ext * 0.85 / half, ext / (half * camera.aspect)) * 0.98;
-  cam.dist = cam.fit * HOME; cam.tx = 0; cam.tz = 0;
+  cam.dist = cam.fit * home(); cam.tx = 0; cam.tz = 0;
 }
 function placeCamera() {
   const cp = Math.cos(cam.pitch);
@@ -142,7 +143,7 @@ function tap(sx, sy, touch) {
 // view buttons (zoom in / out / reset)
 document.getElementById("v3in").onclick = () => { cam.dist = Math.max(cam.fit * 0.3, cam.dist * 0.75); };
 document.getElementById("v3out").onclick = () => { cam.dist = Math.min(cam.fit * 1.25, cam.dist / 0.75); };
-document.getElementById("v3reset").onclick = () => { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * HOME; };
+document.getElementById("v3reset").onclick = () => { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * home(); };
 
 // ---------- procedural planet textures ----------
 function hash(x, y, z) { let h = (x * 374761393 + y * 668265263 + z * 1274126177) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
@@ -659,6 +660,19 @@ function sync() {
     const tilt = g.getObjectByName("tilt"); if (tilt) tilt.rotation.set(-(cam.pitch - 0.35), cam.yaw, 0);
   });
   if (od().map().final) sunPoint.position.set(0, 0, 0);
+  // Solar System: each planet's HP above it; a fallen planet goes dark
+  const HP = S && S.bodyHp;
+  B.bodies.forEach((b, i) => {
+    if (b.root) return;
+    const g = world.bodies[i], lbl = g.getObjectByName("label"), hp = HP ? HP[i] : null;
+    if (lbl && lbl.userData.hp !== hp) {
+      lbl.userData.hp = hp;
+      const fresh = textSprite(hp == null ? b.name : hp > 0 ? `${b.name} ♥${hp}` : `${b.name} ✖`, hp === 0 ? "#ff6b7a" : hp != null && hp <= 3 ? "#ffb070" : "#8b90b8", 22);
+      lbl.material.map.dispose(); lbl.material.map = fresh.material.map; lbl.scale.copy(fresh.scale); lbl.material.needsUpdate = true;
+    }
+    const surf = g.getObjectByName("surface");
+    if (surf && surf.material && surf.material.color) { const dark = hp === 0; if (surf.userData.dark !== dark) { surf.userData.dark = dark; surf.material.color.setScalar(dark ? 0.25 : 1); } }
+  });
   // rings follow their body and rotate
   B.rings.forEach((r, i) => { const b = B.bodies[r.body]; world.rings[i].position.set(b.x - C.x, H, b.y - C.y); });
   // empty slots
@@ -677,7 +691,8 @@ function sync() {
   // satellites: grow when zoomed out so they stay at least SAT_MIN_PX across on screen
   const viewH = canvas.clientHeight || 1;
   const worldPerPx = 2 * cam.dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / viewH;
-  const satScale = Math.max(SAT, SAT_MIN_PX * worldPerPx / 20); // a satellite body is ~20 model units wide
+  const MS = od().map().satScale || 1; // Solar System: satellites small next to big planets
+  const satScale = Math.max(SAT * MS, SAT_MIN_PX * MS * worldPerPx / 20); // a satellite body is ~20 model units wide
   const seen = new Set();
   if (S) for (const tw of S.towers) {
     seen.add(tw.id);
@@ -708,7 +723,8 @@ function sync() {
       if (k >= 1 || k < 0) satPop.delete(tw.id);
       else { m.scale.multiplyScalar(1 + 0.35 * (1 - k) * (1 - k)); burst(m.position, towerColor(tw), 60 * satScale, k, now * 4); }
     }
-    m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
+    if (tw.offline) m.scale.multiplyScalar(0.8); // offline (its planet has fallen)
+    else m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
     // firing visuals, read from the satellite's cooldown (no gameplay change)
     const st = tw.st, period = st && st.rate ? 1 / st.rate : 0, cd = tw.cd || 0;
     if (period && MUZZLE[tw.type] && !st.dps) {
@@ -985,7 +1001,7 @@ function menuBackdrop(t) {
 function menuCamera() {
   const menu = !od().state();
   if (menu && !inMenu) { cam.pitch = 0.42; cam.dist = cam.fit * 0.62; cam.tx = 0; cam.tz = 0; }
-  if (!menu && inMenu) { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * HOME; cam.tx = 0; cam.tz = 0; }
+  if (!menu && inMenu) { cam.yaw = 0; cam.pitch = 0.95; cam.dist = cam.fit * home(); cam.tx = 0; cam.tz = 0; }
   if (menu && !reducedMotion.matches) cam.yaw += 0.0012;
   if (menuSet) menuSet.g.visible = menu;
   inMenu = menu;
