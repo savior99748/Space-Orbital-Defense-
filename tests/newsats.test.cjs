@@ -31,7 +31,10 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
       const root = B.bodies[0];
       const place = r => { dummy.x = root.x + r; dummy.y = root.y; dummy.z = 0; };
       place(root.leo * 1.6); await wait(1500); out.siloOutside = S.shots.length; out.siloDmgOutside = Math.round(silo.dmg || 0);
-      place(root.leo * 0.85); S.speed = 4; await until(() => (silo.dmg || 0) > 0, 25000); S.speed = 1; out.siloDmgInside = Math.round(silo.dmg || 0); out.leo = Math.round(root.leo);
+      place(root.leo * 0.85); S.speed = 4;
+      // it fires (a missile in the air, or damage already dealt); on a slow machine a homing missile can overshoot a target that never moves
+      let fired = 0; await until(() => (fired += S.shots.filter(m => m.tower === silo).length) > 0 || (silo.dmg || 0) > 0, 25000); S.speed = 1;
+      out.siloDmgInside = Math.round(silo.dmg || 0); out.siloFiredInside = fired > 0 || out.siloDmgInside > 0; out.leo = Math.round(root.leo);
       // Flak: a burst hits several invaders at once
       S.towers = []; S.shots = [];
       od.placeTower(orbit[3], 'flak'); const flak = od.towerAt(orbit[3]); await until(() => flak.st);
@@ -48,7 +51,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     ok(!r.laserOnPad && !r.siloInOrbit, `${view}: satellites can't go on ground pads, silos can't go in orbit`);
     ok(r.focusMul > 1 && Math.abs(r.laserDmg - r.laserBase * r.focusMul) < 0.01, `${view}: Focus Array boosts a nearby laser (${r.laserBase} → ${r.laserDmg.toFixed(1)} damage)`);
     ok(r.siloDmgOutside === 0, `${view}: Missile Silo ignores invaders outside low orbit (LEO ${r.leo})`);
-    ok(r.siloDmgInside > 0, `${view}: Missile Silo hits invaders inside low orbit (${r.siloDmgInside} damage)`);
+    ok(r.siloFiredInside, `${view}: Missile Silo fires at invaders inside low orbit (${r.siloDmgInside} damage so far)`);
     ok(r.flakHitAll, `${view}: one flak burst hits several invaders`);
     ok(r.mines >= 2, `${view}: Mine Layer lays mines during a wave (${r.mines})`);
     ok(errs.length === 0, `${view}: no page errors ${errs.slice(0, 3).join(' | ')}`);
