@@ -129,6 +129,7 @@ function tap(sx, sy, touch) {
   const r = canvas.getBoundingClientRect(), C = od().center();
   let best = null, bd = (touch ? 34 : 22) ** 2;
   for (const s of B.slots) {
+    if (!od().slotUsable(s.id)) continue;
     const p = od().slotPos(s.id);
     _v.set(p.x - C.x, H + (p.z || 0), p.y - C.y).project(camera);
     const px = (_v.x + 1) / 2 * r.width, py = (1 - _v.y) / 2 * r.height;
@@ -368,6 +369,7 @@ function buildWorld(B) {
       const lp = od().ringPoint(r, r.node + Math.PI / 2), label = textSprite(name, "#6cf0ff", 24);
       label.position.set(lp.x - body.x, lp.z + 10, lp.y - body.y); line.add(label);
     }
+    line.visible = !r.surface; // ground pads have no orbit line
     group.add(line);
     return line;
   });
@@ -662,9 +664,10 @@ function sync() {
   // empty slots
   const building = S && S.selectedType;
   B.slots.forEach((s, i) => {
-    const p = OD.slotPos(s.id), taken = S && OD.towerAt(s.id);
+    const p = OD.slotPos(s.id), taken = S && OD.towerAt(s.id), usable = !S || OD.slotUsable(s.id);
     dummy.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y); dummy.rotation.set(0, 0, 0);
-    dummy.scale.setScalar(taken ? 0.0001 : building ? 1.6 : 1); dummy.updateMatrix();
+    // while building, only the slots that fit show (orbit slots for satellites, ground pads for silos)
+    dummy.scale.setScalar(taken || !usable ? 0.0001 : building ? 1.6 : s.surface ? 0.7 : 1); dummy.updateMatrix();
     world.slotMesh.setMatrixAt(i, dummy.matrix);
   });
   world.slotMesh.instanceMatrix.needsUpdate = true;
@@ -833,6 +836,13 @@ function sync() {
     glow(_gv, p.color, 3 + k * 4, k);
   }
 
+  // Mine Layer mines: a blinking red light each (shared glow system: no extra draw calls)
+  if (S && S.mines) for (const m of S.mines) {
+    _gv.set(m.x - C.x, H + (m.z || 0), m.y - C.y);
+    const col = m.nuke ? "#ff4a4a" : "#ff6b8a", on = m.arm <= 0 && Math.sin(t * 8 + m.seed) > 0;
+    glow(_gv, col, m.nuke ? 14 : 10, m.arm > 0 ? 0.35 : 0.7); if (on) glow(_gv, "#ffffff", 4, 0.9);
+  }
+
   // expanding rings (explosions, pulses)
   ringPool.forEach((m, i) => {
     const r = S && S.rings[i];
@@ -863,8 +873,9 @@ function sync() {
   rangeMesh.visible = rangeEdge.visible = rangeSphere.visible = false; selRing.visible = false;
   if (sel) {
     const T = window.OD.TOWERS[sel.type], st = sel.st || window.OD.tierOf(sel.type, sel.level, sel.path);
-    const r = st.buffRange || st.range;
-    if (r) showRange(sel.x, sel.y, r, sel.path ? T.paths[sel.path].color : T.color, sel.z);
+    const r = st.buffRange || st.focusRange || st.range, col = sel.path ? T.paths[sel.path].color : T.color;
+    if (sel.type === "silo") { const B = OD.board(), b = B.bodies[B.rings[B.slots[sel.slot].ring].body]; showRange(b.x, b.y, b.leo, col, 0); } // reach: its low orbit
+    else if (r) showRange(sel.x, sel.y, r, col, sel.z);
     selRing.visible = true; selRing.position.copy(W(sel.x, sel.y, H + 0.5, sel.z)); selRing.scale.setScalar(13);
   }
 

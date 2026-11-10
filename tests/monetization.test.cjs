@@ -28,7 +28,7 @@ const money = pg => pg.evaluate(() => window.__od.state().money);
   await pg.evaluate(() => { const btn = document.getElementById('adBtn'); btn.disabled = false; btn.click(); btn.disabled = false; btn.click(); }); // double tap
   await pg.waitForTimeout(2600); // the simulated ad lasts 2 s
   const m1 = await money(pg);
-  ok(m1 > m0 && m1 - m0 === await pg.evaluate(() => Math.round((60 + 3 * 12) * window.__od.state().diff.reward)), `ads: double tap pays exactly one bonus (+${m1 - m0})`);
+  ok(m1 > m0 && m1 - m0 === await pg.evaluate(() => Math.round((60 + 3 * 12) * window.__od.state().diff.reward * OD.ECON)), `ads: double tap pays exactly one bonus (+${m1 - m0})`);
   const again = await pg.evaluate(() => OD.monetization.claim('credits', { done: () => window.__od.state().adWave === window.__od.state().wave, mark() {} }));
   ok(again === false && await money(pg) === m1, 'ads: a second claim in the same wave pays nothing');
   // a run that already used its bonus this wave, saved and reloaded, still can't claim again

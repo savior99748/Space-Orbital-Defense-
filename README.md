@@ -30,10 +30,10 @@ Like the tracks in Bloons, every map has its own difficulty: pick a map and you'
 
 | Tier | Maps | Planet HP | Start credits | Enemies |
 | --- | --- | --- | --- | --- |
-| Beginner | Mercury, Venus, Earth | 50 | 300 | a bit slower |
-| Intermediate | Mars, Jupiter, Saturn | 25 | 275 | normal |
-| Hard | Uranus, Neptune | 15 | 260 | tougher, faster |
-| Expert | Solar System (the Sun) | 15 | 260 | Hard settings on the toughest map |
+| Beginner | Mercury, Venus, Earth | 50 | 1,500 | a bit slower |
+| Intermediate | Mars, Jupiter, Saturn | 25 | 1,375 | normal |
+| Hard | Uranus, Neptune | 15 | 1,300 | tougher, faster |
+| Expert | Solar System (the Sun) | 15 | 1,300 | Hard settings on the toughest map |
 
 ## Satellites and upgrades
 
@@ -41,13 +41,19 @@ Like Bloons, you start with the Laser Sat and the others unlock as you clear wav
 
 | Satellite | Unlocks | Cost | Path A | Path B |
 | --- | --- | --- | --- | --- |
-| Laser Sat | start | 50 | **Prism Array** → Spectrum Cannon: beam splits to extra targets | **Solar Lance** → Sunspear: continuous beam that ramps up damage |
-| Missile Pod | wave 3 | 90 | **Cluster Swarm** → Hive Barrage: missile salvos that burst into bomblets | **Nova Warhead** → Supernova: one huge blast that sets enemies burning |
-| Tractor Beam | wave 6 | 70 | **Singularity** → Event Horizon: pushes enemies back out | **Cryo Field** → Absolute Zero: freezes enemies and makes them take more damage |
-| EMP Sat | wave 9 | 110 | **Shockwave** → Pulsar: big stunning pulses | **Ion Storm** → Tesla Crown: chain lightning |
-| Mining Sat | wave 12 | 120 | **Deep Core Rig** → Stellar Forge: big income | **Command Relay** → Fleet Uplink: boosts nearby satellites |
-| Drone Carrier | wave 15 | 160 | **Strike Wing** → Armada: swarm of fighters | **Bomber Wing** → Siege Wing: splash-bombing bombers |
-| Railgun | wave 18 | Railgun | 150 | **Mass Driver** → Planet Cracker: boss and shield killer | **Coil Repeater** → Gauss Storm: rapid piercing shots |
+| Laser Sat | start | 200 | **Prism Array** → Spectrum Cannon: beam splits to extra targets | **Solar Lance** → Sunspear: continuous beam that ramps up damage |
+| Missile Pod | wave 3 | 400 | **Cluster Swarm** → Hive Barrage: missile salvos that burst into bomblets | **Nova Warhead** → Supernova: one huge blast that sets enemies burning |
+| Missile Silo (ground) | wave 4 | 500 | **Barrage** → Sky Wall: interceptor salvos | **Nuke Silo** → Doomsday Silo: one enormous interceptor |
+| Flak Array | wave 5 | 600 | **Hailstorm** → Steel Rain: bursts hit up to 12 targets | **Shredder** → Hull Breaker: armor-piercing rounds |
+| Tractor Beam | wave 7 | 750 | **Singularity** → Event Horizon: pushes enemies back out | **Cryo Field** → Absolute Zero: freezes enemies and makes them take more damage |
+| EMP Sat | wave 9 | 1000 | **Shockwave** → Pulsar: big stunning pulses | **Ion Storm** → Tesla Crown: chain lightning |
+| Mine Layer | wave 11 | 1250 | **Minefield** → Kill Zone: up to 16 mines | **Nuke Mines** → Star Breaker: few mines, enormous blasts |
+| Mining Sat | wave 12 | 1500 | **Deep Core Rig** → Stellar Forge: big income | **Command Relay** → Fleet Uplink: boosts nearby fire rate (stacks) |
+| Focus Array | wave 14 | 1800 | **Prism Lens** → Star Lens: up to +50% damage to nearby satellites | **Weak-Point Scanner** → Deep Scan: invaders in range take +30% damage |
+| Drone Carrier | wave 16 | 2400 | **Strike Wing** → Armada: swarm of fighters | **Bomber Wing** → Siege Wing: splash-bombing bombers |
+| Railgun | wave 18 | 3200 | **Mass Driver** → Planet Cracker: boss and shield killer | **Coil Repeater** → Gauss Storm: rapid piercing shots |
+
+The **Missile Silo** is built on ground pads (3 on the planet, 1 on each moon) instead of an orbit ring, and only fires at invaders that get inside low orbit (LEO) around its planet or moon: a last line of defense. Keys: **1-9** satellites in order, **R** Railgun, **G** Missile Silo.
 
 You can set each attacking satellite to target **First / Last / Strong / Close**. Selling returns 70% of what you spent.
 
@@ -88,7 +94,7 @@ Low shake by default. Preview every satellite and invader model at `/hangar/`.
 
 ## Endless mode & leaderboards
 
-Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Three **✦ Ascension** tiers (10k / 25k / 50k credits) multiply a maxed satellite's power, in every mode, campaign included. From wave 31 new invaders join: Juggernauts, Phase Wraiths, Brood Hives, Aegis Bastions and the Void Titan, and past wave 60 they get tougher every wave. Each map keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
+Choose **∞ Endless** on the main menu: waves never stop. Milestones at waves **40, 50, 75 and 100** (then every 25) pay bonus credits. Once a satellite is fully upgraded, **⚡ Overclock** it as many times as you like: +25% damage (or income for Mining Sats) per level, and each level costs more. Overclock is also available in Freeplay. Three **✦ Ascension** tiers (50k / 125k / 250k credits) multiply a maxed satellite's power, in every mode, campaign included. From wave 31 new invaders join: Juggernauts, Phase Wraiths, Brood Hives, Aegis Bastions and the Void Titan, and past wave 60 they get tougher every wave. Each map keeps a **top-10 leaderboard** of your best Endless runs (🏆 Leaderboards on the menu). A worldwide leaderboard is planned.
 
 ## Tutorial
 

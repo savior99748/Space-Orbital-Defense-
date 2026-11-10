@@ -16,7 +16,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     await pg.reload(); await pg.waitForFunction(v => window.__od && (v === '2d' || window.__view3d), view, { timeout: 20000 });
     for (const m of MAPS) {
       const r = await pg.evaluate(async m => {
-        const od = window.__od; od.begin(m, 'medium'); const S = od.state(); S.money = 5000;
+        const od = window.__od; od.begin(m, 'medium'); const S = od.state(); S.money = 1e6;
         const T = ['laser','missile','rail','emp','tractor','carrier','miner']; let k = 0;
         for (let i = 0; i < od.board().slots.length && k < 7; i += 3, k++) od.placeTower(i, T[k]);
         od.startWave();

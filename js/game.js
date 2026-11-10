@@ -40,7 +40,7 @@
 
   // Endless milestones: bonus credits + score at waves 40, 50, 75, 100, then every 25.
   const isMilestone = w => [40, 50, 75, 100].includes(w) || (w > 100 && w % 25 === 0);
-  const milestoneReward = w => (w >= 100 ? 3000 : w >= 75 ? 1500 : w >= 50 ? 800 : 500);
+  const milestoneReward = w => (w >= 100 ? 3000 : w >= 75 ? 1500 : w >= 50 ? 800 : 500) * OD.ECON;
   const nextMilestone = w => { for (let m = w + 1; ; m++) if (isMilestone(m)) return m; };
   let MAP = MAPS[MAP_KEY];
   let B = null;
@@ -57,10 +57,16 @@
       }) - 1;
       rings.push({ body: bi, r: m.ring.r, slots: m.ring.slots, speed: m.ring.speed, angle: m.phase * 2, incl: m.ring.incl || 0, node: m.ring.node || 0 });
     }
+    // ground pads for Missile Silos: 3 on the planet, 1 on each moon (none on the Sun). Added after the orbit rings
+    // so slot ids of saved games don't change. Each body's LEO = its lowest orbit ring: the silos' reach.
+    bodies.forEach((b, bi) => { const own = rings.filter(r => r.body === bi); b.leo = own.length ? Math.min(...own.map(r => r.r)) * 1.12 : b.r * 3; });
+    const nOrbit = rings.length;
+    if (!MAP.final) rings.push({ body: 0, r: root.r + 2, slots: 3, speed: 0.05, angle: 0.4, incl: 0, node: 0, surface: true, lat: 0.62 });
+    for (let bi = 1; bi < bodies.length; bi++) rings.push({ body: bi, r: bodies[bi].r + 1.5, slots: 1, speed: 0.08, angle: bi, incl: 0, node: 0, surface: true, lat: 0.62 });
     const slots = [];
-    rings.forEach((ring, ri) => { for (let i = 0; i < ring.slots; i++) slots.push({ id: slots.length, ring: ri, i }); });
+    rings.forEach((ring, ri) => { for (let i = 0; i < ring.slots; i++) slots.push({ id: slots.length, ring: ri, i, surface: !!ring.surface }); });
     let extent = 0;
-    for (const r of rings) extent = Math.max(extent, (bodies[r.body].orbit || 0) + r.r);
+    for (const r of rings.slice(0, nOrbit)) extent = Math.max(extent, (bodies[r.body].orbit || 0) + r.r);
     B = { bodies, rings, slots, extent, spiral: Math.max(extent + 25, MAP.view / 2 - 15), time: 0, view: Math.max(MAP.view, (extent + 34) * 2) };
     resize();
   }
@@ -84,6 +90,7 @@
   // angle `node`, which lifts slots above/below the orbital plane (z). Flat rings give z = 0.
   function ringPoint(ring, a) {
     const b = B.bodies[ring.body];
+    if (ring.surface) { const rr = ring.r * Math.cos(ring.lat); return { x: b.x + Math.cos(a) * rr, y: b.y + Math.sin(a) * rr, z: ring.r * Math.sin(ring.lat) }; } // on the near hemisphere
     if (!ring.incl) return { x: b.x + Math.cos(a) * ring.r, y: b.y + Math.sin(a) * ring.r, z: 0 };
     const u = a - ring.node, lx = Math.cos(u) * ring.r, ly = Math.sin(u) * ring.r;
     const ci = Math.cos(ring.incl), cn = Math.cos(ring.node), sn = Math.sin(ring.node);
@@ -104,7 +111,7 @@
     return {
       diffKey, diff, mapKey: MAP_KEY,
       wave: 0, lives: diff.lives, money: diff.money, score: 0,
-      towers: [], retired: [], enemies: [], shots: [], beams: [], rings: [], particles: [], floaters: [],
+      towers: [], retired: [], enemies: [], shots: [], beams: [], rings: [], particles: [], floaters: [], mines: [],
       queue: [], spawnTimer: 0, waveActive: false,
       selectedType: null, selectedTower: null, hover: null,
       speed: 3, paused: false, over: false, won: false, freeplay: false, auto: false,
@@ -129,7 +136,7 @@
   const OC_MUL = 1.25, OC_KEYS = ["dmg", "dps", "clusterDmg", "burn", "income"];
   // Ascension (Endless and Freeplay): three very expensive tiers after tier 5, for the late game. Each one:
   // ×1.6 damage (or income), ×1.12 fire rate, ×1.06 range (and buff range), +1 fighter for carriers.
-  const ASC = [{ name: "Ascension I", cost: 10000 }, { name: "Ascension II", cost: 25000 }, { name: "Ascension III", cost: 50000 }];
+  const ASC = [{ name: "Ascension I", cost: 50000 }, { name: "Ascension II", cost: 125000 }, { name: "Ascension III", cost: 250000 }];
   const ASC_DMG = 1.6, ASC_RATE = 1.12, ASC_RANGE = 1.06;
   // available in every mode: a long-term goal to save up for, even in the 30-wave campaign
   const canAscend = t => t.level >= 4 && (t.asc || 0) < ASC.length && !!S;
@@ -151,9 +158,13 @@
   const ocCost = t => Math.round(tierOf(t.type, 4, t.path).cost * 0.6 * 1.6 ** (t.oc || 0) / 10) * 10;
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : Math.round(n).toString();
 
+  // satellites go on orbit slots, Missile Silos on the ground pads
+  const slotFits = (slotId, type) => !!B.slots[slotId].surface === !!(TOWERS[type] && TOWERS[type].ground);
+  const slotUsable = id => !S || !S.selectedType || towerAt(id) || slotFits(id, S.selectedType);
   function nearestSlot(x, y, maxD) {
     let best = null, bd = maxD * maxD;
     for (const s of B.slots) {
+      if (!slotUsable(s.id)) continue;
       const p = slotPos(s.id), d = dist2(x, y, p.x, p.y);
       if (d < bd) { bd = d; best = s.id; }
     }
@@ -198,11 +209,11 @@
   const ringFx = (x, y, r, color, life = 0.35, inward = false, z = 0) => S.rings.push({ x, y, z, r, color, life, max: life, inward });
 
   // p: the shooter ({x, y, z}); distances are 3D
-  function pickTarget(p, range, mode, exclude) {
+  function pickTarget(p, range, mode, exclude, only) {
     let best = null, bestScore = -Infinity;
     const r2 = range * range;
     for (const e of S.enemies) {
-      if (e.dead || e === exclude || e.cloaked) continue;
+      if (e.dead || e === exclude || e.cloaked || (only && !only(e))) continue;
       const d = d3(p, e);
       if (d > r2) continue;
       const score = mode === "last" ? e.r : mode === "strong" ? e.hp + (e.shield || 0) : mode === "close" ? -d : -e.r;
@@ -273,7 +284,7 @@
     const st = src && src.st;
     amount *= e.vuln;
     if (st && st.boss && e.def.boss) amount *= st.boss;
-    if (e.def.armor) amount *= 1 - e.def.armor * (opts.rail ? 0.5 : 1); // armored hulls: railguns punch half way through
+    if (e.def.armor && !opts.pierceArmor) amount *= 1 - e.def.armor * (opts.rail ? 0.5 : 1); // armored hulls: railguns punch half way through
     let dealt = 0;
     if (e.shield > 0) {
       const mul = opts.rail ? 2 : 1; // railguns tear through shields
@@ -344,6 +355,13 @@
     // recomputed from scratch every frame (never added onto last frame's value), so a link built, upgraded,
     // sold or carried out of range by the rotating rings changes the bonus at once
     for (const t of S.towers) t.buffRate = 1 + Math.min(LINK_CAP, t.linkBonus);
+    // Focus Array: +damage to nearby satellites (the strongest Focus in range applies; they don't stack)
+    for (const t of S.towers) t.focusMul = 1;
+    for (const f of S.towers) {
+      if (f.type !== "focus") continue;
+      const fs = baseStats(f);
+      for (const t of S.towers) if (t !== f && t.type !== "miner" && t.type !== "focus" && d3(f, t) <= fs.focusRange ** 2) t.focusMul = Math.max(t.focusMul, fs.focusDmg);
+    }
     for (const t of S.towers) {
       const b = baseStats(t);
       const rateMul = t.buffRate * (odActive ? OVERDRIVE.rateMul : 1);
@@ -354,6 +372,7 @@
         dps: b.dps ? b.dps * rateMul : b.dps,
       });
       if (t.oc) applyOc(t.st, t.oc);
+      if (t.focusMul > 1) for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= t.focusMul;
     }
 
     // fields (tractor) apply slow / vulnerability / pulses
@@ -377,6 +396,13 @@
       if (doPush) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, TOWERS.tractor.paths.A.color, 0.5, true, t.z); sfx("push"); } }
       if (doFreeze) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, "#dff8ff", 0.45, false, t.z); sfx("freeze"); } }
     }
+
+    // Weak-Point Scanner (Focus Array path B): invaders in range take more damage
+    for (const f of S.towers) if (f.type === "focus" && f.st.mark) {
+      const r2 = f.st.focusRange ** 2;
+      for (const e of S.enemies) if (!e.dead && d3(f, e) <= r2) e.vuln = Math.max(e.vuln, f.st.mark);
+    }
+    updateMines(dt);
 
     // invaders speed up a little each wave after wave 10 (up to +25%)
     const spd = S.diff.speed * (MAP.enemySpeed || 1) * (1 + Math.min(0.25, Math.max(0, S.wave - 10) * 0.012));
@@ -435,7 +461,7 @@
 
     if (S.waveActive && !S.queue.length && !S.enemies.length) {
       S.waveActive = false;
-      const bonus = Math.round((25 + S.wave * 4) * S.diff.reward);
+      const bonus = Math.round((25 + S.wave * 4) * S.diff.reward * OD.ECON);
       S.money += bonus; S.stats.earnedBonus += bonus;
       sfx("clear");
       unlock("first_wave");
@@ -514,13 +540,23 @@
       if (t.timer >= st.every) {
         t.timer = 0; t.flash = 1;
         S.money += st.income; t.earned = (t.earned || 0) + st.income; S.stats.earnedMining += st.income;
-        if (S.stats.earnedMining >= 2000) unlock("tycoon");
+        if (S.stats.earnedMining >= 2000 * OD.ECON) unlock("tycoon");
         floater(t.x, t.y - 14, `+${st.income}`, "#ffd166");
         sfx("coin");
       }
       return;
     }
-    if (kind === "carrier") return;
+    if (kind === "carrier" || kind === "focus") return;
+    if (kind === "mines") { // drops a mine where it is on its orbit, up to `max` at a time, during waves
+      if (!S.waveActive) return;
+      t.timer = (t.timer || 0) + dt;
+      if (t.timer >= st.every && S.mines.filter(m => m.tower === t).length < st.max) {
+        t.timer = 0; t.flash = 1;
+        S.mines.push({ x: t.x, y: t.y, z: t.z || 0, tower: t, dmg: st.dmg, splash: st.splash, trigger: st.range, arm: 0.6, life: 40, nuke: t.path === "B", seed: Math.random() * 10 });
+        sfx("pew");
+      }
+      return;
+    }
     t.cd = Math.max(0, (t.cd || 0) - dt);
 
     if (kind === "emp") {
@@ -560,7 +596,11 @@
       return;
     }
 
-    const target = pickTarget(t, st.range, t.targeting);
+    let target;
+    if (kind === "silo") { // ground launcher: only invaders inside its planet's / moon's low orbit
+      const body = B.bodies[B.rings[B.slots[t.slot].ring].body], leo2 = body.leo * body.leo;
+      target = pickTarget(t, 1e5, t.targeting, null, e => (e.x - body.x) ** 2 + (e.y - body.y) ** 2 + (e.z || 0) ** 2 <= leo2);
+    } else target = pickTarget(t, st.range, t.targeting);
     if (target) {
       t.aim = Math.atan2(target.y - t.y, target.x - t.x);
       t.aimP = Math.atan2((target.z || 0) - (t.z || 0), Math.hypot(target.x - t.x, target.y - t.y)); // 3D: barrel pitch
@@ -598,7 +638,17 @@
         });
         sfx("prism");
       } else sfx("laser");
-    } else if (kind === "missile") {
+    } else if (kind === "flak") { // a burst that hits the nearest `hits` invaders in range at once
+      const r2 = st.range * st.range;
+      const hits = S.enemies.filter(e => !e.dead && !e.cloaked && d3(t, e) <= r2).sort((a, b) => d3(t, a) - d3(t, b)).slice(0, st.hits);
+      const col = t.path ? TOWERS.flak.paths[t.path].color : TOWERS.flak.color;
+      for (const e of hits) {
+        damage(e, st.dmg, t, { flash: false, pierceArmor: !!st.pierceArmor });
+        S.beams.push({ x1: t.x, y1: t.y, z1: t.z || 0, x2: e.x, y2: e.y, z2: e.z || 0, life: 0.06, color: col, w: 1.5, bolt: true });
+        burst(e.x, e.y, col, 2, 70, 0.25, e.z);
+      }
+      sfx("pew");
+    } else if (kind === "missile" || kind === "silo") {
       for (let i = 0; i < st.count; i++) {
         const a = t.aim + (i - (st.count - 1) / 2) * 0.35;
         S.shots.push({
@@ -643,6 +693,25 @@
       damage(e, dmg, src);
       if (opts.burn) e.burn = { dps: opts.burn, t: 3, src };
     }
+  }
+
+  // Mine Layer mines: arm after a moment, blow up when an invader comes close, fade after a while
+  function updateMines(dt) {
+    if (!S.mines.length) return;
+    for (const m of S.mines) {
+      m.arm -= dt; m.life -= dt;
+      if (m.life <= 0 || !S.towers.includes(m.tower)) { m.dead = true; continue; }
+      if (m.arm > 0) continue;
+      const hit = S.enemies.some(e => !e.dead && d3(m, e) < (m.trigger + e.def.size) ** 2);
+      if (!hit) continue;
+      m.dead = true;
+      explode(m, m.splash, m.dmg, m.tower);
+      const col = m.nuke ? "#ff4a4a" : TOWERS.mines.color;
+      burst(m.x, m.y, col, m.nuke ? 30 : 14, m.nuke ? 200 : 130, m.nuke ? 0.9 : 0.6, m.z);
+      ringFx(m.x, m.y, m.splash, col, m.nuke ? 0.5 : 0.3, false, m.z);
+      if (m.nuke) { S.shake = Math.max(S.shake, 6); sfx("nova"); } else sfx("boom");
+    }
+    S.mines = S.mines.filter(m => !m.dead);
   }
 
   function updateShots(dt) {
@@ -780,7 +849,7 @@
     { id: "first_boss", name: "Giant Slayer", desc: "Destroy a Mothership or the Dreadnought." },
     { id: "tier5", name: "Fully Armed", desc: "Upgrade a satellite to tier 5." },
     { id: "armada", name: "Orbital Armada", desc: "Have 20 satellites in orbit at once." },
-    { id: "tycoon", name: "Space Tycoon", desc: "Mine 2,000 credits in one game." },
+    { id: "tycoon", name: "Space Tycoon", desc: "Mine 10,000 credits in one game." },
     { id: "first_win", name: "Defender", desc: "Win any map." },
     { id: "perfect", name: "Untouchable", desc: "Win a map without a single leak." },
     { id: "win_hard", name: "Hardened", desc: "Win a Hard or Expert map." },
@@ -803,7 +872,7 @@
 
   // ---------- rewarded bonuses (through js/monetization.js: an ad, or free for ad-free players) ----------
   const M = OD.monetization;
-  const adReward = () => Math.round((60 + S.wave * 12) * S.diff.reward);
+  const adReward = () => Math.round((60 + S.wave * 12) * S.diff.reward * OD.ECON);
   // The run itself records each grant (S.adWave, S.revived), so the limits survive saves and never pay twice.
   const creditsOnce = () => ({ done: () => !S || S.adWave === S.wave, mark: () => { S.adWave = S.wave; } });
   const reviveOnce = () => ({ done: () => !S || !!S.revived, mark: () => { S.revived = true; } });
@@ -1005,6 +1074,7 @@
     const odActive = S && S.overdrive > 0;
     const hoverSlot = S && S.hover;
     B.rings.forEach(ring => {
+      if (ring.surface) return;
       const b = B.bodies[ring.body];
       ctx.strokeStyle = odActive ? "rgba(255,209,102,0.4)" : "rgba(108,240,255,0.18)";
       ctx.lineWidth = odActive ? 2.5 : 1.5;
@@ -1013,13 +1083,15 @@
       ctx.beginPath(); ctx.arc(b.x, b.y, ring.r, 0, TAU); ctx.stroke();
       ctx.setLineDash([]);
     });
-    for (const s of B.slots) {
-      if (towerAt(s.id)) continue;
+    const drawSlot = s => {
+      if (towerAt(s.id) || !slotUsable(s.id)) return;
       const p = slotPos(s.id);
       const isHover = hoverSlot === s.id;
       ctx.fillStyle = S && S.selectedType ? (isHover ? "rgba(255,209,102,0.95)" : "rgba(108,240,255,0.6)") : "rgba(108,240,255,0.22)";
+      if (s.surface) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x, p.y, isHover ? 8 : 5, 0, TAU); ctx.stroke(); return; } // ground pad: a ring
       ctx.beginPath(); ctx.arc(p.x, p.y, isHover ? 8 : S && S.selectedType ? 5 : 4, 0, TAU); ctx.fill();
-    }
+    };
+    for (const s of B.slots) if (!s.surface) drawSlot(s);
 
     // bodies
     for (const b of B.bodies) OD.drawBodyRings(ctx, b.style, b.x, b.y, b.r);
@@ -1033,6 +1105,13 @@
       const root = B.bodies[0];
       const hurt = S.lives / S.diff.lives < 0.3;
       if (hurt) { ctx.strokeStyle = `rgba(255,92,122,${0.4 + 0.3 * Math.sin(time * 6)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(root.x, root.y, root.r + 6, 0, TAU); ctx.stroke(); }
+    }
+    for (const s of B.slots) if (s.surface) drawSlot(s); // ground pads sit on top of the planets
+    if (S) for (const m of S.mines) { // Mine Layer mines: a blinking red light
+      const on = m.arm <= 0 && Math.sin(time * 8 + m.seed) > 0;
+      ctx.fillStyle = m.nuke ? "#ff4a4a" : TOWERS.mines.color;
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.nuke ? 4 : 3, 0, TAU); ctx.fill();
+      if (on) { ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.arc(m.x, m.y, 1.5, 0, TAU); ctx.fill(); }
     }
     // body labels (small)
     if (B.bodies.length > 1) {
@@ -1048,8 +1127,9 @@
     };
     if (S.selectedTower) {
       const t = S.selectedTower, st = t.st || baseStats(t);
-      const r = st.buffRange || st.range;
-      if (r) showRange(t.x, t.y, r, t.path ? TOWERS[t.type].paths[t.path].color : TOWERS[t.type].color);
+      const r = st.buffRange || st.focusRange || st.range, col = t.path ? TOWERS[t.type].paths[t.path].color : TOWERS[t.type].color;
+      if (t.type === "silo") { const b = B.bodies[B.rings[B.slots[t.slot].ring].body]; showRange(b.x, b.y, b.leo, col); } // its reach: the low orbit around its body
+      else if (r) showRange(t.x, t.y, r, col);
       ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
       ctx.beginPath(); ctx.arc(t.x, t.y, 24, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     } else if (S.selectedType && S.hover != null && !towerAt(S.hover)) {
@@ -1205,6 +1285,19 @@
     const n = next || {};
     const r1 = x => (x == null ? x : Math.round(x * 10) / 10);
     switch (TOWERS[t.type].kind) {
+      case "flak":
+        row("Damage", st.dmg, n.dmg); row("Targets per burst", st.hits, n.hits); row("Bursts/s", r1(st.rate), r1(n.rate));
+        if (st.pierceArmor || n.pierceArmor) row("Armor piercing", st.pierceArmor ? "Yes" : "No", n.pierceArmor !== undefined ? (n.pierceArmor ? "Yes" : "No") : undefined);
+        row("Range", st.range, n.range); break;
+      case "mines":
+        row("Mine damage", st.dmg, n.dmg); row("Blast radius", st.splash, n.splash); row("New mine every", `${st.every}s`, n.every && `${n.every}s`); row("Mines at once", st.max, n.max); break;
+      case "focus":
+        row("Ally damage", `+${Math.round((st.focusDmg - 1) * 100)}%`, n.focusDmg && `+${Math.round((n.focusDmg - 1) * 100)}%`);
+        if (st.mark || n.mark) row("Invaders take", `+${Math.round(((st.mark || 1) - 1) * 100)}%`, n.mark && `+${Math.round((n.mark - 1) * 100)}%`);
+        row("Range", st.focusRange, n.focusRange); break;
+      case "silo":
+        row("Damage", st.dmg, n.dmg); row("Missiles", st.count, n.count); row("Launches/s", r1(st.rate), r1(n.rate)); row("Blast radius", st.splash, n.splash);
+        row("Reach", "Low orbit (LEO)"); break;
       case "laser":
         if (st.dps) row("Beam DPS", `${st.dps}–${st.dps * st.ramp}`, n.dps && `${n.dps}–${n.dps * n.ramp}`);
         else { row("Damage", st.dmg, n.dmg); row("Shots/s", st.rate, n.rate); if (st.chain || n.chain) row("Extra targets", st.chain || 0, n.chain); }
@@ -1241,6 +1334,7 @@
     }
     if (TOWERS[t.type].kind !== "miner") {
       rows.push(`<div class="row"><span>Fleet Link</span><b data-fleet>${fleetText(t)}</b></div>`);
+      if (t.focusMul > 1) row("Focus Array", `+${Math.round((t.focusMul - 1) * 100)}% damage`);
       row("Damage dealt", fmt(t.dmg || 0)); row("Kills", t.kills || 0);
     }
     return rows.join("");
@@ -1394,6 +1488,7 @@
   function placeTower(slotId) {
     const def = TOWERS[S.selectedType];
     const cost = def.tiers[0].cost;
+    if (!slotFits(slotId, S.selectedType)) { toast(def.ground ? "Missile Silos go on the ground pads on planets and moons" : "Ground pads are for Missile Silos"); sfx("deny"); return; }
     if (S.money < cost) { toast("Not enough credits"); sfx("deny"); return; }
     S.money -= cost; S.stats.spent += cost;
     const p = slotPos(slotId);
@@ -1757,8 +1852,8 @@
     { text: "", countdown: true, enter: () => { tut.launchAt = performance.now() + TUT_COUNTDOWN; },
       done: () => S.waveActive || S.wave > 0 },
     { text: "Your satellite fires on its own. <b>Clear the wave!</b>", done: () => S.wave >= 1 && !S.waveActive },
-    { text: "<b>First victory!</b> +100 bonus credits. Tap your satellite, then its <b>upgrade card</b>.",
-      enter: () => { S.money += 100; updateUI(true); sfx("coin"); },
+    { text: "<b>First victory!</b> +500 bonus credits. Tap your satellite, then its <b>upgrade card</b>.",
+      enter: () => { S.money += 100 * OD.ECON; updateUI(true); sfx("coin"); },
       el: () => ui.info.querySelector("[data-up]"), world: () => (ui.info.querySelector("[data-up]") ? null : tutTower()),
       done: () => S.towers.some(t => t.level >= 1) || !S.towers.length },
   ];
@@ -2061,7 +2156,7 @@
   window.__od = {
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
-    placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; },
+    placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
   };
 
   // desktop: keep the Fullscreen / Windowed label right when F11 or Alt+Enter switches it
