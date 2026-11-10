@@ -3,6 +3,12 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Scarce, Bloons-sized economy:** all money ×5 (start 1,500 / 1,375 / 1,300; kills pay ×6.25), and satellites
+  are now expensive enough that you can't build everything: build prices climb along the unlock order (Laser 200,
+  Missile 400, Silo 500, Flak 600, Tractor 750, EMP 1,000, Mines 1,250, Mining 1,500, Focus 1,800, Carrier 2,400,
+  Railgun 3,200) and upgrades cost 30% more than a straight ×5. Ascension 50k / 125k / 250k. Intermediate and Hard
+  invaders slightly weaker to make up for it. Bot check: Beginner winnable but tight (15-30 of 50 HP); the bot fills
+  every slot on Intermediate and runs out of affordable upgrades around waves 26-27.
 - **10 satellites + a ground launcher:** new **Flak Array** (bursts hit several invaders at once; Hailstorm or
   armor-piercing Shredder), **Mine Layer** (drops mines along its orbit that blow up when invaders pass; Minefield
   or Nuke Mines), **Focus Array** (support: +damage to nearby satellites; Prism Lens or Weak-Point Scanner that

@@ -40,7 +40,7 @@
 
   // Endless milestones: bonus credits + score at waves 40, 50, 75, 100, then every 25.
   const isMilestone = w => [40, 50, 75, 100].includes(w) || (w > 100 && w % 25 === 0);
-  const milestoneReward = w => (w >= 100 ? 3000 : w >= 75 ? 1500 : w >= 50 ? 800 : 500);
+  const milestoneReward = w => (w >= 100 ? 3000 : w >= 75 ? 1500 : w >= 50 ? 800 : 500) * OD.ECON;
   const nextMilestone = w => { for (let m = w + 1; ; m++) if (isMilestone(m)) return m; };
   let MAP = MAPS[MAP_KEY];
   let B = null;
@@ -136,7 +136,7 @@
   const OC_MUL = 1.25, OC_KEYS = ["dmg", "dps", "clusterDmg", "burn", "income"];
   // Ascension (Endless and Freeplay): three very expensive tiers after tier 5, for the late game. Each one:
   // ×1.6 damage (or income), ×1.12 fire rate, ×1.06 range (and buff range), +1 fighter for carriers.
-  const ASC = [{ name: "Ascension I", cost: 10000 }, { name: "Ascension II", cost: 25000 }, { name: "Ascension III", cost: 50000 }];
+  const ASC = [{ name: "Ascension I", cost: 50000 }, { name: "Ascension II", cost: 125000 }, { name: "Ascension III", cost: 250000 }];
   const ASC_DMG = 1.6, ASC_RATE = 1.12, ASC_RANGE = 1.06;
   // available in every mode: a long-term goal to save up for, even in the 30-wave campaign
   const canAscend = t => t.level >= 4 && (t.asc || 0) < ASC.length && !!S;
@@ -461,7 +461,7 @@
 
     if (S.waveActive && !S.queue.length && !S.enemies.length) {
       S.waveActive = false;
-      const bonus = Math.round((25 + S.wave * 4) * S.diff.reward);
+      const bonus = Math.round((25 + S.wave * 4) * S.diff.reward * OD.ECON);
       S.money += bonus; S.stats.earnedBonus += bonus;
       sfx("clear");
       unlock("first_wave");
@@ -540,7 +540,7 @@
       if (t.timer >= st.every) {
         t.timer = 0; t.flash = 1;
         S.money += st.income; t.earned = (t.earned || 0) + st.income; S.stats.earnedMining += st.income;
-        if (S.stats.earnedMining >= 2000) unlock("tycoon");
+        if (S.stats.earnedMining >= 2000 * OD.ECON) unlock("tycoon");
         floater(t.x, t.y - 14, `+${st.income}`, "#ffd166");
         sfx("coin");
       }
@@ -849,7 +849,7 @@
     { id: "first_boss", name: "Giant Slayer", desc: "Destroy a Mothership or the Dreadnought." },
     { id: "tier5", name: "Fully Armed", desc: "Upgrade a satellite to tier 5." },
     { id: "armada", name: "Orbital Armada", desc: "Have 20 satellites in orbit at once." },
-    { id: "tycoon", name: "Space Tycoon", desc: "Mine 2,000 credits in one game." },
+    { id: "tycoon", name: "Space Tycoon", desc: "Mine 10,000 credits in one game." },
     { id: "first_win", name: "Defender", desc: "Win any map." },
     { id: "perfect", name: "Untouchable", desc: "Win a map without a single leak." },
     { id: "win_hard", name: "Hardened", desc: "Win a Hard or Expert map." },
@@ -872,7 +872,7 @@
 
   // ---------- rewarded bonuses (through js/monetization.js: an ad, or free for ad-free players) ----------
   const M = OD.monetization;
-  const adReward = () => Math.round((60 + S.wave * 12) * S.diff.reward);
+  const adReward = () => Math.round((60 + S.wave * 12) * S.diff.reward * OD.ECON);
   // The run itself records each grant (S.adWave, S.revived), so the limits survive saves and never pay twice.
   const creditsOnce = () => ({ done: () => !S || S.adWave === S.wave, mark: () => { S.adWave = S.wave; } });
   const reviveOnce = () => ({ done: () => !S || !!S.revived, mark: () => { S.revived = true; } });
@@ -1852,8 +1852,8 @@
     { text: "", countdown: true, enter: () => { tut.launchAt = performance.now() + TUT_COUNTDOWN; },
       done: () => S.waveActive || S.wave > 0 },
     { text: "Your satellite fires on its own. <b>Clear the wave!</b>", done: () => S.wave >= 1 && !S.waveActive },
-    { text: "<b>First victory!</b> +100 bonus credits. Tap your satellite, then its <b>upgrade card</b>.",
-      enter: () => { S.money += 100; updateUI(true); sfx("coin"); },
+    { text: "<b>First victory!</b> +500 bonus credits. Tap your satellite, then its <b>upgrade card</b>.",
+      enter: () => { S.money += 100 * OD.ECON; updateUI(true); sfx("coin"); },
       el: () => ui.info.querySelector("[data-up]"), world: () => (ui.info.querySelector("[data-up]") ? null : tutTower()),
       done: () => S.towers.some(t => t.level >= 1) || !S.towers.length },
   ];

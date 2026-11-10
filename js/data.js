@@ -11,11 +11,11 @@ window.OD = window.OD || {};
       desc: "50 planet HP, weaker enemies.",
     },
     medium: {
-      name: "Medium", color: "#ffd166", money: 275, lives: 25, hp: 1.06, growth: 0.33, late: 0.038, late2: 0.07, speed: 1.03, reward: 1.0,
+      name: "Medium", color: "#ffd166", money: 275, lives: 25, hp: 0.88, growth: 0.28, late: 0.03, late2: 0.07, speed: 1.03, reward: 1.0,
       desc: "25 planet HP. A real fight past wave 15.",
     },
     hard: {
-      name: "Hard", color: "#ff5c7a", money: 260, lives: 15, hp: 1.1, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
+      name: "Hard", color: "#ff5c7a", money: 260, lives: 15, hp: 1.0, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
       desc: "15 planet HP, tough, fast enemies that ramp up hard after wave 10.",
     },
   };
@@ -313,6 +313,20 @@ window.OD = window.OD || {};
     for (const tier of all) for (const k of ["dmg", "dps", "income", "clusterDmg", "burn"]) if (tier[k]) tier[k] = k === "income" ? Math.round(tier[k] * t.mul) : Math.round(tier[k] * t.mul * 10) / 10;
   }
 
+  // ---------- economy: everything ×5 (Bloons-sized numbers), then satellites made scarce ----------
+  // Build prices climb steeply along the unlock order (200 → 3,200) and upgrades cost 30% more than a straight ×5, so
+  // you can't afford everything: every purchase is a choice.
+  OD.ECON = 5;
+  for (const d of Object.values(OD.DIFFICULTY)) d.money *= OD.ECON;
+  const BUILD = { laser: 200, missile: 400, silo: 500, flak: 600, tractor: 750, emp: 1000, mines: 1250, miner: 1500, focus: 1800, carrier: 2400, rail: 3200 };
+  for (const [type, def] of Object.entries(OD.TOWERS)) {
+    const all = [...def.tiers, ...Object.values(def.paths).flatMap(p => p.tiers)];
+    for (const tier of all) {
+      if (tier.income) tier.income *= OD.ECON;
+      tier.cost = tier === def.tiers[0] ? BUILD[type] : Math.round(tier.cost * OD.ECON * 1.3 / 10) * 10;
+    }
+  }
+
   // Like Bloons, satellites unlock as you go: each one appears in the build bar (as a locked "?") once this many
   // waves have been cleared in the current game. The Railgun, the strongest, comes last.
   OD.UNLOCK_WAVE = { laser: 0, missile: 3, silo: 4, flak: 5, tractor: 7, emp: 9, mines: 11, miner: 12, focus: 14, carrier: 16, rail: 18 };
@@ -341,6 +355,7 @@ window.OD = window.OD || {};
     aegis:    { name: "Aegis Bastion",  hp: 2600, shield: 4200, armor: 0.25, regen: 0.35, regenDelay: 1.5, speed: 19, reward: 150, size: 26, color: "#4af0ff", dmg: 10, spiral: 0.5 },
     titan:    { name: "Void Titan",     hp: 32000, shield: 14000, armor: 0.35, regen: 0.12, speed: 11, reward: 2000, size: 58, color: "#9d4dff", dmg: 40, spiral: 0.45, boss: true, spawn: { type: "brute", every: 5 } },
   };
+  for (const e of Object.values(OD.ENEMIES)) e.reward *= OD.ECON * 1.25; // ×5 economy (see OD.ECON), kills pay a little extra
 
   // Returns an ordered list of groups: { type, count, gap }.
   OD.buildWave = function (n) {
