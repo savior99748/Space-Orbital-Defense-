@@ -136,8 +136,8 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(Math.abs(asc.after.dmg / asc.before.dmg - 1.6 ** 3) < 0.05 && asc.after.rate > asc.before.rate && asc.after.range > asc.before.range, `Ascension III: damage ${asc.before.dmg} → ${asc.after.dmg}, rate ${asc.before.rate} → ${asc.after.rate}, range ${asc.before.range} → ${asc.after.range}`);
   ok(asc.saved === 3, 'Ascension level is saved with the run');
   ok(asc.halos >= 3, `ascended satellite wears its halos in 3D (${asc.halos})`);
-  const campaignAsc = await pg.evaluate(() => { const od = window.__od; od.begin('earth', 'easy'); const S = od.state(); S.money = 1e6; od.placeTower(0, 'laser'); const t = S.towers[0]; od.upgradeTower(t); od.upgradeTower(t); od.upgradeTower(t, 'A'); od.upgradeTower(t); od.ascendTower(t); return t.asc || 0; });
-  ok(campaignAsc === 0, 'Ascension is Endless / Freeplay only (campaign balance unchanged)');
+  const campaignAsc = await pg.evaluate(() => { const od = window.__od; od.begin('earth', 'easy'); const S = od.state(); S.money = 1e6; od.placeTower(0, 'laser'); const t = S.towers[0]; od.upgradeTower(t); od.upgradeTower(t); od.upgradeTower(t, 'A'); od.upgradeTower(t); od.ascendTower(t); od.tapSlot(0); return { asc: t.asc || 0, card: !!document.querySelector('#info [data-asc]'), oc: !!document.querySelector('#info [data-oc]') }; });
+  ok(campaignAsc.asc === 1 && campaignAsc.card && !campaignAsc.oc, 'Ascension also works in the campaign (Overclock stays Endless / Freeplay)');
 
   // ---------- new invaders ----------
   const waves = await pg.evaluate(() => { const types = n => new Set(OD.buildWave(n).map(g => g.type)); const c = n => [...types(n)];

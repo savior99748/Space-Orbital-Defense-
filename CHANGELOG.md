@@ -3,6 +3,8 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Ascension in every mode:** the 10k / 25k / 50k Ascension upgrades now also appear in the 30-wave campaign, as a
+  long-term goal to save up for. Overclock stays Endless / Freeplay only.
 - **Tougher start, slower unlocks, pricier late satellites:** starting credits 450 / 325 / 300 → 300 / 275 / 260
   (Beginner / Intermediate / Hard+Expert). Beginner invaders are tougher (health ×1.0 instead of ×0.8, steeper
   climb, kill rewards ×1.05 instead of ×1.15); Intermediate health ×1.06, Hard ×1.1. Satellites unlock later:
