@@ -131,7 +131,8 @@
   // ×1.6 damage (or income), ×1.12 fire rate, ×1.06 range (and buff range), +1 fighter for carriers.
   const ASC = [{ name: "Ascension I", cost: 10000 }, { name: "Ascension II", cost: 25000 }, { name: "Ascension III", cost: 50000 }];
   const ASC_DMG = 1.6, ASC_RATE = 1.12, ASC_RANGE = 1.06;
-  const canAscend = t => t.level >= 4 && (t.asc || 0) < ASC.length && S && (S.endless || S.freeplay);
+  // available in every mode: a long-term goal to save up for, even in the 30-wave campaign
+  const canAscend = t => t.level >= 4 && (t.asc || 0) < ASC.length && !!S;
   function applyAsc(st, asc) {
     const m = ASC_DMG ** asc;
     for (const k of OC_KEYS) if (st[k]) st[k] = k === "income" ? Math.round(st[k] * m) : Math.round(st[k] * m * 10) / 10;
@@ -1267,7 +1268,7 @@
       upHtml = `<div class="choose">Choose a specialization (permanent):</div>
         ${["A", "B"].map(p => `<div class="path-desc" style="color:${def.paths[p].color}">${def.paths[p].name}: <span>${def.paths[p].desc}</span></div>${upgradeCard(t, 3, p)}`).join("")}`;
     } else if (t.level === 3) { next = tierOf(t.type, 4, t.path); upHtml = upgradeCard(t, 4, t.path); }
-    else if (canOverclock(t)) {
+    else if (t.level >= 4 && (canAscend(t) || canOverclock(t) || t.asc)) {
       const oc = t.oc || 0, cost = ocCost(t), isMiner = def.kind === "miner", asc = t.asc || 0;
       if (canAscend(t)) {
         const a = ASC[asc];
@@ -1275,7 +1276,7 @@
           <span class="oc-icon">✦${asc + 1}</span>
           <span><b>${a.name}</b><small>×${ASC_DMG} ${isMiner ? "income" : "damage"}, +12% fire rate, +6% range${def.kind === "carrier" ? ", +1 fighter" : ""}. ${asc + 1} of 3.</small><span class="cost">${fmt(a.cost)} cr</span></span></button>`;
       } else upHtml += `<div class="maxed" style="color:#c18cff">✦ Ascension III</div>`;
-      upHtml += `${oc ? `<div class="maxed" style="color:${color}">⚡ Overclock ${oc}: ×${(OC_MUL ** oc).toFixed(2)} ${isMiner ? "income" : "damage"}</div>` : ""}
+      if (canOverclock(t)) upHtml += `${oc ? `<div class="maxed" style="color:${color}">⚡ Overclock ${oc}: ×${(OC_MUL ** oc).toFixed(2)} ${isMiner ? "income" : "damage"}</div>` : ""}
         <button class="up-card oc-card" data-oc="1" ${S.money >= cost ? "" : "disabled"} style="--c:#ffd166">
         <span class="oc-icon">⚡${oc + 1}</span>
         <span><b>Overclock ${oc + 1}</b><small>+25% ${isMiner ? "income" : "damage"} (×${(OC_MUL ** (oc + 1)).toFixed(2)} total). No limit, each level costs more.</small><span class="cost">${cost} cr</span></span></button>`;
@@ -1338,7 +1339,7 @@
     if (nextLevel >= 3) toast(`${tier.name}!`);
     stats.once("first/upgrade");
     if (nextLevel === 2) tip("paths", "The next upgrade picks one of two specializations. The choice is permanent!", 600);
-    if (nextLevel === 4) { unlock("tier5"); if (S.endless || S.freeplay) toast("Fully upgraded! Tap it again to ✦ Ascend or ⚡ Overclock for even more power.", 3000); }
+    if (nextLevel === 4) { unlock("tier5"); toast(S.endless || S.freeplay ? "Fully upgraded! Tap it again to ✦ Ascend or ⚡ Overclock for even more power." : "Fully upgraded! Save up to ✦ Ascend it for even more power.", 3000); }
     if (nextLevel === 3) stats.track(`path/${t.type}/${TOWERS[t.type].paths[usePath].name.toLowerCase().replace(/ /g, "-")}`);
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
