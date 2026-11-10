@@ -201,23 +201,23 @@ window.OD = window.OD || {};
     flak: {
       name: "Flak Array", key: "3", color: "#ffb26b", desc: "Bursts hit several targets", kind: "flak", targets: true,
       tiers: [
-        { name: "Flak Array", cost: 100, dmg: 7, range: 140, rate: 1.2, hits: 3 },
-        { name: "Twin Barrels", cost: 80, dmg: 9, range: 145, rate: 1.4, hits: 4, desc: "Hits 4 targets per burst." },
-        { name: "Proximity Fuses", cost: 130, dmg: 12, range: 160, rate: 1.5, hits: 5, desc: "Hits 5 targets, longer reach." },
+        { name: "Flak Array", cost: 100, dmg: 12, range: 140, rate: 1.2, hits: 3 },
+        { name: "Twin Barrels", cost: 80, dmg: 15, range: 145, rate: 1.4, hits: 4, desc: "Hits 4 targets per burst." },
+        { name: "Proximity Fuses", cost: 130, dmg: 20, range: 160, rate: 1.5, hits: 5, desc: "Hits 5 targets, longer reach." },
       ],
       paths: {
         A: {
           name: "Hailstorm", color: "#ffd166", desc: "Wider bursts that shred whole swarms.",
           tiers: [
-            { name: "Hailstorm", cost: 260, dmg: 14, range: 170, rate: 1.8, hits: 8, desc: "Hits 8 targets per burst." },
-            { name: "Steel Rain", cost: 600, dmg: 20, range: 185, rate: 2.2, hits: 12, desc: "Hits 12 targets per burst." },
+            { name: "Hailstorm", cost: 260, dmg: 24, range: 170, rate: 1.8, hits: 8, desc: "Hits 8 targets per burst." },
+            { name: "Steel Rain", cost: 600, dmg: 34, range: 185, rate: 2.2, hits: 12, desc: "Hits 12 targets per burst." },
           ],
         },
         B: {
           name: "Shredder", color: "#ff7a4a", desc: "Armor-piercing rounds that ignore armor.",
           tiers: [
-            { name: "Shredder", cost: 280, dmg: 26, range: 170, rate: 1.5, hits: 5, pierceArmor: true, desc: "Ignores armor." },
-            { name: "Hull Breaker", cost: 640, dmg: 48, range: 185, rate: 1.7, hits: 6, pierceArmor: true, desc: "Ignores armor, huge hits." },
+            { name: "Shredder", cost: 280, dmg: 44, range: 170, rate: 1.5, hits: 5, pierceArmor: true, desc: "Ignores armor." },
+            { name: "Hull Breaker", cost: 640, dmg: 82, range: 185, rate: 1.7, hits: 6, pierceArmor: true, desc: "Ignores armor, huge hits." },
           ],
         },
       },
@@ -226,23 +226,23 @@ window.OD = window.OD || {};
     mines: {
       name: "Mine Layer", key: "6", color: "#ff6b8a", desc: "Drops space mines on its orbit", kind: "mines",
       tiers: [
-        { name: "Mine Layer", cost: 150, dmg: 45, splash: 45, every: 3, max: 4, range: 30 },
-        { name: "Mine Racks", cost: 110, dmg: 60, splash: 50, every: 2.6, max: 5, range: 30, desc: "Faster, stronger mines." },
-        { name: "Smart Mines", cost: 170, dmg: 80, splash: 55, every: 2.2, max: 6, range: 34, desc: "Up to 6 mines at once." },
+        { name: "Mine Layer", cost: 150, dmg: 90, splash: 45, every: 2.5, max: 4, range: 30 },
+        { name: "Mine Racks", cost: 110, dmg: 120, splash: 50, every: 2.6, max: 5, range: 30, desc: "Faster, stronger mines." },
+        { name: "Smart Mines", cost: 170, dmg: 160, splash: 55, every: 2.2, max: 6, range: 34, desc: "Up to 6 mines at once." },
       ],
       paths: {
         A: {
           name: "Minefield", color: "#ffd166", desc: "Lays mines fast to carpet the orbit.",
           tiers: [
-            { name: "Minefield", cost: 340, dmg: 90, splash: 55, every: 1.4, max: 10, range: 34, desc: "Up to 10 mines." },
-            { name: "Kill Zone", cost: 760, dmg: 140, splash: 60, every: 0.9, max: 16, range: 36, desc: "Up to 16 mines." },
+            { name: "Minefield", cost: 340, dmg: 180, splash: 55, every: 1.4, max: 10, range: 34, desc: "Up to 10 mines." },
+            { name: "Kill Zone", cost: 760, dmg: 280, splash: 60, every: 0.9, max: 16, range: 36, desc: "Up to 16 mines." },
           ],
         },
         B: {
           name: "Nuke Mines", color: "#ff4a4a", desc: "Few mines, enormous blasts.",
           tiers: [
-            { name: "Nuke Mine", cost: 380, dmg: 300, splash: 90, every: 3.5, max: 4, range: 36, desc: "Huge blasts." },
-            { name: "Star Breaker", cost: 820, dmg: 800, splash: 120, every: 3.5, max: 5, range: 40, desc: "Enormous blasts." },
+            { name: "Nuke Mine", cost: 380, dmg: 600, splash: 90, every: 3.5, max: 4, range: 36, desc: "Huge blasts." },
+            { name: "Star Breaker", cost: 820, dmg: 1600, splash: 120, every: 3.5, max: 5, range: 40, desc: "Enormous blasts." },
           ],
         },
       },
@@ -276,23 +276,23 @@ window.OD = window.OD || {};
     silo: {
       name: "Missile Silo", key: "g", color: "#9fd4ff", desc: "Ground launcher, defends LEO", kind: "silo", targets: true, ground: true,
       tiers: [
-        { name: "Missile Silo", cost: 120, dmg: 30, rate: 0.8, splash: 40, count: 1 },
-        { name: "Twin Silos", cost: 100, dmg: 34, rate: 1.0, splash: 42, count: 2, desc: "Fires 2 interceptors." },
-        { name: "Fast Reload", cost: 150, dmg: 42, rate: 1.2, splash: 50, count: 2, desc: "Faster, harder hits." },
+        { name: "Missile Silo", cost: 120, dmg: 54, rate: 0.8, splash: 40, count: 1 },
+        { name: "Twin Silos", cost: 100, dmg: 61, rate: 1.0, splash: 42, count: 2, desc: "Fires 2 interceptors." },
+        { name: "Fast Reload", cost: 150, dmg: 76, rate: 1.2, splash: 50, count: 2, desc: "Faster, harder hits." },
       ],
       paths: {
         A: {
           name: "Barrage", color: "#ffd166", desc: "Salvos of interceptors.",
           tiers: [
-            { name: "Barrage", cost: 300, dmg: 46, rate: 1.5, splash: 50, count: 4, desc: "4-missile salvos." },
-            { name: "Sky Wall", cost: 680, dmg: 60, rate: 1.8, splash: 55, count: 6, desc: "6-missile salvos." },
+            { name: "Barrage", cost: 300, dmg: 83, rate: 1.5, splash: 50, count: 4, desc: "4-missile salvos." },
+            { name: "Sky Wall", cost: 680, dmg: 108, rate: 1.8, splash: 55, count: 6, desc: "6-missile salvos." },
           ],
         },
         B: {
           name: "Nuke Silo", color: "#ff5c5c", desc: "One massive interceptor at a time.",
           tiers: [
-            { name: "Nuke Silo", cost: 340, dmg: 220, rate: 0.5, splash: 110, count: 1, desc: "Huge blast." },
-            { name: "Doomsday Silo", cost: 760, dmg: 560, rate: 0.5, splash: 150, count: 1, desc: "Enormous blast." },
+            { name: "Nuke Silo", cost: 340, dmg: 396, rate: 0.5, splash: 110, count: 1, desc: "Huge blast." },
+            { name: "Doomsday Silo", cost: 760, dmg: 1008, rate: 0.5, splash: 150, count: 1, desc: "Enormous blast." },
           ],
         },
       },

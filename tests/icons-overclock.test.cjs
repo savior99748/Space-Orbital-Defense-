@@ -14,7 +14,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     await pg.evaluate(() => window.__od.begin('neptune', 'hard', false, true));
     await pg.waitForTimeout(800);
     const painted = await pg.evaluate(() => [...document.querySelectorAll('#shop canvas')].map(c => c.width));
-    ok(painted.length === 7 && painted.every(w => w >= 96), `${name}: 7 shop icons rendered in 3D (${painted.join(',')})`);
+    ok(painted.length === 11 && painted.every(w => w >= 96), `${name}: all 11 shop icons rendered in 3D (${painted.join(',')})`);
     await pg.screenshot({ path: `shots/icons-${name}.png` });
     // endless: max a laser then overclock
     const r = await pg.evaluate(() => {
