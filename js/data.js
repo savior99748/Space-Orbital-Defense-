@@ -7,15 +7,15 @@ window.OD = window.OD || {};
 
   OD.DIFFICULTY = {
     easy: {
-      name: "Easy", color: "#7dff9a", money: 300, lives: 50, hp: 1.0, growth: 0.27, late: 0.026, late2: 0.03, speed: 0.95, reward: 1.05,
+      name: "Easy", color: "#7dff9a", money: 200, lives: 50, hp: 1.0, growth: 0.27, late: 0.026, late2: 0.03, speed: 0.95, reward: 1.05,
       desc: "50 planet HP, weaker enemies.",
     },
     medium: {
-      name: "Medium", color: "#ffd166", money: 275, lives: 25, hp: 0.88, growth: 0.28, late: 0.03, late2: 0.07, speed: 1.03, reward: 1.0,
+      name: "Medium", color: "#ffd166", money: 200, lives: 25, hp: 0.88, growth: 0.28, late: 0.03, late2: 0.07, speed: 1.03, reward: 1.0,
       desc: "25 planet HP. A real fight past wave 15.",
     },
     hard: {
-      name: "Hard", color: "#ff5c7a", money: 260, lives: 15, hp: 1.0, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
+      name: "Hard", color: "#ff5c7a", money: 200, lives: 15, hp: 1.0, growth: 0.34, late: 0.038, late2: 0.1, speed: 1.06, reward: 0.95,
       desc: "15 planet HP, tough, fast enemies that ramp up hard after wave 10.",
     },
   };

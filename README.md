@@ -30,10 +30,10 @@ Like the tracks in Bloons, every map has its own difficulty: pick a map and you'
 
 | Tier | Maps | Planet HP | Start credits | Enemies |
 | --- | --- | --- | --- | --- |
-| Beginner | Mercury, Venus, Earth | 50 | 1,500 | a bit slower |
-| Intermediate | Mars, Jupiter, Saturn | 25 | 1,375 | normal |
-| Hard | Uranus, Neptune | 15 | 1,300 | tougher, faster |
-| Expert | Solar System (the Sun) | 15 | 1,300 | Hard settings on the toughest map |
+| Beginner | Mercury, Venus, Earth | 50 | 1,000 | a bit slower |
+| Intermediate | Mars, Jupiter, Saturn | 25 | 1,000 | normal |
+| Hard | Uranus, Neptune | 15 | 1,000 | tougher, faster |
+| Expert | Solar System (the Sun) | 15 | 1,000 | Hard settings on the toughest map |
 
 ## Satellites and upgrades
 
