@@ -41,6 +41,8 @@ const money = pg => pg.evaluate(() => window.__od.state().money);
   await pg.evaluate(() => { OD.platform.premium = { owned: () => true }; });
   await pg.waitForTimeout(300);
   ok(await pg.evaluate(() => OD.monetization.offer('credits').method === 'premium' && OD.monetization.isPremium()), 'premium: bonus offered without an ad');
+  // the top bar redraws on the next frame once premium is on (can take a moment on a slow machine)
+  await pg.waitForFunction(() => document.getElementById('adBtn').textContent.startsWith('🎁'), null, { timeout: 8000 }).catch(() => {});
   ok(await pg.evaluate(() => document.getElementById('adBtn').textContent.startsWith('🎁')), 'premium: 🎁 claim button instead of 📺');
   const p0 = await money(pg);
   await pg.evaluate(() => document.getElementById('adBtn').click());
