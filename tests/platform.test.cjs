@@ -19,7 +19,9 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     const m0 = await pg.evaluate(() => window.__od.state().money);
     await pg.click('#adBtn');
     ok(await pg.isVisible('.fake-ad'), 'test ad shows');
-    await pg.waitForTimeout(2400);
+    // the test ad lasts 2 s; wait for the credits rather than a fixed time (CI machines can be slow)
+    await pg.waitForFunction(m0 => window.__od.state().money > m0, m0, { timeout: 15000 }).catch(() => {});
+    await pg.waitForTimeout(300);
     const m1 = await pg.evaluate(() => window.__od.state().money);
     ok(m1 > m0, `credits granted after ad (${m0} → ${m1})`);
     ok(!(await pg.isVisible('#adBtn')), 'ad button hidden after use this wave');
