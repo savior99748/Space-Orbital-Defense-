@@ -19,7 +19,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(st.e && st.w.includes('∞'), 'Endless game started, HUD shows ∞: ' + st.w);
   // Jump to wave 39 with a strong defense, clear wave 40 → milestone
   await pg.evaluate(() => { const od = window.__od, S = od.state(), B = od.board(); S.money = 1e7;
-    B.slots.forEach((sl, i) => { od.placeTower(sl.id, ['laser', 'rail', 'missile', 'emp'][i % 4]); const t = od.towerAt(sl.id); while (t.level < 4) od.upgradeTower(t, i % 2 ? 'A' : 'B'); });
+    B.slots.filter(sl => !sl.surface).forEach((sl, i) => { od.placeTower(sl.id, ['laser', 'rail', 'missile', 'emp'][i % 4]); const t = od.towerAt(sl.id); while (t.level < 4) od.upgradeTower(t, i % 2 ? 'A' : 'B'); });
     S.money = 1000; S.wave = 39; S.lives = 9999; });
   await pg.waitForTimeout(300);
   ok((await pg.textContent('#preview')).includes('Wave 40'), 'next-milestone chip shows wave 40');

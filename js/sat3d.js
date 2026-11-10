@@ -165,6 +165,80 @@ function arc(parent, color) {
 
 // ---------- the seven designs ----------
 const DESIGNS = {
+
+  // FLAK ARRAY: armored drum on a gimbal with a fan of stubby autocannons
+  flak(g, tur, L, P, anim) {
+    const orange = Accent("#ffb26b");
+    add(g, G.bbox, GUN_D, [11, 9, 13]);
+    for (const z of [-5, 5]) add(g, G.box, orange, [11.2, 1, 1], [0, 4.6, z]);
+    add(g, G.bbox, GOLD, [5, 7, 9], [-6.5, 0, 0]);
+    beacon(g, -3, 4.5, -5, 5);
+    const tint = P === "A" ? "#ffe08a" : P === "B" ? "#ff9a6a" : null;
+    wing(g, 7 + L * 2, 5, 8, tint); wing(g, 7 + L * 2, 5, -8, tint);
+    add(tur, G.cyl, GUN, [12, 7, 12], [3, 2, 0], [H, 0, 0]);
+    const n = 3 + Math.min(L, 2) + (P === "A" ? 2 : 0), long = P === "B" ? 17 : 12;
+    for (let i = 0; i < n; i++) {
+      const z = (i - (n - 1) / 2) * 2.4, y = 2 + (i % 2) * 1.6;
+      alongX(tur, G.cyl, STEEL, P === "B" ? 1.1 : 0.9, long, [6 + long / 2, y, z]);
+      alongX(tur, G.cyl, DARK, 1.2, 1.4, [6 + long, y, z]);
+    }
+    if (P === "B") for (let i = 0; i < 3; i++) add(tur, G.tor, orange, [3.6, 3.6, 3], [9 + i * 4, 2.8, 0], [0, H, 0]);
+    if (L >= 4) halo(tur, P === "B" ? "#ff7a4a" : "#ffd166", 30).position.set(14, 2, 0);
+  },
+
+  // MINE LAYER: a cargo dispenser with racks of spiked red mines and a drop chute
+  mines(g, tur, L, P, anim) {
+    const red = Accent(P === "B" ? "#ff4a4a" : "#ff6b8a");
+    add(g, G.bbox, GUN, [14, 9, 14]);
+    add(g, G.bbox, GUN_D, [10, 10, 10], [-3, 0, 0]);
+    alongX(g, G.cyl, DARK, 3, 6, [8.5, -1, 0]);                    // drop chute
+    add(g, G.box, red, [14.2, 1, 1.2], [0, 4.6, 0]);
+    beacon(g, -4, 5, 5, 4);
+    const tint = P === "A" ? "#ffe08a" : P === "B" ? "#ff8a8a" : null;
+    wing(g, 6 + L * 2, 5, 9, tint); wing(g, 6 + L * 2, 5, -9, tint);
+    const rack = live(new THREE.Group()); g.add(rack); rack.position.set(0, 6.5, 0);
+    const n = Math.min(6, 2 + L), mineMat = M("#3a2a30", { metal: 0.6, rough: 0.4 });
+    for (let i = 0; i < n; i++) {
+      const x = -4 + (i % 3) * 4, z = (Math.floor(i / 3) - 0.5) * 5, sz = P === "B" ? 3.6 : 2.8;
+      add(rack, G.ico, mineMat, sz, [x, 0, z]);
+      add(rack, G.sphLo, Glow(P === "B" ? "#ff4a4a" : "#ff6b8a"), sz * 0.35, [x, sz * 0.4, z]);
+    }
+    bakeGroup(rack);
+    anim.push(t => { rack.rotation.y = Math.sin(t * 0.8) * 0.15; });
+    if (L >= 4) halo(g, P === "B" ? "#ff4a4a" : "#ffd166", 32).position.set(0, 6, 0);
+  },
+
+  // FOCUS ARRAY: a crystal lens floating inside counter-rotating rings
+  focus(g, tur, L, P, anim) {
+    const col = P === "A" ? "#c18cff" : P === "B" ? "#ff9de6" : "#9cf6ff";
+    add(g, G.bbox, GUN_D, [8, 6, 8], [0, -6, 0]);
+    add(g, G.cyl8, STEEL, [1.4, 6, 1.4], [0, -2.5, 0]);
+    const tint = P ? col : null;
+    wing(g, 6 + L * 2, 5, 6, tint); wing(g, 6 + L * 2, 5, -6, tint);
+    const crystal = live(add(g, P === "B" ? G.ico : G.oct, M("#ffffff", { metal: 0.1, rough: 0.05, emissive: col, glow: 1.1 }), [6 + L, 9 + L * 1.4, 6 + L], [0, 3, 0]));
+    const rings = [];
+    for (let i = 0; i < 1 + Math.min(L, 2); i++) rings.push(live(add(g, G.torThick, Accent(col), 7 + i * 2.6, [0, 3, 0], [H, 0, 0])));
+    anim.push(t => { crystal.rotation.y = t * 1.6; rings.forEach((r, i) => { r.rotation.x = H + Math.sin(t * (0.9 + i * 0.3)) * 0.8; r.rotation.y = t * (i % 2 ? -1 : 1) * (0.7 + i * 0.3); }); });
+    halo(g, col, 26 + L * 4).position.set(0, 3, 0);
+  },
+
+  // MISSILE SILO (ground): an armored bunker with launch tubes pointing up out of the surface
+  silo(g, tur, L, P, anim) {
+    const warn = M("#ffd166", { metal: 0.3, rough: 0.5, emissive: "#ff9a1a", glow: 0.3 });
+    add(g, G.cyl, GUN_D, [16, 5, 16], [-1, 0, 0], [0, 0, H]);       // bunker base, flat on the ground (local x = up)
+    add(g, G.cyl, GUN, [12, 3, 12], [2, 0, 0], [0, 0, H]);
+    add(g, G.tor, warn, [7, 7, 6], [3.6, 0, 0], [0, H, 0]);
+    beacon(g, 1, 0, 6.5, 3);
+    const tubes = P === "A" ? (L >= 4 ? 6 : 4) : P === "B" ? 1 : L >= 1 ? 2 : 1;
+    const r = P === "B" ? (L >= 4 ? 3.8 : 3.2) : 1.5;
+    for (let i = 0; i < tubes; i++) {
+      const a = i * TAU / tubes, rr = tubes > 1 ? 3 : 0, y = Math.cos(a) * rr, z = Math.sin(a) * rr;
+      alongX(tur, G.cyl, DARK, r + 0.4, 6, [6, y, z]);
+      alongX(tur, G.cone, M("#e8e8e8", { metal: 0.5, rough: 0.3 }), r, 4 * (r / 1.5) ** 0.5, [10, y, z]);
+      add(tur, G.sphLo, Glow(P === "B" ? "#ff4a3a" : "#ff8a5c"), r * 0.8, [8.2, y, z]);
+    }
+    if (L >= 4) halo(g, P === "B" ? "#ff5c5c" : "#ffd166", 30).position.set(8, 0, 0);
+  },
   // LANCER: gunmetal arrow hull with cyan seams, upright solar wings, ringed emitter barrel
   laser(g, tur, L, P, anim) {
     const cyan = Accent("#45e3ff");
@@ -462,9 +536,13 @@ const KIT = {
   emp:     L => ({ thr: [[-4, -7.2, 0], [4, -7.2, 0]], dir: "y", ring: (i) => { const a = 2.75 + i * 0.32; return [Math.cos(a) * 6.1, -1.94, Math.sin(a) * 6.1, a]; } }),
   miner:   L => ({ thr: [[-2.4, -2.5, -4], [2.4, -2.5, -4]], dir: "z", plate: (i) => [-2.4 + i * 1.6, 4.12, -2.9] }),
   carrier: (L, P) => ({ thr: [], side: (i) => [(P === "B" ? 13 / 2 + 2.05 : 11 / 2 + 0.05), 0, -(26 + L * 5) / 2 + 3 + i * 1.2] }),
+  flak:    L => ({ thr: [[-3.4, -2.5, -7], [3.4, -2.5, -7]], dir: "z", plate: (i) => [-4 + i * 1.6, 4.62, -3] }),
+  mines:   L => ({ thr: [[-4, -3, -7.4], [4, -3, -7.4]], dir: "z", plate: (i) => [5 - i * 1.6, 4.62, -4] }),
+  focus:   L => ({ thr: [[-2.4, -9.2, 0], [2.4, -9.2, 0]], dir: "y", plate: (i) => [-2.4 + i * 1.6, -2.88, 3] }),
+  silo:    L => ({ thr: [], plate: (i) => [3.6, -4 + i * 2.6, 5.4] }),
 };
 function addKit(g, type, L, P, anim) {
-  const k = KIT[type](L, P), accent = { laser: "#45e3ff", missile: "#ff9f43", tractor: "#bc83ff", rail: "#74ffa4", emp: "#ffe06a", miner: "#ffd166", carrier: "#ff7ad9" }[type];
+  const k = KIT[type](L, P), accent = { laser: "#45e3ff", missile: "#ff9f43", tractor: "#bc83ff", rail: "#74ffa4", emp: "#ffe06a", miner: "#ffd166", carrier: "#ff7ad9", flak: "#ffb26b", mines: "#ff6b8a", focus: "#9cf6ff", silo: "#9fd4ff" }[type];
   const lit = Accent(accent);
   for (const [x, y, z] of k.thr) {
     // flames flicker through their shared material (see buildSatellite), so they merge: no extra draw calls
@@ -532,7 +610,7 @@ export function setReflections(on) {
 }
 
 // Codenames for the hangar / shop (kept with the models so art and names stay together).
-export const SAT_NAMES = { laser: "Lancer", missile: "Hornet", tractor: "Gravity Well", rail: "Spear", emp: "Tesla", miner: "Prospector", carrier: "Hangar" };
+export const SAT_NAMES = { laser: "Lancer", missile: "Hornet", tractor: "Gravity Well", rail: "Spear", emp: "Tesla", miner: "Prospector", carrier: "Hangar", flak: "Hailstorm", mines: "Minelayer", focus: "Lens", silo: "Silo" };
 
 let beaconFrame = -1;
 export function buildSatellite({ type, level = 0, path = null }) {

@@ -3,6 +3,13 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **10 satellites + a ground launcher:** new **Flak Array** (bursts hit several invaders at once; Hailstorm or
+  armor-piercing Shredder), **Mine Layer** (drops mines along its orbit that blow up when invaders pass; Minefield
+  or Nuke Mines), **Focus Array** (support: +damage to nearby satellites; Prism Lens or Weak-Point Scanner that
+  makes invaders in range take more damage), and the **Missile Silo**, built on ground pads (3 on the planet, 1 on
+  each moon) that only fires at invaders inside low orbit (LEO). Each has 5 tiers, 2 specializations, its own 3D
+  model and Classic 2D art. Unlocks: Silo 4, Flak 5, Mines 11, Focus 14 (Tractor 7, Carrier 16; Railgun still last
+  at 18). Keys 1-9 / R (Railgun) / G (Silo). Ground pads are added after the orbit slots, so saved games load.
 - **Ascension in every mode:** the 10k / 25k / 50k Ascension upgrades now also appear in the 30-wave campaign, as a
   long-term goal to save up for. Overclock stays Endless / Freeplay only.
 - **Tougher start, slower unlocks, pricier late satellites:** starting credits 450 / 325 / 300 → 300 / 275 / 260

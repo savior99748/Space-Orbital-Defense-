@@ -74,7 +74,7 @@ window.OD = window.OD || {};
     },
 
     tractor: {
-      name: "Tractor Beam", key: "3", color: "#b388ff", desc: "Slows and drains nearby", kind: "field",
+      name: "Tractor Beam", key: "4", color: "#b388ff", desc: "Slows and drains nearby", kind: "field",
       tiers: [
         { name: "Tractor Beam", cost: 70, dps: 2, range: 110, slow: 0.55 },
         { name: "Dense Field", cost: 70, dps: 4, range: 120, slow: 0.45, desc: "Stronger slow and drain." },
@@ -99,7 +99,7 @@ window.OD = window.OD || {};
     },
 
     emp: {
-      name: "EMP Sat", key: "4", color: "#ffe066", desc: "Pulse stuns everything near", kind: "emp",
+      name: "EMP Sat", key: "5", color: "#ffe066", desc: "Pulse stuns everything near", kind: "emp",
       tiers: [
         { name: "EMP Sat", cost: 110, dmg: 15, range: 120, rate: 0.33, stun: 0.4 },
         { name: "Overcharge", cost: 90, dmg: 24, range: 125, rate: 0.4, stun: 0.5, desc: "Stronger, more frequent pulses." },
@@ -124,7 +124,7 @@ window.OD = window.OD || {};
     },
 
     miner: {
-      name: "Mining Sat", key: "5", color: "#f5c542", desc: "Earns credits during waves", kind: "miner",
+      name: "Mining Sat", key: "7", color: "#f5c542", desc: "Earns credits during waves", kind: "miner",
       tiers: [
         { name: "Mining Sat", cost: 120, income: 8, every: 8 },
         { name: "Ore Drills", cost: 100, income: 12, every: 8, desc: "More credits per cycle." },
@@ -149,7 +149,7 @@ window.OD = window.OD || {};
     },
 
     carrier: {
-      name: "Drone Carrier", key: "6", color: "#ff7ad9", desc: "Launches fighter drones", kind: "carrier", targets: true,
+      name: "Drone Carrier", key: "9", color: "#ff7ad9", desc: "Launches fighter drones", kind: "carrier", targets: true,
       tiers: [
         { name: "Drone Carrier", cost: 160, range: 230, craft: 2, dmg: 7, rate: 3 },
         { name: "Hangar Bay", cost: 130, range: 240, craft: 3, dmg: 8, rate: 3, desc: "A third fighter." },
@@ -173,7 +173,7 @@ window.OD = window.OD || {};
       },
     },
     rail: {
-      name: "Railgun", key: "7", color: "#7dff9a", desc: "Huge damage, long reload", kind: "rail", targets: true,
+      name: "Railgun", key: "r", color: "#7dff9a", desc: "Huge damage, long reload", kind: "rail", targets: true,
       tiers: [
         { name: "Railgun", cost: 150, dmg: 120, range: 320, rate: 0.35 },
         { name: "Capacitor Bank", cost: 140, dmg: 165, range: 330, rate: 0.45, desc: "Faster charging, harder hits." },
@@ -196,6 +196,107 @@ window.OD = window.OD || {};
         },
       },
     },
+
+    // ---------- added later: Flak Array, Mine Layer, Focus Array (satellites) and the Missile Silo (ground) ----------
+    flak: {
+      name: "Flak Array", key: "3", color: "#ffb26b", desc: "Bursts hit several targets", kind: "flak", targets: true,
+      tiers: [
+        { name: "Flak Array", cost: 100, dmg: 7, range: 140, rate: 1.2, hits: 3 },
+        { name: "Twin Barrels", cost: 80, dmg: 9, range: 145, rate: 1.4, hits: 4, desc: "Hits 4 targets per burst." },
+        { name: "Proximity Fuses", cost: 130, dmg: 12, range: 160, rate: 1.5, hits: 5, desc: "Hits 5 targets, longer reach." },
+      ],
+      paths: {
+        A: {
+          name: "Hailstorm", color: "#ffd166", desc: "Wider bursts that shred whole swarms.",
+          tiers: [
+            { name: "Hailstorm", cost: 260, dmg: 14, range: 170, rate: 1.8, hits: 8, desc: "Hits 8 targets per burst." },
+            { name: "Steel Rain", cost: 600, dmg: 20, range: 185, rate: 2.2, hits: 12, desc: "Hits 12 targets per burst." },
+          ],
+        },
+        B: {
+          name: "Shredder", color: "#ff7a4a", desc: "Armor-piercing rounds that ignore armor.",
+          tiers: [
+            { name: "Shredder", cost: 280, dmg: 26, range: 170, rate: 1.5, hits: 5, pierceArmor: true, desc: "Ignores armor." },
+            { name: "Hull Breaker", cost: 640, dmg: 48, range: 185, rate: 1.7, hits: 6, pierceArmor: true, desc: "Ignores armor, huge hits." },
+          ],
+        },
+      },
+    },
+
+    mines: {
+      name: "Mine Layer", key: "6", color: "#ff6b8a", desc: "Drops space mines on its orbit", kind: "mines",
+      tiers: [
+        { name: "Mine Layer", cost: 150, dmg: 45, splash: 45, every: 3, max: 4, range: 30 },
+        { name: "Mine Racks", cost: 110, dmg: 60, splash: 50, every: 2.6, max: 5, range: 30, desc: "Faster, stronger mines." },
+        { name: "Smart Mines", cost: 170, dmg: 80, splash: 55, every: 2.2, max: 6, range: 34, desc: "Up to 6 mines at once." },
+      ],
+      paths: {
+        A: {
+          name: "Minefield", color: "#ffd166", desc: "Lays mines fast to carpet the orbit.",
+          tiers: [
+            { name: "Minefield", cost: 340, dmg: 90, splash: 55, every: 1.4, max: 10, range: 34, desc: "Up to 10 mines." },
+            { name: "Kill Zone", cost: 760, dmg: 140, splash: 60, every: 0.9, max: 16, range: 36, desc: "Up to 16 mines." },
+          ],
+        },
+        B: {
+          name: "Nuke Mines", color: "#ff4a4a", desc: "Few mines, enormous blasts.",
+          tiers: [
+            { name: "Nuke Mine", cost: 380, dmg: 300, splash: 90, every: 3.5, max: 4, range: 36, desc: "Huge blasts." },
+            { name: "Star Breaker", cost: 820, dmg: 800, splash: 120, every: 3.5, max: 5, range: 40, desc: "Enormous blasts." },
+          ],
+        },
+      },
+    },
+
+    focus: {
+      name: "Focus Array", key: "8", color: "#9cf6ff", desc: "Boosts nearby satellites' damage", kind: "focus",
+      tiers: [
+        { name: "Focus Array", cost: 180, focusRange: 140, focusDmg: 1.15 },
+        { name: "Wide Lens", cost: 140, focusRange: 150, focusDmg: 1.2, desc: "Nearby: +20% damage." },
+        { name: "Phase Lens", cost: 200, focusRange: 165, focusDmg: 1.25, desc: "Nearby: +25% damage." },
+      ],
+      paths: {
+        A: {
+          name: "Prism Lens", color: "#c18cff", desc: "A bigger damage boost for every satellite nearby.",
+          tiers: [
+            { name: "Prism Lens", cost: 420, focusRange: 180, focusDmg: 1.35, desc: "Nearby: +35% damage." },
+            { name: "Star Lens", cost: 900, focusRange: 200, focusDmg: 1.5, desc: "Nearby: +50% damage." },
+          ],
+        },
+        B: {
+          name: "Weak-Point Scanner", color: "#ff9de6", desc: "Marks invaders in range so everything hits them harder.",
+          tiers: [
+            { name: "Target Scanner", cost: 400, focusRange: 170, focusDmg: 1.25, mark: 1.15, desc: "Invaders in range take +15% damage." },
+            { name: "Deep Scan", cost: 860, focusRange: 190, focusDmg: 1.3, mark: 1.3, desc: "Invaders in range take +30% damage." },
+          ],
+        },
+      },
+    },
+
+    silo: {
+      name: "Missile Silo", key: "g", color: "#9fd4ff", desc: "Ground launcher, defends LEO", kind: "silo", targets: true, ground: true,
+      tiers: [
+        { name: "Missile Silo", cost: 120, dmg: 30, rate: 0.8, splash: 40, count: 1 },
+        { name: "Twin Silos", cost: 100, dmg: 34, rate: 1.0, splash: 42, count: 2, desc: "Fires 2 interceptors." },
+        { name: "Fast Reload", cost: 150, dmg: 42, rate: 1.2, splash: 50, count: 2, desc: "Faster, harder hits." },
+      ],
+      paths: {
+        A: {
+          name: "Barrage", color: "#ffd166", desc: "Salvos of interceptors.",
+          tiers: [
+            { name: "Barrage", cost: 300, dmg: 46, rate: 1.5, splash: 50, count: 4, desc: "4-missile salvos." },
+            { name: "Sky Wall", cost: 680, dmg: 60, rate: 1.8, splash: 55, count: 6, desc: "6-missile salvos." },
+          ],
+        },
+        B: {
+          name: "Nuke Silo", color: "#ff5c5c", desc: "One massive interceptor at a time.",
+          tiers: [
+            { name: "Nuke Silo", cost: 340, dmg: 220, rate: 0.5, splash: 110, count: 1, desc: "Huge blast." },
+            { name: "Doomsday Silo", cost: 760, dmg: 560, rate: 0.5, splash: 150, count: 1, desc: "Enormous blast." },
+          ],
+        },
+      },
+    },
   };
 
   // Each satellite in the unlock order costs more to build than the one before, and hits harder to match:
@@ -214,7 +315,10 @@ window.OD = window.OD || {};
 
   // Like Bloons, satellites unlock as you go: each one appears in the build bar (as a locked "?") once this many
   // waves have been cleared in the current game. The Railgun, the strongest, comes last.
-  OD.UNLOCK_WAVE = { laser: 0, missile: 3, tractor: 6, emp: 9, miner: 12, carrier: 15, rail: 18 };
+  OD.UNLOCK_WAVE = { laser: 0, missile: 3, silo: 4, flak: 5, tractor: 7, emp: 9, mines: 11, miner: 12, focus: 14, carrier: 16, rail: 18 };
+  // build-bar order = unlock order
+  const ORDER = Object.keys(OD.UNLOCK_WAVE), T0 = OD.TOWERS;
+  OD.TOWERS = Object.fromEntries(ORDER.map(k => [k, T0[k]]));
 
   OD.tierOf = (type, level, path) => {
     const def = OD.TOWERS[type];

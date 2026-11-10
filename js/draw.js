@@ -54,6 +54,39 @@ window.OD = window.OD || {};
 
   // ---------- satellites ----------
   const ART = {
+    // FLAK ARRAY: a squat drum with a fan of short barrels
+    flak(ctx, lvl, path, c, pc, time, t) {
+      const col = lvl >= 3 ? pc : c;
+      body(ctx, 8 + lvl * 0.6, col);
+      ctx.rotate(t.aim);
+      const n = 3 + Math.min(lvl, 2) + (path === "A" ? 2 : 0);
+      for (let i = 0; i < n; i++) { const a = (i - (n - 1) / 2) * 0.22; ctx.save(); ctx.rotate(a); rect(ctx, 4, -1.3, path === "B" ? 17 : 13, 2.6, col); ctx.restore(); }
+      circle(ctx, 0, 0, 4, "#2a1a10", col, 1.5);
+      if (path === "B" && lvl >= 4) glow(ctx, 16, 0, 6, pc, 0.7);
+    },
+    // MINE LAYER: a boxy dispenser with a rack of red mines
+    mines(ctx, lvl, path, c, pc, time, t) {
+      const col = lvl >= 3 ? pc : c;
+      rect(ctx, -8, -7, 16, 14, "#1d1420"); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(-8, -7, 16, 14);
+      const n = Math.min(6, 2 + lvl);
+      for (let i = 0; i < n; i++) circle(ctx, -5 + (i % 3) * 5, -3 + Math.floor(i / 3) * 6, path === "B" ? 2.6 : 2, col);
+      if ((t.flash || 0) > 0) glow(ctx, 0, 0, 14, col, t.flash * 0.8);
+    },
+    // FOCUS ARRAY: a lens ring around a glowing crystal
+    focus(ctx, lvl, path, c, pc, time, t) {
+      const col = lvl >= 3 ? pc : c;
+      glow(ctx, 0, 0, 14 + lvl * 2, col, 0.25 + 0.1 * Math.sin(time * 3));
+      circle(ctx, 0, 0, 10 + lvl, null, col, 2);
+      ctx.save(); ctx.rotate(time * 0.8); ctx.fillStyle = col; poly(ctx, path === "B" ? 6 : 4, 6); ctx.fill(); ctx.restore();
+      circle(ctx, 0, 0, 2.5, "#ffffff");
+    },
+    // MISSILE SILO: a round hatch with the warhead peeking out
+    silo(ctx, lvl, path, c, pc, time, t) {
+      const col = lvl >= 3 ? pc : c;
+      circle(ctx, 0, 0, 8 + lvl * 0.5, "#1a2333", col, 2);
+      const n = path === "A" ? (lvl >= 4 ? 6 : 4) : lvl >= 1 && path !== "B" ? 2 : 1;
+      for (let i = 0; i < n; i++) { const a = i * TAU / n, r = n > 1 ? 4 : 0; circle(ctx, Math.cos(a) * r, Math.sin(a) * r, path === "B" ? 4.5 : 2.4, path === "B" ? "#ff5c5c" : "#e8eef6"); }
+    },
     laser(ctx, lvl, path, c, pc, time, t) {
       body(ctx, 9 + lvl * 0.8, lvl >= 3 ? pc : c);
       ctx.rotate(t.aim);
@@ -303,7 +336,7 @@ window.OD = window.OD || {};
     ctx.translate(x, y);
     if (lvl >= 4) glow(ctx, 0, 0, 32, pc, 0.25 + 0.1 * Math.sin(time * 2));
     ctx.save(); ctx.rotate(ringAngle);
-    if (t.type !== "carrier") panels(ctx, lvl, pc);
+    if (t.type !== "carrier" && t.type !== "silo" && t.type !== "mines") panels(ctx, lvl, pc);
     if (t.type === "miner" || t.type === "carrier") ART[t.type](ctx, lvl, path, c, pc, time, t);
     ctx.restore();
     if (t.type !== "miner" && t.type !== "carrier") {

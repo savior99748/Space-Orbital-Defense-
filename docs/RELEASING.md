@@ -25,6 +25,7 @@ its own browser, and prints one line per file. Screenshots land in `tests/.out/`
 | `view3d.test.cjs` | 3D view, Classic 2D switch, per-view records, all maps |
 | `maps-modes.test.cjs` | Every map in 3D and 2D, Endless save/load, pause, game over and retry |
 | `satellites.test.cjs` | All 7 satellites on both paths at every tier, turret aim, animation, kills |
+| `newsats.test.cjs` | Flak, Mine Layer, Focus Array, Missile Silo: ground-pad rules, LEO-only targeting (3D and 2D) |
 | `progression.test.cjs` | Fleet Link stacking (+35% each, cap +140%, real fire rate, removal), Ascension tiers, the five Endless invaders, late-game scaling |
 | `tutorial.test.cjs`, `endless.test.cjs`, `stats.test.cjs`, `icons-overclock.test.cjs`, `menu.test.cjs`, `shake.test.cjs`, `rotate.test.cjs` | Tutorial, Endless + leaderboards, analytics, 3D icons + Overclock, cinematic menu, shake + graphics settings, phone rotation |
 

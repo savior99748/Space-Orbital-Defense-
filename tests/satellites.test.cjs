@@ -11,14 +11,16 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     await pg.goto('http://127.0.0.1:8769/index.html?view=3d');
     await pg.evaluate(() => { localStorage.setItem('od_tut_done','1'); localStorage.setItem('od_stats_off','1'); });
     await pg.reload(); await pg.waitForFunction(() => window.__view3d && window.__od, null, { timeout: 20000 });
-    const T = ['laser','missile','tractor','rail','emp','miner','carrier'];
+    const T = ['laser','missile','tractor','rail','emp','miner','carrier','flak','mines','focus','silo'];
     // place every type twice (path A and B), check the model after every upgrade
     const res = await pg.evaluate(async T => {
       const od = window.__od, v = window.__view3d; od.begin('earth', 'medium'); const S = od.state(); S.money = 1e7; S.lives = 999;
       const frame = () => new Promise(r => requestAnimationFrame(() => r()));
       const models = () => { const m = new Map(); v.scene.children.forEach(c => { if (c.userData && c.userData.key) m.set(c, c.userData.key); }); return [...m.values()]; };
-      const out = { keys: [], bad: [] }; let slot = 0;
+      const out = { keys: [], bad: [] }, B = od.board();
+      const orbit = B.slots.filter(s => !s.surface).map(s => s.id), pads = B.slots.filter(s => s.surface).map(s => s.id);
       for (const t of T) for (const path of ['A', 'B']) {
+        const slot = (t === 'silo' ? pads : orbit).shift(); // silos go on ground pads, satellites in orbit
         od.placeTower(slot, t); const tw = od.towerAt(slot); await frame(); await frame();
         for (let l = 0; l < 4; l++) {
           od.upgradeTower(tw, path); await frame(); await frame();
@@ -26,13 +28,12 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
           if (!models().includes(want)) out.bad.push(want);
         }
         out.keys.push(`${t}|${tw.level}|${tw.path}`);
-        slot += 2;
       }
       out.count = S.towers.length; out.models = models().length;
       return out;
     }, T);
-    ok(res.count === 14 && res.models === 14, `${name}: 14 satellites placed, 14 models in the scene (${res.models})`);
-    ok(res.bad.length === 0, `${name}: model updates on every upgrade, all 7 types, both paths ${res.bad.join(' ')}`);
+    ok(res.count === T.length * 2 && res.models === T.length * 2, `${name}: ${T.length * 2} satellites and silos placed, ${res.models} models in the scene`);
+    ok(res.bad.length === 0, `${name}: model updates on every upgrade, all 10 satellites and the silo, both paths ${res.bad.join(' ')}`);
     // targeting + animation: start a wave, watch turret orientations and animated parts move
     const snap = () => pg.evaluate(() => { const v = window.__view3d, out = {}; v.scene.children.forEach(c => { const tur = c.userData && c.userData.key && c.getObjectByName('turret'); if (tur) out[c.userData.key] = tur.quaternion.toArray().map(x => x.toFixed(3)).join(','); }); return out; });
     const animSnap = () => pg.evaluate(() => { const v = window.__view3d; let s = ''; v.scene.children.forEach(c => { if (c.userData && c.userData.key) c.traverse(o => { if (o.userData.live) s += o.rotation.toArray().slice(0, 3).map(x => (+x).toFixed(2)) + o.scale.x.toFixed(2) + o.visible; }); }); return s; });

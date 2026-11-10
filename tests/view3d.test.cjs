@@ -35,7 +35,7 @@ const BASE = 'http://127.0.0.1:8769/';
       await pg.evaluate(m => { const od = window.__od; od.begin(m, 'medium');
         const S = od.state(), B = od.board(); S.money = 1e6;
         const types = ['laser', 'missile', 'rail', 'emp', 'tractor', 'carrier', 'miner'];
-        B.slots.forEach((s, i) => { if (i % 2) return; od.placeTower(s.id, types[i % 7]); const t = od.towerAt(s.id); while (t.level < (i % 5)) od.upgradeTower(t, i % 4 < 2 ? 'A' : 'B'); });
+        B.slots.forEach((s, i) => { if (i % 2 || s.surface) return; od.placeTower(s.id, types[i % 7]); const t = od.towerAt(s.id); while (t.level < (i % 5)) od.upgradeTower(t, i % 4 < 2 ? 'A' : 'B'); });
         S.wave = 11; S.lives = 999; od.startWave(); S.speed = 2; }, map);
       await pg.waitForTimeout(3500);
       await pg.screenshot({ path: `v3-map-${map}.png` });
