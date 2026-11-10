@@ -3,6 +3,7 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Starting credits 1,000** on every map tier.
 - **Scarce, Bloons-sized economy:** all money ×5 (start 1,500 / 1,375 / 1,300; kills pay ×6.25), and satellites
   are now expensive enough that you can't build everything: build prices climb along the unlock order (Laser 200,
   Missile 400, Silo 500, Flak 600, Tractor 750, EMP 1,000, Mines 1,250, Mining 1,500, Focus 1,800, Carrier 2,400,
