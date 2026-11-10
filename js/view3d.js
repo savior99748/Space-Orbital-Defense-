@@ -659,6 +659,19 @@ function sync() {
     const tilt = g.getObjectByName("tilt"); if (tilt) tilt.rotation.set(-(cam.pitch - 0.35), cam.yaw, 0);
   });
   if (od().map().final) sunPoint.position.set(0, 0, 0);
+  // Solar System: each planet's HP above it; a fallen planet goes dark
+  const HP = S && S.bodyHp;
+  B.bodies.forEach((b, i) => {
+    if (b.root) return;
+    const g = world.bodies[i], lbl = g.getObjectByName("label"), hp = HP ? HP[i] : null;
+    if (lbl && lbl.userData.hp !== hp) {
+      lbl.userData.hp = hp;
+      const fresh = textSprite(hp == null ? b.name : hp > 0 ? `${b.name} ♥${hp}` : `${b.name} ✖`, hp === 0 ? "#ff6b7a" : hp != null && hp <= 3 ? "#ffb070" : "#8b90b8", 22);
+      lbl.material.map.dispose(); lbl.material.map = fresh.material.map; lbl.scale.copy(fresh.scale); lbl.material.needsUpdate = true;
+    }
+    const surf = g.getObjectByName("surface");
+    if (surf && surf.material && surf.material.color) { const dark = hp === 0; if (surf.userData.dark !== dark) { surf.userData.dark = dark; surf.material.color.setScalar(dark ? 0.25 : 1); } }
+  });
   // rings follow their body and rotate
   B.rings.forEach((r, i) => { const b = B.bodies[r.body]; world.rings[i].position.set(b.x - C.x, H, b.y - C.y); });
   // empty slots
@@ -677,7 +690,8 @@ function sync() {
   // satellites: grow when zoomed out so they stay at least SAT_MIN_PX across on screen
   const viewH = canvas.clientHeight || 1;
   const worldPerPx = 2 * cam.dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / viewH;
-  const satScale = Math.max(SAT, SAT_MIN_PX * worldPerPx / 20); // a satellite body is ~20 model units wide
+  const MS = od().map().satScale || 1; // Solar System: satellites small next to big planets
+  const satScale = Math.max(SAT * MS, SAT_MIN_PX * MS * worldPerPx / 20); // a satellite body is ~20 model units wide
   const seen = new Set();
   if (S) for (const tw of S.towers) {
     seen.add(tw.id);
@@ -708,7 +722,8 @@ function sync() {
       if (k >= 1 || k < 0) satPop.delete(tw.id);
       else { m.scale.multiplyScalar(1 + 0.35 * (1 - k) * (1 - k)); burst(m.position, towerColor(tw), 60 * satScale, k, now * 4); }
     }
-    m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
+    if (tw.offline) m.scale.multiplyScalar(0.8); // offline (its planet has fallen)
+    else m.userData.update(t, (tw.cd || 0) > 0, 1 / 60);
     // firing visuals, read from the satellite's cooldown (no gameplay change)
     const st = tw.st, period = st && st.rate ? 1 / st.rate : 0, cd = tw.cd || 0;
     if (period && MUZZLE[tw.type] && !st.dps) {
