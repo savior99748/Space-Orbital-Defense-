@@ -26,7 +26,9 @@ const money = pg => pg.evaluate(() => window.__od.state().money);
   ok(await pg.evaluate(() => !document.getElementById('adBtn').classList.contains('hidden') && document.getElementById('adBtn').textContent.startsWith('📺')), 'ads: 📺 bonus button shown');
   const m0 = await money(pg);
   await pg.evaluate(() => { const btn = document.getElementById('adBtn'); btn.disabled = false; btn.click(); btn.disabled = false; btn.click(); }); // double tap
-  await pg.waitForTimeout(2600); // the simulated ad lasts 2 s
+  // the simulated ad lasts 2 s: wait for the payout (slow CI machines), then a little longer to catch any second payout
+  await pg.waitForFunction(m0 => window.__od.state().money > m0, m0, { timeout: 15000 }).catch(() => {});
+  await pg.waitForTimeout(1500);
   const m1 = await money(pg);
   ok(m1 > m0 && m1 - m0 === await pg.evaluate(() => Math.round((60 + 3 * 12) * window.__od.state().diff.reward * OD.ECON)), `ads: double tap pays exactly one bonus (+${m1 - m0})`);
   const again = await pg.evaluate(() => OD.monetization.claim('credits', { done: () => window.__od.state().adWave === window.__od.state().wave, mark() {} }));
