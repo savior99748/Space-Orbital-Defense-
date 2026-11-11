@@ -32,17 +32,28 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     od.begin('earth', 'medium'); const S = od.state(), B = od.board(); S.money = 1e6;
     out.oldSlotsHidden = B.slots.filter(s => B.rings[s.ring].hidden).every(s => !od.slotFits(s.id, 'laser'));
     const L = od.launchSlot(0);
-    for (let i = 0; i < 3; i++) od.placeTower(L, 'laser');
+    out.noMarker = !od.slotUsable(L); // no tappable marker: launches go through the LAUNCH button
+    // pick a satellite → the launch panel shows; LAUNCH puts it on its own orbit in the chosen zone
+    document.querySelector('#shop [data-type="laser"]').click(); od.updateUI && od.updateUI(true);
+    await wait(100); const pad = document.getElementById('launchPad');
+    out.padShown = !!pad && pad.style.display === 'flex' && !!pad.querySelector('[data-launch]');
+    pad.querySelector('[data-launch]').click(); pad.querySelector('[data-launch]').click();
+    pad.querySelector('[data-band="2"]').click(); pad.querySelector('[data-launch]').click();
     out.rings = new Set(S.towers.map(t => B.slots[t.slot].ring)).size;
-    out.inLeo = S.towers.every(t => B.rings[B.slots[t.slot].ring].band === 0 && t.fuel === 20 && t.orbit === 0);
-    const t = S.towers[0];
-    od.upgradeTower(t); od.upgradeTower(t); od.upgradeTower(t, 'A'); out.blockedAt = t.level; // needs MEO to specialize
-    const r0 = B.rings[B.slots[t.slot].ring].r; od.raiseOrbit(t); const r1 = B.rings[B.slots[t.slot].ring];
-    out.meo = t.orbit === 1 && r1.band === 1 && r1.r > r0;
-    od.upgradeTower(t, 'A'); out.specialized = t.level === 3;
-    od.upgradeTower(t); out.blockedTier5 = t.level === 3; od.raiseOrbit(t); od.upgradeTower(t); out.tier5 = t.level === 4 && t.orbit === 2;
+    out.zones = S.towers.map(t => `${B.rings[B.slots[t.slot].ring].band}:${t.orbit}:${t.fuel}`).join(',');
+    // tapping the Moon picks it as the launch site
+    od.pickLaunchSite(1); pad.querySelector('[data-band="0"]').click(); pad.querySelector('[data-launch]').click();
+    out.moon = B.rings[B.slots[S.towers[3].slot].ring].body === 1;
+    S.selectedType = null; od.tapSlot(null);
+    // moving a satellite to another zone costs 1 fuel per zone; upgrades aren't tied to orbits
+    const t = S.towers[0]; od.setOrbit(t, 2); out.moved = t.orbit === 2 && B.rings[B.slots[t.slot].ring].band === 2 && t.fuel === 18;
+    od.upgradeTower(t); od.upgradeTower(t); od.upgradeTower(t, 'A'); od.upgradeTower(t); out.tier5 = t.level === 4;
+    // refuel: costs half of everything spent on it (for a full tank), back to 20
+    t.fuel = 0; const rc = od.refuelCost(t), m0 = S.money; od.refuel(t);
+    out.refuel = t.fuel === 20 && m0 - S.money === rc && rc >= Math.floor(t.spent * 0.5) && od.refuelCost(t) === 0; out.refuelCost = rc; out.spent = t.spent;
+    for (let i = 0; i < 2; i++) od.placeTower(L, 'laser');
     // fill LEO: launch refuses when it's full
-    const leo = od.freeLanes(0, 0).length; for (let i = 0; i < leo; i++) od.placeTower(L, 'laser');
+    S.launchBand = 0; const leo = od.freeLanes(0, 0).length; for (let i = 0; i < leo; i++) od.placeTower(L, 'laser');
     const n = S.towers.length; od.placeTower(L, 'laser'); out.leoFull = S.towers.length === n;
     // fuel: 1 per wave, Overdrive burns 2, out of fuel → burns up
     S.lives = 1e6; S.wave = 0; od.startWave(); S.speed = 8; S.enemies = []; S.queue = [];
@@ -62,10 +73,12 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   });
   console.log(JSON.stringify(r.maps));
   ok(Object.values(r.maps).every(v => !v.includes('CLASH') && !v.startsWith('0')), `every map has LEO/MEO/HEO lanes, none sharing a radius (${Object.entries(r.maps).map(([k, v]) => k + ' ' + v).join(', ')})`);
-  ok(r.oldSlotsHidden, 'the old shared ring slots are switched off');
-  ok(r.rings === 3 && r.inLeo, 'three launches → three different orbits, all in LEO with 20 fuel');
-  ok(r.blockedAt === 2 && r.meo && r.specialized, 'specializing needs MEO; raising moves it to a higher orbit');
-  ok(r.blockedTier5 && r.tier5, 'tier 5 needs HEO');
+  ok(r.oldSlotsHidden && r.noMarker, 'the old shared ring slots and the tap markers are off');
+  ok(r.padShown, 'picking a satellite opens the launch panel with a LAUNCH button');
+  ok(r.rings === 3 && r.zones === '0:0:20,0:0:20,2:2:18', `each LAUNCH → its own orbit in the chosen zone; higher starts with less fuel (${r.zones})`);
+  ok(r.moon, 'tapping the Moon makes it the launch site');
+  ok(r.moved && r.tier5, 'changing zone costs 1 fuel per zone; upgrades no longer need an orbit');
+  ok(r.refuel, `refuel tops up to 20 and costs a lot (${r.refuelCost} cr for a satellite worth ${r.spent} cr)`);
   ok(r.leoFull, 'launching into a full LEO is refused');
   ok(r.fuelAfterWave === 19 && r.fuelAfterOd === 17, `1 fuel per wave (${r.fuelAfterWave}), Overdrive burns 2 more (${r.fuelAfterOd})`);
   ok(r.burned > 0 && r.left === 0, `satellites out of fuel burn up (${r.burned})`);
