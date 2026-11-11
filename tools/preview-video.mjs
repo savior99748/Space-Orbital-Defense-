@@ -1,7 +1,7 @@
 // 20-second CrazyGames preview video (landscape 1920x1080 and portrait 1080x1620), cut from real gameplay:
 //   satellites launching at Earth → Saturn: flak + mines + warp-ins → Jupiter: Missile Silos and railguns →
 //   an Endless Void Titan with Overdrive → a sweep over the whole Solar System under attack.
-//   Plays at 3× game speed. No text, no black intro, no cursor (CrazyGames' preview rules).
+//   Plays at a steady 2× game speed. No text, no black intro, no cursor (CrazyGames' preview rules).
 //   node tools/preview-video.mjs                     → dist/preview/ both formats
 //   FORMAT=landscape|portrait node tools/preview-video.mjs   → just one
 //   PREVIEW=1 node tools/preview-video.mjs           → contact sheets only (fast)
@@ -30,9 +30,9 @@ const CLIPS = [
   { map: "jupiter", wave: 26, secs: 3.5,
     keys: [[0, -1.35, 0.4, 0.5], [3.5, -0.95, 0.52, 0.62]] },
   { map: "uranus", wave: 55, endless: true, secs: 4.5, boss: "titan", cap: 26, warm: 110,
-    keys: [[0, 0.3, 0.4, 0.58], [4.5, 0.75, 0.5, 0.68]], acts: [[2.2, "overdrive"]] },
+    keys: [[0, 0.3, 0.4, 0.58], [4.5, 0.75, 0.5, 0.68]] },
   { map: "sol", wave: 32, endless: true, secs: 5, warm: 260,
-    keys: [[0, 0.25, 0.42, 0.3], [2.5, 0.6, 0.48, 0.4], [5, 0.9, 0.6, 0.56]], acts: [[2, "overdrive"]] },
+    keys: [[0, 0.25, 0.42, 0.3], [2.5, 0.6, 0.48, 0.4], [5, 0.9, 0.6, 0.56]] },
 ];
 
 // ---------- static server + virtual clock ----------
@@ -75,7 +75,7 @@ const SETUP = ({ map, wave, endless, fill = 1, swarm, boss, cap = 0 }) => {
   S.queue.sort((a, b) => rank(a.type) - rank(b.type)).forEach(q => { q.gap = Math.min(q.gap, 0.2); });
   if (cap) S.queue = S.queue.slice(0, cap); // a readable fight (the boss up front, not a white-out)
   window.__keepAlive = () => { S.lives = 1e6; if (S.bodyHp) S.bodyHp = S.bodyHp.map((h, i) => (i ? Math.max(h, 6) : h)); if (!cap && S.queue.length === 0 && S.enemies.length < 14) { S.waveActive = false; od.startWave(); } };
-  S.speed = 3; // fast-paced: the whole preview plays at 3× game speed (camera moves stay smooth)
+  S.speed = 2; // steady 2× game speed for the whole preview (no Overdrive, so nothing speeds up mid-clip)
   const v = window.__view3d; if (v.quality) v.quality.level = 99;
   v.cam.fit = v.cam.fit || 900;
 };
@@ -124,7 +124,7 @@ try {
     for (const clip of CLIPS) {
       await page.evaluate(SIZE, [W / 4, H / 4]);
       await page.evaluate(SETUP, clip);
-      await step(page, 50, Math.round((clip.warm ?? 150) / 3)); // let the wave close in before rolling
+      await step(page, 50, Math.round((clip.warm ?? 150) / 2)); // let the wave close in before rolling
       await page.evaluate(CLEAN);
       await page.evaluate(SIZE, [Math.round(W * SS), Math.round(H * SS)]);
       const n = Math.round(clip.secs * FPS), acts = [...(clip.acts || [])];
