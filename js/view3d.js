@@ -137,17 +137,18 @@ function tap(sx, sy, touch) {
     const d = (px - sx) ** 2 + (py - sy) ** 2;
     if (d < bd) { bd = d; best = s.id; }
   }
-  // Own Orbits: with a satellite picked, tapping a planet or moon itself launches from it
+  // Own Orbits: with a satellite picked, tapping a planet or moon picks it as the launch site (LAUNCH button does the rest)
   if (best == null && od().EXP && S.selectedType && !od().TOWERS[S.selectedType].ground) {
-    let bb = Infinity;
+    let bb = Infinity, site = null;
     B.bodies.forEach((b, bi) => {
-      const ls = od().launchSlot(bi); if (ls == null || !od().slotUsable(ls)) return;
+      if (od().launchSlot(bi) == null) return;
       _v.set(b.x - C.x, H, b.y - C.y).project(camera);
       const px = (_v.x + 1) / 2 * r.width, py = (1 - _v.y) / 2 * r.height;
       _v.set(b.x - C.x + b.r, H, b.y - C.y).project(camera);
       const rad = Math.max(touch ? 34 : 22, Math.abs((_v.x + 1) / 2 * r.width - px) * 1.15), d = (px - sx) ** 2 + (py - sy) ** 2;
-      if (d < rad * rad && d < bb) { bb = d; best = ls; }
+      if (d < rad * rad && d < bb) { bb = d; site = bi; }
     });
+    if (site != null && od().pickLaunchSite(site)) return;
   }
   od().tapSlot(best, touch);
 }
@@ -698,7 +699,7 @@ function sync() {
     const p = OD.slotPos(s.id), taken = S && OD.towerAt(s.id), usable = !S || OD.slotUsable(s.id);
     dummy.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y); dummy.rotation.set(0, 0, 0);
     // while building, only the slots that fit show (orbit slots for satellites, ground pads for silos)
-    dummy.scale.setScalar(taken || !usable ? 0.0001 : B.rings[s.ring].launch ? 2.6 + 0.4 * Math.sin(now * 5) : building ? 1.6 : s.surface ? 0.7 : 1); dummy.updateMatrix();
+    dummy.scale.setScalar(taken || !usable ? 0.0001 : building ? 1.6 : s.surface ? 0.7 : 1); dummy.updateMatrix();
     world.slotMesh.setMatrixAt(i, dummy.matrix);
   });
   world.slotMesh.instanceMatrix.needsUpdate = true;

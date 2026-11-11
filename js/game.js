@@ -12,10 +12,10 @@
   const OVERDRIVE = { duration: 6, cooldown: 30, ringMul: 5, rateMul: 1.3 };
   // EXPERIMENT "Own Orbits" (?exp=orbits, see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
   // lanes never cross (each has its own radius), so satellites can't collide. Satellites carry fuel for FUEL_MAX waves
-  // and burn up when it runs out; Overdrive burns OD_FUEL extra. Specializing needs MEO, tier 5 needs HEO.
+  // and burn up when it runs out; Overdrive burns OD_FUEL extra. Picking a satellite opens a launch panel: choose the
+  // zone (LEO / MEO / HEO) and the body to launch from, then LAUNCH. A satellite can change zone later for 1 fuel per zone.
   const EXP = !!OD.EXP;
-  const FUEL_MAX = 20, OD_FUEL = 2, BAND = ["LEO", "MEO", "HEO"];
-  const orbitCost = (type, band) => Math.round(TOWERS[type].tiers[0].cost * (band === 1 ? 0.75 : 1.5) / 10) * 10;
+  const FUEL_MAX = 20, OD_FUEL = 2, BAND = ["LEO", "MEO", "HEO"], EXP_SPEED = 0.8; // invaders 20% slower in the test
   const TARGET_MODES = ["first", "last", "strong", "close"];
   const TARGET_LABEL = { first: "First", last: "Last", strong: "Strong", close: "Close" };
 
@@ -204,7 +204,7 @@
     const r = B.rings[B.slots[id].ring];
     if (r.hidden) return false;
     if (r.lane) return !!towerAt(id);
-    if (r.launch) return !!(S && S.selectedType) && slotFits(id, S.selectedType);
+    if (r.launch) return false; // Own Orbits: launches go through the LAUNCH button
     return !S || !S.selectedType || !!towerAt(id) || slotFits(id, S.selectedType);
   };
   function nearestSlot(x, y, maxD) {
@@ -416,7 +416,7 @@
       const rateMul = t.buffRate * (odActive ? OVERDRIVE.rateMul : 1);
       t.st = Object.assign({}, b, {
         // 3D maps give extra range: satellites cover a volume instead of a flat disk
-        range: b.range ? b.range * t.buffRange * (MAP.rangeMul || 1) * (t.orbit ? 1 + 0.1 * t.orbit : 1) : b.range,
+        range: b.range ? b.range * t.buffRange * (MAP.rangeMul || 1) : b.range,
         rate: b.rate ? b.rate * rateMul : b.rate,
         dps: b.dps ? b.dps * rateMul : b.dps,
       });
@@ -454,7 +454,7 @@
     updateMines(dt);
 
     // invaders speed up a little each wave after wave 10 (up to +25%)
-    const spd = S.diff.speed * (MAP.enemySpeed || 1) * (1 + Math.min(0.25, Math.max(0, S.wave - 10) * 0.012));
+    const spd = S.diff.speed * (MAP.enemySpeed || 1) * (EXP ? EXP_SPEED : 1) * (1 + Math.min(0.25, Math.max(0, S.wave - 10) * 0.012));
     const rootR = B.bodies[0].r;
     for (const e of S.enemies) {
       if (e.dead) continue;
@@ -563,20 +563,59 @@
     if (S.selectedTower === t) S.selectedTower = null;
     sfx("sell");
   }
-  function raiseOrbit(t) {
-    if (!EXP || t.fuel == null || (t.orbit || 0) >= 2) return;
-    const band = (t.orbit || 0) + 1, cost = orbitCost(t.type, band), bi = B.rings[B.slots[t.slot].ring].body;
-    if (S.money < cost) { sfx("deny"); return; }
+  // Move a satellite to another zone around the same body (like Target: First / Last / ...). 1 fuel per zone moved.
+  function setOrbit(t, band) {
+    if (!EXP || t.fuel == null || band === (t.orbit || 0) || band < 0 || band > 2) return;
+    const bi = B.rings[B.slots[t.slot].ring].body, burn = Math.abs(band - (t.orbit || 0));
+    if (t.fuel <= burn) { toast("Not enough fuel to change orbit"); sfx("deny"); return; }
     const lane = freeLane(bi, band);
     if (lane == null) { toast(`${BAND[band]} around ${B.bodies[bi].name} is full`); sfx("deny"); return; }
-    S.money -= cost; t.spent += cost; S.stats.spent += cost;
-    t.slot = lane; t.orbit = band;
+    t.fuel -= burn; t.slot = lane; t.orbit = band;
     const p = slotPos(lane);
     burst(p.x, p.y, "#7fd8ff", 18, 100, 0.7, p.z);
-    sfx("upgrade"); toast(`🚀 Raised to ${BAND[band]}: +${band * 10}% range`);
+    sfx("click"); toast(`🚀 Moved to ${BAND[band]} (−${burn} fuel)`);
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
+  const nextOrbit = t => { const bi = B.rings[B.slots[t.slot].ring].body; for (let k = 1; k <= 2; k++) { const b = ((t.orbit || 0) + k) % 3; if (freeLanes(bi, b).length) return b; } return null; };
+
+  // Launch panel: shown while a satellite is picked. Zone + launch site + LAUNCH.
+  const launchSites = () => B.bodies.map((b, i) => i).filter(i => launchSlot(i) != null && !(S.bodyHp && i && S.bodyHp[i] <= 0));
+  let padEl = null, padKey = "";
+  function renderLaunchPad() {
+    if (!EXP) return;
+    if (!padEl) {
+      padEl = document.createElement("div"); padEl.id = "launchPad";
+      padEl.style.cssText = "position:absolute;left:50%;transform:translateX(-50%);bottom:52px;z-index:6;display:none;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;padding:8px 10px;border-radius:14px;background:rgba(7,24,42,.94);border:1px solid #386782;color:#dfefff;font:600 13px system-ui,sans-serif;max-width:calc(100% - 16px)";
+      stage.appendChild(padEl);
+      padEl.addEventListener("click", ev => {
+        const z = ev.target.closest("[data-band]"), go = ev.target.closest("[data-launch]");
+        if (z) { S.launchBand = +z.dataset.band; sfx("click"); renderLaunchPad(); }
+        if (go) launchNow();
+      });
+      padEl.addEventListener("change", ev => { if (ev.target.matches("select")) { S.launchFrom = +ev.target.value; sfx("click"); renderLaunchPad(); } });
+    }
+    const type = S && !S.over && S.selectedType, def = type && TOWERS[type];
+    if (!def || def.ground) { padEl.style.display = "none"; padKey = ""; return; }
+    const sites = launchSites();
+    if (!sites.includes(S.launchFrom)) S.launchFrom = sites[0];
+    const band = S.launchBand || 0, from = S.launchFrom, free = from == null ? 0 : freeLanes(from, band).length, cost = def.tiers[0].cost;
+    const narrow = stage.clientWidth < 620;
+    const key = [type, band, from, free, S.money >= cost, sites.join(), narrow].join("|");
+    if (key === padKey) return; padKey = key;
+    padEl.style.bottom = narrow ? "6px" : "52px"; padEl.style.width = narrow ? "calc(100% - 12px)" : ""; padEl.style.gap = narrow ? "6px" : "8px"; padEl.style.padding = narrow ? "6px" : "8px 10px";
+    const zb = i => `<button data-band="${i}" style="${narrow ? "flex:1;" : ""}padding:6px 11px;border-radius:9px;border:1px solid #7fd8ff;font:inherit;cursor:pointer;${band === i ? "background:#7fd8ff;color:#07182a" : "background:transparent;color:#bfefff"}">${BAND[i]}</button>`;
+    padEl.innerHTML = `${narrow ? "" : "<span>🛰 Orbit</span>"}${[0, 1, 2].map(zb).join("")}
+      ${narrow ? "" : `<span style="margin-left:4px">from</span>`}<select style="${narrow ? "flex:1.6;min-width:0;" : ""}font:inherit;padding:5px;border-radius:8px;background:#0c2238;color:#dfefff;border:1px solid #386782">${sites.map(i => `<option value="${i}" ${i === from ? "selected" : ""}>${B.bodies[i].name} ${narrow ? `· ${freeLanes(i, band).length}` : `(${freeLanes(i, band).length} free)`}</option>`).join("")}</select>
+      <button data-launch="1" ${free && S.money >= cost ? "" : "disabled"} style="${narrow ? "width:100%;" : ""}padding:8px 16px;border-radius:10px;border:0;font:800 14px system-ui,sans-serif;letter-spacing:.04em;cursor:pointer;background:${free && S.money >= cost ? "#ffb347" : "#555"};color:#1a0d00">🚀 LAUNCH · ${cost} cr</button>`;
+    padEl.style.display = "flex";
+  }
+  function launchNow() {
+    if (!S || !S.selectedType || S.launchFrom == null) return;
+    placeTower(launchSlot(S.launchFrom));
+    renderLaunchPad();
+  }
+  const pickLaunchSite = bi => { if (!EXP || !S || !S.selectedType || !launchSites().includes(bi)) return false; S.launchFrom = bi; sfx("click"); renderLaunchPad(); return true; };
 
   // Invaders spiral toward the centre; moons/planets bend their path with gravity.
   // Works in 3D (z = height); on flat maps z stays 0 and this is the classic 2D spiral.
@@ -1490,14 +1529,7 @@
     const color = pathDef ? pathDef.color : def.color;
     let upHtml = "", next = null;
     const bi = B.rings[B.slots[t.slot].ring].body, sat = EXP && t.fuel != null;
-    if (sat && (t.level === 2 || t.level === 3) && (t.orbit || 0) < t.level - 1) { // needs a higher orbit first
-      const band = (t.orbit || 0) + 1, oc = orbitCost(t.type, band), free = freeLanes(bi, band).length;
-      upHtml = `<div class="choose">${t.level === 2 ? "Specializations" : "Tier 5"} need${t.level === 2 ? "" : "s"} a higher orbit:</div>
-        <button class="up-card oc-card" data-orbit="1" ${S.money >= oc && free ? "" : "disabled"} style="--c:#7fd8ff">
-        <span class="oc-icon">🚀</span>
-        <span><b>Raise to ${BAND[band]}</b><small>Moves to its own ${BAND[band]} orbit: +${band * 10}% range. ${free ? `${free} free around ${B.bodies[bi].name}.` : `${BAND[band]} around ${B.bodies[bi].name} is full.`}</small><span class="cost">${fmt(oc)} cr</span></span></button>`;
-    }
-    else if (t.level < 2) { next = tierOf(t.type, t.level + 1); upHtml = upgradeCard(t, t.level + 1); }
+    if (t.level < 2) { next = tierOf(t.type, t.level + 1); upHtml = upgradeCard(t, t.level + 1); }
     else if (t.level === 2) {
       upHtml = `<div class="choose">Choose a specialization (permanent):</div>
         ${["A", "B"].map(p => `<div class="path-desc" style="color:${def.paths[p].color}">${def.paths[p].name}: <span>${def.paths[p].desc}</span></div>${upgradeCard(t, 3, p)}`).join("")}`;
@@ -1531,7 +1563,7 @@
         <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
-      <div class="actions">${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
+      <div class="actions">${sat ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone">Orbit: <b>${BAND[t.orbit || 0]}</b></button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
       if (paint3D(c)) return;
@@ -1545,7 +1577,6 @@
   ui.info.addEventListener("click", ev => {
     const t = S && S.selectedTower;
     if (!t) return;
-    if (ev.target.closest("[data-orbit]") && !ev.target.closest("[data-orbit]").disabled) return raiseOrbit(t);
     if (ev.target.closest("[data-oc]") && !ev.target.closest("[data-oc]").disabled) return overclockTower(t);
     if (ev.target.closest("[data-asc]") && !ev.target.closest("[data-asc]").disabled) return ascendTower(t);
     const up = ev.target.closest("[data-up]");
@@ -1555,6 +1586,7 @@
       const a = act.dataset.act;
       if (a === "close") { S.selectedTower = null; renderInfo(); }
       else if (a === "sell") sellTower(t);
+      else if (a === "orbit") { const nb = nextOrbit(t); if (nb == null) { toast("Every other zone is full"); sfx("deny"); } else setOrbit(t, nb); }
       else if (a === "target") { t.targeting = TARGET_MODES[(TARGET_MODES.indexOf(t.targeting) + 1) % TARGET_MODES.length]; sfx("click"); renderInfo(); }
     }
   });
@@ -1566,7 +1598,6 @@
     const nextLevel = t.level + 1;
     const usePath = nextLevel === 3 ? path : t.path;
     if (nextLevel === 3 && !usePath) return;
-    if (EXP && t.fuel != null && nextLevel >= 3 && (t.orbit || 0) < nextLevel - 2) { toast(`Raise it to ${BAND[nextLevel - 2]} first`); sfx("deny"); return; }
     const tier = tierOf(t.type, nextLevel, usePath);
     if (S.money < tier.cost) { sfx("deny"); return; }
     S.money -= tier.cost; t.spent += tier.cost; S.stats.spent += tier.cost;
@@ -1637,15 +1668,15 @@
     if (!slotFits(slotId, S.selectedType)) { toast(def.ground ? "Missile Silos go on the ground pads on planets and moons" : "Ground pads are for Missile Silos"); sfx("deny"); return; }
     if (S.money < cost) { toast("Not enough credits"); sfx("deny"); return; }
     if (B.rings[B.slots[slotId].ring].launch) { // Own Orbits: launch onto a free LEO lane around that body
-      const bi = B.rings[B.slots[slotId].ring].body, lane = freeLane(bi, 0);
-      if (lane == null) { toast(`LEO around ${B.bodies[bi].name} is full: raise a satellite to MEO, or launch from another body`, 2800); sfx("deny"); return; }
+      const bi = B.rings[B.slots[slotId].ring].body, lane = freeLane(bi, S.launchBand || 0);
+      if (lane == null) { toast(`${BAND[S.launchBand || 0]} around ${B.bodies[bi].name} is full: pick another zone or launch site`, 2800); sfx("deny"); return; }
       slotId = lane;
     }
     S.money -= cost; S.stats.spent += cost;
     const p = slotPos(slotId);
     S.towers.push(Object.assign({ id: nextId++, type: S.selectedType, slot: slotId, level: 0, path: null, spent: cost,
-      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a }, EXP && !def.ground ? { fuel: FUEL_MAX, orbit: 0 } : {}));
-    if (EXP && !def.ground) tip("fuel", `⛽ Each satellite has fuel for ${FUEL_MAX} waves, then burns up. Upgrading needs higher orbits: MEO to specialize, HEO for tier 5.`, 900, 6000);
+      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a }, EXP && !def.ground ? { fuel: FUEL_MAX - (S.launchBand || 0), orbit: S.launchBand || 0 } : {}));
+    if (EXP && !def.ground) tip("fuel", `⛽ Each satellite has fuel for ${FUEL_MAX} waves, then burns up. Changing orbit costs 1 fuel per zone.`, 900, 6000);
     burst(p.x, p.y, def.color, 12, 90, 0.7, p.z);
     sfx("place");
     if (S.money < cost) S.selectedType = null;
@@ -1657,6 +1688,7 @@
 
   let lastUI = "", lastPreview = -1;
   function updateUI(force) {
+    if (EXP) renderLaunchPad();
     if (!S) return;
     const odState = S.overdrive > 0 ? "on" : S.overdriveCd > 0 ? Math.ceil(S.overdriveCd) : "ready";
     const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over, M.isPremium()].join("|");
@@ -1973,7 +2005,7 @@
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
     stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : ""}`);
     clearRun(); saveRun();
-    if (EXP) { toast(`🧪 Own Orbits test: each satellite gets its own orbit and ${FUEL_MAX} waves of fuel. Pick one, then tap the gold marker above a planet or moon.`, 5000); sfx("wave"); return; }
+    if (EXP) { toast(`🧪 Own Orbits test: each satellite gets its own orbit and ${FUEL_MAX} waves of fuel. Pick a satellite, choose LEO / MEO / HEO, then 🚀 LAUNCH.`, 5000); sfx("wave"); return; }
     toast(S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
   }
@@ -2317,7 +2349,7 @@
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
-    EXP, launchSlot, freeLanes, raiseOrbit, FUEL_MAX,
+    EXP, launchSlot, freeLanes, setOrbit, FUEL_MAX, launchNow, pickLaunchSite,
   };
 
   // desktop: keep the Fullscreen / Windowed label right when F11 or Alt+Enter switches it
