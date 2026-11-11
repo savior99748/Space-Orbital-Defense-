@@ -64,12 +64,10 @@ const BASE = 'http://127.0.0.1:8769/';
     ok(await step(0) === 0, '3D tutorial starts');
     await pg.tap('[data-type="laser"]');
     ok(await step(1) === 1, 'tutorial: select laser');
-    ok(await pg.isVisible('#coachArrow'), 'arrow shows over the 3D slot');
+    ok(await pg.isVisible('#coachArrow') && await pg.isVisible('#launchPad [data-launch]'), 'arrow points at the 🚀 LAUNCH button');
     await pg.screenshot({ path: 'v3-tut-slot.png' });
-    // tap exactly where the arrow points (the suggested slot)
-    const tgt = await pg.evaluate(() => { const od = window.__od, B = od.board(); const sl = B.slots.find(x => x.ring === 0 && !od.towerAt(x.id)); return od.slotPos(sl.id); });
-    await tapWorld(tgt);
-    ok(await pg.evaluate(() => window.__od.state().towers.length === 1), 'tutorial: built first satellite with a 3D tap');
+    await pg.tap('#launchPad [data-launch]'); // Own Orbits: the LAUNCH button sends it to its own orbit
+    ok(await pg.evaluate(() => window.__od.state().towers.length === 1), 'tutorial: launched the first satellite with a real tap');
     await pg.waitForFunction(() => window.__od.state().waveActive, null, { timeout: 15000 });
     ok(true, 'tutorial: Wave 1 launched by itself');
     await pg.evaluate(() => { window.__od.state().speed = 8; });

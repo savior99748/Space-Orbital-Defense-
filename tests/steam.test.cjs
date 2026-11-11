@@ -30,9 +30,9 @@ const readJson = f => { try { return JSON.parse(fs.readFileSync(path.join(userDa
   await win.click('[data-act="display"]'); await win.waitForTimeout(1500);
   ok(!(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())), 'and back to windowed');
   // play: free bonus, then save
-  await win.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); });
+  await win.evaluate(() => { localStorage.setItem('od_tut_done', '1'); });
   const r = await win.evaluate(async () => {
-    const od = window.__od; od.begin('earth', 'medium'); const S = od.state(); od.placeTower(0, 'laser'); S.wave = 2; S.waveActive = false;
+    const od = window.__od; od.begin('earth', 'medium'); const S = od.state(); od.placeTower(od.EXP ? od.launchSlot(0) : 0, 'laser'); S.wave = 2; // Own Orbits: launched onto its own orbit S.waveActive = false;
     await new Promise(r => setTimeout(r, 400));
     const m0 = S.money; document.getElementById('adBtn').click(); await new Promise(r => setTimeout(r, 400));
     od.saveRun(); return { label: document.getElementById('adBtn').textContent, gained: S.money - m0 };
@@ -40,7 +40,7 @@ const readJson = f => { try { return JSON.parse(fs.readFileSync(path.join(userDa
   ok(r.gained > 0, `free 🎁 bonus credits on Steam (+${r.gained})`);
   await win.waitForTimeout(800);
   const saved = readJson('saves.json');
-  const run = saved && (saved.od_run3d || saved.od_run); // the 3D view keeps its own run (od_run3d)
+  const run = saved && (saved.od_run3d_exp || saved.od_run3d || saved.od_run); // 3D Own Orbits runs: od_run3d_exp
   ok(run && JSON.parse(run).wave === 2, 'progress is written to saves.json (the file Steam Cloud syncs)');
   // quit from the menu, relaunch: the run is still there
   await win.evaluate(() => window.__od.mainMenu());
