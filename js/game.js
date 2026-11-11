@@ -551,7 +551,7 @@
     }
     for (const t of gone) deorbit(t);
     const msg = gone.length ? `🔥 ${gone.length === 1 ? `${TOWERS[gone[0].type].name} ran` : `${gone.length} satellites ran`} out of fuel and burned up`
-      : low.length ? `⛽ ${low.length === 1 ? `${TOWERS[low[0].type].name} has` : `${low.length} satellites have`} 3 waves of fuel left` : "";
+      : low.length ? `⛽ ${low.length === 1 ? `${TOWERS[low[0].type].name} has` : `${low.length} satellites have`} 3 waves of fuel left: tap to refuel` : "";
     if (msg) setTimeout(() => S && toast(msg, 3000), 1900);
     if (S.selectedTower) renderInfo();
   }
@@ -574,6 +574,19 @@
     const p = slotPos(lane);
     burst(p.x, p.y, "#7fd8ff", 18, 100, 0.7, p.z);
     sfx("click"); toast(`🚀 Moved to ${BAND[band]} (−${burn} fuel)`);
+    if (!S.waveActive) saveRun();
+    renderInfo(); updateUI(true);
+  }
+  // Refuel back to a full tank. Costs a lot: a full tank = half of everything spent on the satellite (at least its
+  // price), charged for the fuel missing, so keeping a big late-game satellite flying is a real upkeep cost.
+  const refuelCost = t => t.fuel == null || t.fuel >= FUEL_MAX ? 0 : Math.ceil(Math.max(TOWERS[t.type].tiers[0].cost, t.spent * 0.5) * (FUEL_MAX - t.fuel) / FUEL_MAX / 10) * 10;
+  function refuel(t) {
+    const cost = refuelCost(t);
+    if (!EXP || !cost) return;
+    if (S.money < cost) { toast("Not enough credits to refuel"); sfx("deny"); return; }
+    S.money -= cost; S.stats.spent += cost; t.fuel = FUEL_MAX; // upkeep: not added to the sell value
+    burst(t.x, t.y, "#7dff9a", 14, 80, 0.6, t.z);
+    sfx("upgrade"); toast(`⛽ Refueled: ${FUEL_MAX} waves`);
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
@@ -1563,7 +1576,7 @@
         <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
-      <div class="actions">${sat ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone">Orbit: <b>${BAND[t.orbit || 0]}</b></button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
+      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b></button>` : ""}${sat ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone">Orbit: <b>${BAND[t.orbit || 0]}</b></button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
       if (paint3D(c)) return;
@@ -1586,6 +1599,7 @@
       const a = act.dataset.act;
       if (a === "close") { S.selectedTower = null; renderInfo(); }
       else if (a === "sell") sellTower(t);
+      else if (a === "refuel") refuel(t);
       else if (a === "orbit") { const nb = nextOrbit(t); if (nb == null) { toast("Every other zone is full"); sfx("deny"); } else setOrbit(t, nb); }
       else if (a === "target") { t.targeting = TARGET_MODES[(TARGET_MODES.indexOf(t.targeting) + 1) % TARGET_MODES.length]; sfx("click"); renderInfo(); }
     }
@@ -1676,7 +1690,7 @@
     const p = slotPos(slotId);
     S.towers.push(Object.assign({ id: nextId++, type: S.selectedType, slot: slotId, level: 0, path: null, spent: cost,
       cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a }, EXP && !def.ground ? { fuel: FUEL_MAX - (S.launchBand || 0), orbit: S.launchBand || 0 } : {}));
-    if (EXP && !def.ground) tip("fuel", `⛽ Each satellite has fuel for ${FUEL_MAX} waves, then burns up. Changing orbit costs 1 fuel per zone.`, 900, 6000);
+    if (EXP && !def.ground) tip("fuel", `⛽ Each satellite has fuel for ${FUEL_MAX} waves, then burns up. Refuel it (tap it) before it runs dry; changing orbit costs 1 fuel per zone.`, 900, 6000);
     burst(p.x, p.y, def.color, 12, 90, 0.7, p.z);
     sfx("place");
     if (S.money < cost) S.selectedType = null;
@@ -2349,7 +2363,7 @@
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
-    EXP, launchSlot, freeLanes, setOrbit, FUEL_MAX, launchNow, pickLaunchSite,
+    EXP, launchSlot, freeLanes, setOrbit, FUEL_MAX, launchNow, pickLaunchSite, refuel, refuelCost,
   };
 
   // desktop: keep the Fullscreen / Windowed label right when F11 or Alt+Enter switches it

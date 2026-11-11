@@ -48,6 +48,9 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     // moving a satellite to another zone costs 1 fuel per zone; upgrades aren't tied to orbits
     const t = S.towers[0]; od.setOrbit(t, 2); out.moved = t.orbit === 2 && B.rings[B.slots[t.slot].ring].band === 2 && t.fuel === 18;
     od.upgradeTower(t); od.upgradeTower(t); od.upgradeTower(t, 'A'); od.upgradeTower(t); out.tier5 = t.level === 4;
+    // refuel: costs half of everything spent on it (for a full tank), back to 20
+    t.fuel = 0; const rc = od.refuelCost(t), m0 = S.money; od.refuel(t);
+    out.refuel = t.fuel === 20 && m0 - S.money === rc && rc >= Math.floor(t.spent * 0.5) && od.refuelCost(t) === 0; out.refuelCost = rc; out.spent = t.spent;
     for (let i = 0; i < 2; i++) od.placeTower(L, 'laser');
     // fill LEO: launch refuses when it's full
     S.launchBand = 0; const leo = od.freeLanes(0, 0).length; for (let i = 0; i < leo; i++) od.placeTower(L, 'laser');
@@ -75,6 +78,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(r.rings === 3 && r.zones === '0:0:20,0:0:20,2:2:18', `each LAUNCH → its own orbit in the chosen zone; higher starts with less fuel (${r.zones})`);
   ok(r.moon, 'tapping the Moon makes it the launch site');
   ok(r.moved && r.tier5, 'changing zone costs 1 fuel per zone; upgrades no longer need an orbit');
+  ok(r.refuel, `refuel tops up to 20 and costs a lot (${r.refuelCost} cr for a satellite worth ${r.spent} cr)`);
   ok(r.leoFull, 'launching into a full LEO is refused');
   ok(r.fuelAfterWave === 19 && r.fuelAfterOd === 17, `1 fuel per wave (${r.fuelAfterWave}), Overdrive burns 2 more (${r.fuelAfterOd})`);
   ok(r.burned > 0 && r.left === 0, `satellites out of fuel burn up (${r.burned})`);
