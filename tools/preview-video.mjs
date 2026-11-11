@@ -1,7 +1,7 @@
 // 20-second CrazyGames preview video (landscape 1920x1080 and portrait 1080x1620), cut from real gameplay:
 //   satellites launching at Earth → Saturn: flak + mines + warp-ins → Jupiter: Missile Silos and railguns →
 //   an Endless Void Titan with Overdrive → a sweep over the whole Solar System under attack.
-//   No text, no black intro, no cursor (CrazyGames' preview rules).
+//   Plays at 3× game speed. No text, no black intro, no cursor (CrazyGames' preview rules).
 //   node tools/preview-video.mjs                     → dist/preview/ both formats
 //   FORMAT=landscape|portrait node tools/preview-video.mjs   → just one
 //   PREVIEW=1 node tools/preview-video.mjs           → contact sheets only (fast)
@@ -75,6 +75,7 @@ const SETUP = ({ map, wave, endless, fill = 1, swarm, boss, cap = 0 }) => {
   S.queue.sort((a, b) => rank(a.type) - rank(b.type)).forEach(q => { q.gap = Math.min(q.gap, 0.2); });
   if (cap) S.queue = S.queue.slice(0, cap); // a readable fight (the boss up front, not a white-out)
   window.__keepAlive = () => { S.lives = 1e6; if (S.bodyHp) S.bodyHp = S.bodyHp.map((h, i) => (i ? Math.max(h, 6) : h)); if (!cap && S.queue.length === 0 && S.enemies.length < 14) { S.waveActive = false; od.startWave(); } };
+  S.speed = 3; // fast-paced: the whole preview plays at 3× game speed (camera moves stay smooth)
   const v = window.__view3d; if (v.quality) v.quality.level = 99;
   v.cam.fit = v.cam.fit || 900;
 };
@@ -123,7 +124,7 @@ try {
     for (const clip of CLIPS) {
       await page.evaluate(SIZE, [W / 4, H / 4]);
       await page.evaluate(SETUP, clip);
-      await step(page, 50, clip.warm ?? 150); // let the wave close in before rolling
+      await step(page, 50, Math.round((clip.warm ?? 150) / 3)); // let the wave close in before rolling
       await page.evaluate(CLEAN);
       await page.evaluate(SIZE, [Math.round(W * SS), Math.round(H * SS)]);
       const n = Math.round(clip.secs * FPS), acts = [...(clip.acts || [])];
