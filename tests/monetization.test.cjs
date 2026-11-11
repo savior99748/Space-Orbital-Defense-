@@ -23,7 +23,7 @@ const money = pg => pg.evaluate(() => window.__od.state().money);
   // 2. rewarded ad flow (simulated ads): grants once per wave, a double tap pays once
   await prep(pg, 'http://127.0.0.1:8769/index.html?view=2d&adtest=1');
   ok(await pg.evaluate(() => OD.monetization.offer('credits').method === 'ad'), 'ads: bonus offered as an ad');
-  ok(await pg.evaluate(() => !document.getElementById('adBtn').classList.contains('hidden') && document.getElementById('adBtn').textContent.startsWith('📺')), 'ads: 📺 bonus button shown');
+  ok(await pg.waitForFunction(() => !document.getElementById('adBtn').classList.contains('hidden') && document.getElementById('adBtn').textContent.startsWith('📺'), null, { timeout: 10000 }).then(() => true, () => false), 'ads: 📺 bonus button shown'); // the HUD redraws on its own schedule
   const m0 = await money(pg);
   await pg.evaluate(() => { const btn = document.getElementById('adBtn'); btn.disabled = false; btn.click(); btn.disabled = false; btn.click(); }); // double tap
   // the simulated ad lasts 2 s: wait for the payout (slow CI machines), then a little longer to catch any second payout

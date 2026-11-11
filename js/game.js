@@ -10,6 +10,12 @@
   const sfx = name => audio.play(name);
 
   const OVERDRIVE = { duration: 6, cooldown: 30, ringMul: 5, rateMul: 1.3 };
+  // EXPERIMENT "Own Orbits" (?exp=orbits, see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
+  // lanes never cross (each has its own radius), so satellites can't collide. Satellites carry fuel for FUEL_MAX waves
+  // and burn up when it runs out; Overdrive burns OD_FUEL extra. Specializing needs MEO, tier 5 needs HEO.
+  const EXP = !!OD.EXP;
+  const FUEL_MAX = 20, OD_FUEL = 2, BAND = ["LEO", "MEO", "HEO"];
+  const orbitCost = (type, band) => Math.round(TOWERS[type].tiers[0].cost * (band === 1 ? 0.75 : 1.5) / 10) * 10;
   const TARGET_MODES = ["first", "last", "strong", "close"];
   const TARGET_LABEL = { first: "First", last: "Last", strong: "Strong", close: "Close" };
 
@@ -45,7 +51,7 @@
   let MAP = MAPS[MAP_KEY];
   let B = null;
 
-  function buildBoard(key) {
+  function buildBoard(key, seed = 1) {
     MAP_KEY = key; MAP = MAPS[key];
     const root = { name: MAP.name, style: MAP.body.style, r: MAP.body.r, belt: MAP.body.belt, root: true, x: CX, y: CY };
     const bodies = [root];
@@ -63,6 +69,7 @@
     const nOrbit = rings.length;
     if (!MAP.final) rings.push({ body: 0, r: root.r + 2, slots: 3, speed: 0.05, angle: 0.4, incl: 0, node: 0, surface: true, lat: 0.62 });
     for (let bi = 1; bi < bodies.length; bi++) rings.push({ body: bi, r: bodies[bi].r + 1.5, slots: 1, speed: 0.08, angle: bi, incl: 0, node: 0, surface: true, lat: 0.62 });
+    if (EXP) { rings.slice(0, nOrbit).forEach(r => { r.hidden = true; }); addLanes(rings, bodies, nOrbit, seed); }
     const slots = [];
     rings.forEach((ring, ri) => { for (let i = 0; i < ring.slots; i++) slots.push({ id: slots.length, ring: ri, i, surface: !!ring.surface }); });
     let extent = 0;
@@ -70,6 +77,33 @@
     B = { bodies, rings, slots, extent, spiral: Math.max(extent + 25, MAP.view / 2 - 15), time: 0, view: Math.max(MAP.view, (extent + 34) * 2) };
     resize();
   }
+
+  // Own Orbits: three bands (LEO / MEO / HEO) of single-satellite lanes around every body that had turret rings,
+  // plus one launch marker per body. Lanes in a band sit LANE apart; inclination, node and phase are random (seeded,
+  // so a saved run gets the same orbits back). Kepler-ish: higher lanes turn slower.
+  function addLanes(rings, bodies, nOrbit, seed) {
+    let a = seed >>> 0;
+    const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const LANE = 10 * Math.max(0.33, MAP.satScale || 1);
+    bodies.forEach((b, bi) => {
+      const own = rings.slice(0, nOrbit).filter(r => r.body === bi).sort((x, y) => x.r - y.r);
+      if (!own.length) return;
+      const lo = own[0].r, hi = own[own.length - 1].r;
+      const centers = own.length > 1 ? [lo, (lo + hi) / 2, hi] : [lo * 0.8, lo * 1.15, lo * 1.5];
+      const n = Math.max(1, Math.floor((centers[1] - centers[0]) * 0.8 / LANE) + 1);
+      const w0 = Math.abs(own[0].speed) || 0.1, dir = Math.sign(own[0].speed) || 1;
+      centers.forEach((c, band) => {
+        for (let k = 0; k < n; k++) {
+          const r = c + (k - (n - 1) / 2) * LANE;
+          rings.push({ body: bi, r, slots: 1, speed: dir * w0 * (centers[0] / r) ** 1.5, angle: rnd() * TAU, incl: rnd() * 0.9, node: rnd() * TAU, lane: true, band });
+        }
+      });
+      rings.push({ body: bi, r: 0, slots: 1, speed: 0, angle: 0, incl: 0, node: 0, launch: true });
+    });
+  }
+  const freeLanes = (bi, band) => B.slots.filter(s => { const r = B.rings[s.ring]; return r.lane && r.body === bi && r.band === band && !towerAt(s.id); });
+  const freeLane = (bi, band) => { const f = freeLanes(bi, band); return f.length ? f[Math.floor(Math.random() * f.length)].id : null; };
+  const launchSlot = bi => { const s = B.slots.find(x => B.rings[x.ring].launch && B.rings[x.ring].body === bi); return s ? s.id : null; };
 
   function positionBodies() {
     for (const b of B.bodies) {
@@ -90,6 +124,7 @@
   // angle `node`, which lifts slots above/below the orbital plane (z). Flat rings give z = 0.
   function ringPoint(ring, a) {
     const b = B.bodies[ring.body];
+    if (ring.launch) return { x: b.x, y: b.y, z: b.r * 1.25 + 10 * (MAP.satScale || 1) }; // launch marker above the body
     if (ring.surface) { const rr = ring.r * Math.cos(ring.lat); return { x: b.x + Math.cos(a) * rr, y: b.y + Math.sin(a) * rr, z: ring.r * Math.sin(ring.lat) }; } // on the near hemisphere
     if (!ring.incl) return { x: b.x + Math.cos(a) * ring.r, y: b.y + Math.sin(a) * ring.r, z: 0 };
     const u = a - ring.node, lx = Math.cos(u) * ring.r, ly = Math.sin(u) * ring.r;
@@ -159,8 +194,19 @@
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : Math.round(n).toString();
 
   // satellites go on orbit slots, Missile Silos on the ground pads
-  const slotFits = (slotId, type) => !!B.slots[slotId].surface === !!(TOWERS[type] && TOWERS[type].ground);
-  const slotUsable = id => !S || !S.selectedType || towerAt(id) || slotFits(id, S.selectedType);
+  const slotFits = (slotId, type) => {
+    const s = B.slots[slotId], r = B.rings[s.ring], ground = !!(TOWERS[type] && TOWERS[type].ground);
+    if (r.launch) return !ground; // Own Orbits: satellites launch from the marker, never straight onto a lane
+    if (r.lane || r.hidden) return false;
+    return !!s.surface === ground;
+  };
+  const slotUsable = id => {
+    const r = B.rings[B.slots[id].ring];
+    if (r.hidden) return false;
+    if (r.lane) return !!towerAt(id);
+    if (r.launch) return !!(S && S.selectedType) && slotFits(id, S.selectedType);
+    return !S || !S.selectedType || !!towerAt(id) || slotFits(id, S.selectedType);
+  };
   function nearestSlot(x, y, maxD) {
     let best = null, bd = maxD * maxD;
     for (const s of B.slots) {
@@ -370,7 +416,7 @@
       const rateMul = t.buffRate * (odActive ? OVERDRIVE.rateMul : 1);
       t.st = Object.assign({}, b, {
         // 3D maps give extra range: satellites cover a volume instead of a flat disk
-        range: b.range ? b.range * t.buffRange * (MAP.rangeMul || 1) : b.range,
+        range: b.range ? b.range * t.buffRange * (MAP.rangeMul || 1) * (t.orbit ? 1 + 0.1 * t.orbit : 1) : b.range,
         rate: b.rate ? b.rate * rateMul : b.rate,
         dps: b.dps ? b.dps * rateMul : b.dps,
       });
@@ -487,11 +533,49 @@
       else if (S.wave === 1 && !tut) { toast(`🎉 First wave cleared! +${bonus} credits${S.towers.some(t => t.level >= 1) ? "" : " · Tap a satellite to upgrade it"}`, 3200); ringFx(CX, CY, B.bodies[0].r * 2.2, "#ffd166", 0.8); }
       else if (S.wave === 3 || S.wave === 5) { toast(`⭐ Wave ${S.wave} cleared! +${bonus} credits · Next goal: wave ${S.wave === 3 ? 5 : "10, the Mothership"}`, 3200); ringFx(CX, CY, B.bodies[0].r * 2.2, "#ffd166", 0.8); }
       else toast(`Wave ${S.wave} cleared! +${bonus} credits`);
+      if (EXP) burnFuel();
       if (S.wave >= 1 && !tut) tip("saved", "Your progress is saved after every wave. Leave anytime and press Continue.", 3400);
       saveRun();
       updateUI(true);
       if (S.auto) setTimeout(() => S && !S.paused && startWave(), 1200);
     }
+  }
+
+  // Own Orbits: every satellite burns 1 fuel per wave; at 0 it burns up re-entering the atmosphere.
+  function burnFuel() {
+    const gone = [], low = [];
+    for (const t of S.towers) {
+      if (t.fuel == null) continue;
+      t.fuel = Math.max(0, t.fuel - 1);
+      if (t.fuel <= 0) gone.push(t); else if (t.fuel === 3) low.push(t);
+    }
+    for (const t of gone) deorbit(t);
+    const msg = gone.length ? `🔥 ${gone.length === 1 ? `${TOWERS[gone[0].type].name} ran` : `${gone.length} satellites ran`} out of fuel and burned up`
+      : low.length ? `⛽ ${low.length === 1 ? `${TOWERS[low[0].type].name} has` : `${low.length} satellites have`} 3 waves of fuel left` : "";
+    if (msg) setTimeout(() => S && toast(msg, 3000), 1900);
+    if (S.selectedTower) renderInfo();
+  }
+  function deorbit(t) {
+    S.towers = S.towers.filter(x => x !== t);
+    t.sold = true; t.crafts = null; t.burned = true;
+    S.retired.push(t);
+    burst(t.x, t.y, "#ff9a4a", 20, 120, 0.9, t.z); burst(t.x, t.y, "#ffd166", 10, 70, 0.6, t.z);
+    if (S.selectedTower === t) S.selectedTower = null;
+    sfx("sell");
+  }
+  function raiseOrbit(t) {
+    if (!EXP || t.fuel == null || (t.orbit || 0) >= 2) return;
+    const band = (t.orbit || 0) + 1, cost = orbitCost(t.type, band), bi = B.rings[B.slots[t.slot].ring].body;
+    if (S.money < cost) { sfx("deny"); return; }
+    const lane = freeLane(bi, band);
+    if (lane == null) { toast(`${BAND[band]} around ${B.bodies[bi].name} is full`); sfx("deny"); return; }
+    S.money -= cost; t.spent += cost; S.stats.spent += cost;
+    t.slot = lane; t.orbit = band;
+    const p = slotPos(lane);
+    burst(p.x, p.y, "#7fd8ff", 18, 100, 0.7, p.z);
+    sfx("upgrade"); toast(`🚀 Raised to ${BAND[band]}: +${band * 10}% range`);
+    if (!S.waveActive) saveRun();
+    renderInfo(); updateUI(true);
   }
 
   // Invaders spiral toward the centre; moons/planets bend their path with gravity.
@@ -830,7 +914,7 @@
   // ---------- records ----------
   // 3D and Classic 2D play differently, so each view keeps its own records, saved game and leaderboards.
   const VIEW_TAG = OD.is3D ? "3d" : "";
-  const recKey = (map, diff) => `od_rec${VIEW_TAG}_${map}_${diff}`;
+  const recKey = (map, diff) => `od_rec${VIEW_TAG}${EXP ? "exp" : ""}_${map}_${diff}`;
   function getRec(map, diff) { try { return JSON.parse(store.get(recKey(map, diff)) || "null"); } catch { return null; } }
   function saveRec() {
     const old = getRec(S.mapKey, S.diffKey) || {};
@@ -841,13 +925,13 @@
 
   // ---------- saved game (resume) ----------
   // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
-  const RUN_KEY = `od_run${VIEW_TAG}`;
+  const RUN_KEY = `od_run${VIEW_TAG}${EXP ? "_exp" : ""}`;
   const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
-    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0, asc: t.asc || 0 });
+    dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0, asc: t.asc || 0, fuel: t.fuel, orbit: t.orbit });
   function saveRun() {
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
-      v: 1, map: S.mapKey, diff: S.diffKey, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
+      v: 1, map: S.mapKey, diff: S.diffKey, seed: S.seed, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
       stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless,
       towers: S.towers.map(packTower), retired: S.retired.map(packTower),
       board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
@@ -859,7 +943,7 @@
   }
   const clearRun = () => store.remove(RUN_KEY);
   function resumeRun(r) {
-    MAP_KEY = r.map; DIFF_KEY = r.diff;
+    MAP_KEY = r.map; DIFF_KEY = r.diff; pendingSeed = r.seed;
     begin(r.map, r.diff, true, !!r.endless);
     Object.assign(S, { wave: r.wave, lives: r.lives, money: r.money, score: r.score, realTime: r.realTime || 0,
       won: !!r.won, freeplay: !!r.freeplay, revived: !!r.revived, adWave: r.adWave });
@@ -899,6 +983,7 @@
   ];
   function getAch() { try { return JSON.parse(store.get("od_ach") || "{}"); } catch { return {}; } }
   function unlock(id) {
+    if (EXP) return;
     const got = getAch();
     if (got[id]) return;
     const a = ACHIEVEMENTS.find(x => x.id === id);
@@ -957,7 +1042,7 @@
     sfx("lose");
     if (S.endless) {
       stats.track(`endless-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
-      S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
+      S.lastLb = EXP ? null : LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
       showStats("over", null, false, S.lastLb);
     } else {
       stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
@@ -1404,7 +1489,15 @@
     const pathDef = t.path ? def.paths[t.path] : null;
     const color = pathDef ? pathDef.color : def.color;
     let upHtml = "", next = null;
-    if (t.level < 2) { next = tierOf(t.type, t.level + 1); upHtml = upgradeCard(t, t.level + 1); }
+    const bi = B.rings[B.slots[t.slot].ring].body, sat = EXP && t.fuel != null;
+    if (sat && (t.level === 2 || t.level === 3) && (t.orbit || 0) < t.level - 1) { // needs a higher orbit first
+      const band = (t.orbit || 0) + 1, oc = orbitCost(t.type, band), free = freeLanes(bi, band).length;
+      upHtml = `<div class="choose">${t.level === 2 ? "Specializations" : "Tier 5"} need${t.level === 2 ? "" : "s"} a higher orbit:</div>
+        <button class="up-card oc-card" data-orbit="1" ${S.money >= oc && free ? "" : "disabled"} style="--c:#7fd8ff">
+        <span class="oc-icon">🚀</span>
+        <span><b>Raise to ${BAND[band]}</b><small>Moves to its own ${BAND[band]} orbit: +${band * 10}% range. ${free ? `${free} free around ${B.bodies[bi].name}.` : `${BAND[band]} around ${B.bodies[bi].name} is full.`}</small><span class="cost">${fmt(oc)} cr</span></span></button>`;
+    }
+    else if (t.level < 2) { next = tierOf(t.type, t.level + 1); upHtml = upgradeCard(t, t.level + 1); }
     else if (t.level === 2) {
       upHtml = `<div class="choose">Choose a specialization (permanent):</div>
         ${["A", "B"].map(p => `<div class="path-desc" style="color:${def.paths[p].color}">${def.paths[p].name}: <span>${def.paths[p].desc}</span></div>${upgradeCard(t, 3, p)}`).join("")}`;
@@ -1430,9 +1523,12 @@
       <div class="info-head">
         <canvas width="64" height="64" data-preview="${t.type}|${t.level}|${t.path || ""}"></canvas>
         <div><h3 style="color:${color}">${st.name}</h3>
-        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.asc ? ` ✦${t.asc}` : ""}${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} orbit</div></div>
+        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.asc ? ` ✦${t.asc}` : ""}${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} ${sat ? BAND[t.orbit || 0] : "orbit"}</div></div>
         <button class="close" data-act="close" aria-label="Close">✕</button>
       </div>
+      ${sat ? `<div class="fuel" style="display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:13px">⛽ Fuel
+        <span style="flex:1;height:7px;border-radius:4px;background:#ffffff1f;overflow:hidden"><i style="display:block;height:100%;width:${t.fuel / FUEL_MAX * 100}%;background:${t.fuel <= 3 ? "#ff6b6b" : t.fuel <= 8 ? "#ffd166" : "#7dff9a"}"></i></span>
+        <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
       <div class="actions">${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
@@ -1449,6 +1545,7 @@
   ui.info.addEventListener("click", ev => {
     const t = S && S.selectedTower;
     if (!t) return;
+    if (ev.target.closest("[data-orbit]") && !ev.target.closest("[data-orbit]").disabled) return raiseOrbit(t);
     if (ev.target.closest("[data-oc]") && !ev.target.closest("[data-oc]").disabled) return overclockTower(t);
     if (ev.target.closest("[data-asc]") && !ev.target.closest("[data-asc]").disabled) return ascendTower(t);
     const up = ev.target.closest("[data-up]");
@@ -1462,13 +1559,14 @@
     }
   });
 
-  const sellValue = t => Math.floor(t.spent * 0.7);
+  const sellValue = t => Math.floor(t.spent * 0.7 * (t.fuel != null ? Math.max(0.2, t.fuel / FUEL_MAX) : 1)); // Own Orbits: worth less as fuel runs low
 
   function upgradeTower(t, path) {
     if (t.level >= 4) return;
     const nextLevel = t.level + 1;
     const usePath = nextLevel === 3 ? path : t.path;
     if (nextLevel === 3 && !usePath) return;
+    if (EXP && t.fuel != null && nextLevel >= 3 && (t.orbit || 0) < nextLevel - 2) { toast(`Raise it to ${BAND[nextLevel - 2]} first`); sfx("deny"); return; }
     const tier = tierOf(t.type, nextLevel, usePath);
     if (S.money < tier.cost) { sfx("deny"); return; }
     S.money -= tier.cost; t.spent += tier.cost; S.stats.spent += tier.cost;
@@ -1538,10 +1636,16 @@
     if (S.bodyHp && S.bodyHp[B.rings[B.slots[slotId].ring].body] <= 0 && B.rings[B.slots[slotId].ring].body) { toast("That planet has fallen"); sfx("deny"); return; }
     if (!slotFits(slotId, S.selectedType)) { toast(def.ground ? "Missile Silos go on the ground pads on planets and moons" : "Ground pads are for Missile Silos"); sfx("deny"); return; }
     if (S.money < cost) { toast("Not enough credits"); sfx("deny"); return; }
+    if (B.rings[B.slots[slotId].ring].launch) { // Own Orbits: launch onto a free LEO lane around that body
+      const bi = B.rings[B.slots[slotId].ring].body, lane = freeLane(bi, 0);
+      if (lane == null) { toast(`LEO around ${B.bodies[bi].name} is full: raise a satellite to MEO, or launch from another body`, 2800); sfx("deny"); return; }
+      slotId = lane;
+    }
     S.money -= cost; S.stats.spent += cost;
     const p = slotPos(slotId);
-    S.towers.push({ id: nextId++, type: S.selectedType, slot: slotId, level: 0, path: null, spent: cost,
-      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a });
+    S.towers.push(Object.assign({ id: nextId++, type: S.selectedType, slot: slotId, level: 0, path: null, spent: cost,
+      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a }, EXP && !def.ground ? { fuel: FUEL_MAX, orbit: 0 } : {}));
+    if (EXP && !def.ground) tip("fuel", `⛽ Each satellite has fuel for ${FUEL_MAX} waves, then burns up. Upgrading needs higher orbits: MEO to specialize, HEO for tier 5.`, 900, 6000);
     burst(p.x, p.y, def.color, 12, 90, 0.7, p.z);
     sfx("place");
     if (S.money < cost) S.selectedType = null;
@@ -1564,7 +1668,7 @@
     ui.lives.classList.toggle("danger", S.lives / S.diff.lives < 0.3);
     ui.money.textContent = S.money.toLocaleString();
     ui.score.textContent = S.score.toLocaleString();
-    ui.diff.textContent = S.diff.name; ui.diff.style.color = S.diff.color;
+    ui.diff.textContent = S.diff.name + (EXP ? " · 🧪 Own Orbits" : ""); ui.diff.style.color = S.diff.color;
     ui.waveBtn.disabled = S.waveActive || S.over;
     ui.waveBtn.innerHTML = S.waveActive ? `Wave ${S.wave}…` : `Launch Wave ${S.wave + 1} ▶`;
     // early waves: the launch button pulses while it's waiting for the player (never auto-launches)
@@ -1847,12 +1951,14 @@
     }
   });
 
+  let pendingSeed = null; // the orbit layout of a resumed Own Orbits run
   function begin(mapKey, diffKey, resuming, endless) {
     audio.init();
     abandonTutorial();
-    buildBoard(mapKey); B.key = mapKey;
+    const seed = pendingSeed != null ? pendingSeed : (Math.random() * 2 ** 31) | 0; pendingSeed = null;
+    buildBoard(mapKey, seed); B.key = mapKey;
     resetCamera();
-    S = newState(diffKey);
+    S = newState(diffKey); S.seed = seed;
     // Solar System: every planet has its own HP (the Sun is still the game)
     S.bodyHp = MAP.planetHp ? B.bodies.map(b => (b.root ? 0 : MAP.planetHp)) : null;
     const tier = mapTier(mapKey);
@@ -1867,6 +1973,7 @@
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
     stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : ""}`);
     clearRun(); saveRun();
+    if (EXP) { toast(`🧪 Own Orbits test: each satellite gets its own orbit and ${FUEL_MAX} waves of fuel. Pick one, then tap the gold marker above a planet or moon.`, 5000); sfx("wave"); return; }
     toast(S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
   }
@@ -1880,6 +1987,7 @@
 
   // Suggest an empty inner-ring slot (the second suggestion goes opposite the first satellite).
   function tutSlot() {
+    if (EXP) return launchSlot(0);
     const inner = B.slots.filter(sl => sl.ring === 0 && !towerAt(sl.id));
     if (!inner.length) return null;
     const first = S.towers[0];
@@ -2149,7 +2257,9 @@
   function activateOverdrive() {
     if (!S || S.overdriveCd > 0 || S.over) return;
     S.overdrive = OVERDRIVE.duration; S.overdriveCd = OVERDRIVE.cooldown; S.stats.overdrives++;
-    sfx("overdrive"); toast("⚡ OVERDRIVE: rings spinning, fire rate +30%");
+    if (EXP) for (const t of S.towers) if (t.fuel != null) t.fuel = Math.max(0, t.fuel - OD_FUEL);
+    sfx("overdrive"); toast(EXP ? `⚡ OVERDRIVE: fire rate +30% · −${OD_FUEL} fuel on every satellite` : "⚡ OVERDRIVE: rings spinning, fire rate +30%");
+    if (EXP && S.selectedTower) renderInfo();
     updateUI(true);
   }
   ui.waveBtn.onclick = () => { audio.init(); startWave(); };
@@ -2207,6 +2317,7 @@
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
+    EXP, launchSlot, freeLanes, raiseOrbit, FUEL_MAX,
   };
 
   // desktop: keep the Fullscreen / Windowed label right when F11 or Alt+Enter switches it
@@ -2228,7 +2339,7 @@
     stats.sessionStart();
     // A brand-new player goes straight into the guided first game (aliens within seconds) instead of the
     // menu; everyone else, and editions that open on a title screen (desktop), gets the menu.
-    if (!P.titleFirst && !tutDone() && !loadRun()) startTutorial();
+    if (!P.titleFirst && !tutDone() && !loadRun() && !EXP) startTutorial();
     else mainMenu();
   });
 })(window.OD);

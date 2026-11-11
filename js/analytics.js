@@ -45,6 +45,7 @@ window.OD = window.OD || {};
 
   // Count one event. Names are short paths, e.g. "game-start/earth/medium".
   A.track = function (path) {
+    if (OD.EXP) return; // the Own Orbits experiment is never counted
     if (debug) console.log("[stats]", path);
     if (!A.enabled || blocked) return;
     if (queue.length < 200) queue.push(path);

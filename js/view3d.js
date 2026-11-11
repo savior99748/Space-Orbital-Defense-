@@ -137,6 +137,18 @@ function tap(sx, sy, touch) {
     const d = (px - sx) ** 2 + (py - sy) ** 2;
     if (d < bd) { bd = d; best = s.id; }
   }
+  // Own Orbits: with a satellite picked, tapping a planet or moon itself launches from it
+  if (best == null && od().EXP && S.selectedType && !od().TOWERS[S.selectedType].ground) {
+    let bb = Infinity;
+    B.bodies.forEach((b, bi) => {
+      const ls = od().launchSlot(bi); if (ls == null || !od().slotUsable(ls)) return;
+      _v.set(b.x - C.x, H, b.y - C.y).project(camera);
+      const px = (_v.x + 1) / 2 * r.width, py = (1 - _v.y) / 2 * r.height;
+      _v.set(b.x - C.x + b.r, H, b.y - C.y).project(camera);
+      const rad = Math.max(touch ? 34 : 22, Math.abs((_v.x + 1) / 2 * r.width - px) * 1.15), d = (px - sx) ** 2 + (py - sy) ** 2;
+      if (d < rad * rad && d < bb) { bb = d; best = ls; }
+    });
+  }
   od().tapSlot(best, touch);
 }
 
@@ -370,7 +382,8 @@ function buildWorld(B) {
       const lp = od().ringPoint(r, r.node + Math.PI / 2), label = textSprite(name, "#6cf0ff", 24);
       label.position.set(lp.x - body.x, lp.z + 10, lp.y - body.y); line.add(label);
     }
-    line.visible = !r.surface; // ground pads have no orbit line
+    if (r.lane) line.material.color.set([0x6cf0ff, 0x7dff9a, 0xc18cff][r.band]); // Own Orbits: LEO / MEO / HEO lanes
+    line.visible = !r.surface && !r.hidden && !r.lane && !r.launch; // ground pads have no orbit line; lanes show once used
     group.add(line);
     return line;
   });
@@ -675,13 +688,17 @@ function sync() {
   });
   // rings follow their body and rotate
   B.rings.forEach((r, i) => { const b = B.bodies[r.body]; world.rings[i].position.set(b.x - C.x, H, b.y - C.y); });
+  if (OD.EXP && S) { // Own Orbits: an orbit line only for lanes with a satellite on them
+    const used = new Set(S.towers.map(tw => B.slots[tw.slot].ring));
+    B.rings.forEach((r, i) => { if (r.lane) world.rings[i].visible = used.has(i); });
+  }
   // empty slots
   const building = S && S.selectedType;
   B.slots.forEach((s, i) => {
     const p = OD.slotPos(s.id), taken = S && OD.towerAt(s.id), usable = !S || OD.slotUsable(s.id);
     dummy.position.set(p.x - C.x, H + (p.z || 0), p.y - C.y); dummy.rotation.set(0, 0, 0);
     // while building, only the slots that fit show (orbit slots for satellites, ground pads for silos)
-    dummy.scale.setScalar(taken || !usable ? 0.0001 : building ? 1.6 : s.surface ? 0.7 : 1); dummy.updateMatrix();
+    dummy.scale.setScalar(taken || !usable ? 0.0001 : B.rings[s.ring].launch ? 2.6 + 0.4 * Math.sin(now * 5) : building ? 1.6 : s.surface ? 0.7 : 1); dummy.updateMatrix();
     world.slotMesh.setMatrixAt(i, dummy.matrix);
   });
   world.slotMesh.instanceMatrix.needsUpdate = true;
@@ -717,6 +734,17 @@ function sync() {
         for (let j = 1; j <= 6; j++) { const kk = Math.max(0, e - j * 0.05); _gv.lerpVectors(_from, _to, kk); _gv.y += Math.sin(Math.max(0, k - j * 0.05) * Math.PI) * body.r * 0.35; glow(_gv, j < 3 ? "#ffb070" : "#8fa0c0", (50 - j * 5) * satScale, (1 - j / 7) * (1 - k * 0.7)); }
       }
     }
+    // Own Orbits: raising to a higher orbit flies the satellite across with its engine lit
+    if (m.userData.slot != null && m.userData.slot !== tw.slot && !calm) m.userData.move = { t: now, from: m.userData.last.clone() };
+    m.userData.slot = tw.slot;
+    const mv = m.userData.move;
+    if (mv) {
+      const k = (now - mv.t) / 1.2;
+      if (k >= 1 || k < 0) m.userData.move = null;
+      else { const e = easeOut(k); m.position.lerpVectors(mv.from, m.position, e); glow(m.position, "#ffd08a", 50 * satScale, 1 - k * 0.6); }
+    }
+    (m.userData.last || (m.userData.last = new THREE.Vector3())).copy(m.position);
+    if (tw.fuel != null && tw.fuel <= 3) glow(m.position, "#ff5c5c", 46 * satScale, 0.45 + 0.45 * Math.sin(now * 6)); // low on fuel
     const pt = satPop.get(tw.id);
     if (pt != null) { // arrival / upgrade: a quick swell and a burst of light in the satellite's color
       const k = (now - pt) / POP;

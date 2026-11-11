@@ -18,6 +18,9 @@ window.OD = window.OD || {};
   OD.view = view;
   OD.is3D = view === "3d";
   OD.headless = params.get("headless") === "1";
+  // ?exp=orbits: EXPERIMENT "Own Orbits" (each satellite on its own orbit, fuel, LEO → MEO → HEO). Off unless the
+  // link asks for it; 3D only. Uses its own saves and records, and sends no stats, achievements or leaderboard scores.
+  OD.EXP = OD.is3D && params.get("exp") === "orbits" ? "orbits" : null;
   if (OD.is3D) {
     window.OD_NO2D = true;            // the 3D view does the drawing
     OD.apply3DMaps();                 // bigger planets, tilted orbits
