@@ -22,7 +22,7 @@ const ff = (...a) => execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error
 // ---------- the cut ----------
 // keys: [time in the clip, yaw, pitch, distance as a fraction of the fitted view]; acts: [time, action]
 const CLIPS = [
-  { map: "earth", wave: 14, secs: 3, fill: 0.55, warm: 60,
+  { map: "earth", wave: 14, secs: 3, fill: 0.5, warm: 60, lines: true, // the one shot with orbit lines: launches onto new orbits
     keys: [[0, -1.15, 0.32, 0.36], [3, -0.75, 0.42, 0.46]],
     acts: [[0.15, "build:laser"], [0.6, "build:flak"], [1.05, "build:rail"], [1.5, "build:missile"], [1.9, "upgrade"], [2.3, "upgrade"]] },
   { map: "saturn", wave: 28, secs: 4, swarm: true,
@@ -50,7 +50,7 @@ const CLOCK = () => {
   window.cancelAnimationFrame = () => {};
   window.__step = ms => { now += ms; for (const cb of q.splice(0)) cb(now); };
   window.OD_NO_SW = true;
-  try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_orbits", "classic"); localStorage.setItem("od_stats_off", "1"); localStorage.setItem("od_shake", "0.4"); } catch { /* ignore */ }
+  try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_stats_off", "1"); localStorage.setItem("od_shake", "0.4"); } catch { /* ignore */ }
 };
 async function step(page, ms, n = 1) {
   for (let done = 0; done < n; done += 5) {
@@ -61,20 +61,29 @@ async function step(page, ms, n = 1) {
 
 // ---------- in-page helpers ----------
 // A strong late-game defense (all ten satellites, silos on the ground pads), then a big wave with the action up front.
-const SETUP = ({ map, wave, endless, fill = 1, swarm, boss, cap = 0 }) => {
+const SETUP = ({ map, wave, endless, fill = 1, swarm, boss, cap = 0, lines = false }) => {
   const od = window.__od; od.begin(map, "hard", false, !!endless);
   const S = od.state(), B = od.board(); S.money = 1e9; S.lives = 1e6;
   const plan = [["laser", "B"], ["flak", "A"], ["rail", "A"], ["missile", "A"], ["mines", "A"], ["emp", "B"], ["focus", "A"], ["laser", "A"],
     ["tractor", "B"], ["carrier", "A"], ["flak", "B"], ["rail", "B"], ["missile", "B"], ["mines", "B"], ["miner", "B"]];
-  const orbit = B.slots.filter(s => !s.surface), pads = B.slots.filter(s => s.surface);
-  orbit.forEach((s, k) => { if (k / orbit.length >= fill) return; const [type, p] = plan[k % plan.length]; od.placeTower(s.id, type); const t = od.towerAt(s.id); if (t) for (let l = 0; l < 4; l++) od.upgradeTower(t, p); });
+  const pads = B.slots.filter(s => s.surface);
+  window.OD.orbitLines = lines; // orbit lines off for the battle shots, so the fight reads
+  let k = 0; // Own Orbits: launch satellites onto their own orbits, LEO / MEO / HEO around the planet and its moons
+  B.bodies.forEach((b, bi) => {
+    if (od.launchSlot(bi) == null) return;
+    for (const z of [0, 1, 2]) {
+      const n = Math.round(od.freeLanes(bi, z).length * fill);
+      for (let i = 0; i < n; i++) { const [type, p] = plan[k++ % plan.length]; S.launchBand = z; od.placeTower(od.launchSlot(bi), type); const t = S.towers[S.towers.length - 1]; if (t) for (let l = 0; l < 4; l++) od.upgradeTower(t, p); }
+    }
+  });
   pads.forEach((s, k) => { od.placeTower(s.id, "silo"); const t = od.towerAt(s.id); if (t) for (let l = 0; l < 4; l++) od.upgradeTower(t, k % 2 ? "A" : "B"); });
   S.wave = wave - 1; od.startWave();
   const order = boss ? [boss, "aegis", "brute", "dread", "mother", "cruiser", "drone", "swarm", "comet", "asteroid"] : swarm ? ["swarm", "mother", "brood", "drone", "comet", "cruiser", "asteroid"] : ["dread", "mother", "cruiser", "brute", "drone", "swarm", "comet", "asteroid"];
   const rank = t => { const i = order.indexOf(t); return i < 0 ? 99 : i; };
   S.queue.sort((a, b) => rank(a.type) - rank(b.type)).forEach(q => { q.gap = Math.min(q.gap, 0.2); });
   if (cap) S.queue = S.queue.slice(0, cap); // a readable fight (the boss up front, not a white-out)
-  window.__keepAlive = () => { S.lives = 1e6; if (S.bodyHp) S.bodyHp = S.bodyHp.map((h, i) => (i ? Math.max(h, 6) : h)); if (!cap && S.queue.length === 0 && S.enemies.length < 14) { S.waveActive = false; od.startWave(); } };
+  window.__keepAlive = () => { S.lives = 1e6; for (const t of S.towers) if (t.fuel != null) t.fuel = 20; // full tanks: nothing blinks or burns up on camera
+    if (S.bodyHp) S.bodyHp = S.bodyHp.map((h, i) => (i ? Math.max(h, 6) : h)); if (!cap && S.queue.length === 0 && S.enemies.length < 14) { S.waveActive = false; od.startWave(); } };
   S.speed = 2; // steady 2× game speed for the whole preview (no Overdrive, so nothing speeds up mid-clip)
   const v = window.__view3d; if (v.quality) v.quality.level = 99;
   v.cam.fit = v.cam.fit || 900;
@@ -83,10 +92,9 @@ const ACT = (what) => {
   const od = window.__od, S = od.state(), B = od.board();
   if (what === "overdrive") return document.getElementById("odBtn").click();
   if (what === "upgrade") { const t = S.towers.filter(t => t.level < 4 && !t.offline).pop() || S.towers[0]; S.money = 1e9; return t && od.upgradeTower(t, "A"); }
-  if (what.startsWith("build:")) { // the free orbit slot closest to the camera's side, so the launch is in view
-    const v = window.__view3d, C = od.center();
-    const free = B.slots.filter(s => !s.surface && !od.towerAt(s.id)).map(s => { const p = od.slotPos(s.id), q = v.project(p.x, p.y, p.z || 0); return { id: s.id, d: (q.x - 0.5 * innerWidth) ** 2 + (q.y - 0.5 * innerHeight) ** 2 }; }).sort((a, b) => a.d - b.d);
-    if (free[0]) { S.money = 1e9; od.placeTower(free[0].id, what.slice(6)); }
+  if (what.startsWith("build:")) { // launch from the planet onto a free orbit (zones take turns: LEO, MEO, HEO)
+    window.__z = ((window.__z ?? -1) + 1) % 3;
+    for (const z of [window.__z, 0, 1, 2]) if (od.freeLanes(0, z).length) { S.launchBand = z; S.money = 1e9; od.placeTower(od.launchSlot(0), what.slice(6)); break; }
   }
 };
 const CLEAN = () => { // no orbit / moon name tags, no empty-slot markers
@@ -94,7 +102,7 @@ const CLEAN = () => { // no orbit / moon name tags, no empty-slot markers
   v.scene.traverse(o => { const im = o.isSprite && o.material.map && o.material.map.image; if (im && o.material.blending === 1 && im.height < 64 && im.width > im.height) o.visible = false; if (o.isInstancedMesh && o.count === n) o.visible = false; });
 };
 const SIZE = ([w, h]) => {
-  if (!document.getElementById("ad-css")) { const st = document.createElement("style"); st.id = "ad-css"; st.textContent = "#hud,#shop,#preview,#toast,#v3ctl,#info,#coach,#overlay,#coachArrow,#zoomCtl{display:none!important}"; document.head.appendChild(st); }
+  if (!document.getElementById("ad-css")) { const st = document.createElement("style"); st.id = "ad-css"; st.textContent = "#hud,#shop,#preview,#toast,#v3ctl,#info,#coach,#overlay,#coachArrow,#zoomCtl,#launchPad{display:none!important}"; document.head.appendChild(st); }
   const v = window.__view3d; v.renderer.setPixelRatio(1); v.renderer.setSize(w, h, false); v.camera.aspect = w / h; v.camera.updateProjectionMatrix();
 };
 const FRAME = ([keys, t]) => {
