@@ -53,6 +53,9 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     out.refuel = t.fuel === 20 && m0 - S.money === rc && rc >= Math.floor(t.spent * 0.5) && od.refuelCost(t) === 0; out.refuelCost = rc; out.spent = t.spent;
     for (let i = 0; i < 2; i++) od.placeTower(L, 'laser');
     // fill LEO: launch refuses when it's full
+    // orbit lines toggle (top bar): hides the lines, and back
+    const btn = document.getElementById('linesBtn'); out.linesBtn = !!btn && OD.orbitLines === true;
+    btn.click(); out.linesOff = OD.orbitLines === false && localStorage.getItem('od_exp_lines') === '0'; btn.click(); out.linesOn = OD.orbitLines === true;
     S.launchBand = 0; const leo = od.freeLanes(0, 0).length; for (let i = 0; i < leo; i++) od.placeTower(L, 'laser');
     const n = S.towers.length; od.placeTower(L, 'laser'); out.leoFull = S.towers.length === n;
     // fuel: 1 per wave, Overdrive burns 2, out of fuel → burns up
@@ -79,6 +82,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(r.moon, 'tapping the Moon makes it the launch site');
   ok(r.moved && r.tier5, 'changing zone costs 1 fuel per zone; upgrades no longer need an orbit');
   ok(r.refuel, `refuel tops up to 20 and costs a lot (${r.refuelCost} cr for a satellite worth ${r.spent} cr)`);
+  ok(r.linesBtn && r.linesOff && r.linesOn, 'top-bar button turns the orbit lines off and back on (remembered)');
   ok(r.leoFull, 'launching into a full LEO is refused');
   ok(r.fuelAfterWave === 19 && r.fuelAfterOd === 17, `1 fuel per wave (${r.fuelAfterWave}), Overdrive burns 2 more (${r.fuelAfterOd})`);
   ok(r.burned > 0 && r.left === 0, `satellites out of fuel burn up (${r.burned})`);

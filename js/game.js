@@ -628,6 +628,20 @@
     placeTower(launchSlot(S.launchFrom));
     renderLaunchPad();
   }
+  // Orbit lines on/off (top bar button, key L). Remembered on this device.
+  OD.orbitLines = store.get("od_exp_lines") !== "0";
+  function toggleOrbitLines() {
+    OD.orbitLines = !OD.orbitLines; store.set("od_exp_lines", OD.orbitLines ? "1" : "0");
+    if (linesBtn) { linesBtn.textContent = OD.orbitLines ? "Orbits: On" : "Orbits: Off"; linesBtn.classList.toggle("on", OD.orbitLines); }
+    sfx("click"); toast(OD.orbitLines ? "Orbit lines on" : "Orbit lines off");
+  }
+  let linesBtn = null;
+  if (EXP) {
+    linesBtn = document.createElement("button"); linesBtn.id = "linesBtn"; linesBtn.title = "Show / hide orbit lines (L)";
+    linesBtn.textContent = OD.orbitLines ? "Orbits: On" : "Orbits: Off"; linesBtn.classList.toggle("on", OD.orbitLines);
+    linesBtn.onclick = toggleOrbitLines; ui.autoBtn.parentNode.insertBefore(linesBtn, ui.autoBtn);
+    window.addEventListener("keydown", ev => { if ((ev.key === "l" || ev.key === "L") && S && !(ev.target.closest && ev.target.closest("input,select"))) toggleOrbitLines(); });
+  }
   const pickLaunchSite = bi => { if (!EXP || !S || !S.selectedType || !launchSites().includes(bi)) return false; S.launchFrom = bi; sfx("click"); renderLaunchPad(); return true; };
 
   // Invaders spiral toward the centre; moons/planets bend their path with gravity.

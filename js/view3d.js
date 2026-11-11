@@ -691,7 +691,7 @@ function sync() {
   B.rings.forEach((r, i) => { const b = B.bodies[r.body]; world.rings[i].position.set(b.x - C.x, H, b.y - C.y); });
   if (OD.EXP && S) { // Own Orbits: an orbit line only for lanes with a satellite on them
     const used = new Set(S.towers.map(tw => B.slots[tw.slot].ring));
-    B.rings.forEach((r, i) => { if (r.lane) world.rings[i].visible = used.has(i); });
+    B.rings.forEach((r, i) => { if (r.lane) world.rings[i].visible = window.OD.orbitLines !== false && used.has(i); }); // top-bar toggle
   }
   // empty slots
   const building = S && S.selectedType;

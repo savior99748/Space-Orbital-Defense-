@@ -16,6 +16,7 @@ edition never see it.
   at 0 it burns up re-entering the atmosphere. 3 waves or less: it blinks red. Selling is worth less as fuel runs low.
 - **Refuel** (tap the satellite → ⛽ Refuel): back to 20 waves. Expensive on purpose: a full tank costs half of
   everything spent on the satellite (at least its price), charged for the fuel missing. It doesn't add to the sell value.
+- **Orbits: On / Off** (top bar, key L) shows or hides the orbit lines.
 - **Overdrive** burns **2 extra fuel** from every satellite.
 - **Invaders are 20% slower** than in the normal game.
 - Missile Silos are on the ground: no fuel, no orbits. Upgrades work as normal.
