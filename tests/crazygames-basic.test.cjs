@@ -11,7 +11,7 @@ const MOCK = `window.__cg=[];window.CrazyGames={SDK:{init:async()=>{__cg.push('i
   for (const [name, opts] of [['desktop', { viewport: { width: 1280, height: 720 } }], ['phone', devices['iPhone 13']]]) {
     const ctx = await b.newContext(opts);
     await ctx.route('**/*', r => { const u = r.request().url(); if (u.includes('sdk.crazygames.com')) return r.fulfill({ contentType: 'text/javascript', body: MOCK }); if (!u.startsWith('http://127.0.0.1')) return r.abort(); r.continue(); });
-    await ctx.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} });
+    await ctx.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} });
     const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
     await pg.goto('http://127.0.0.1:8775/index.html');
     await pg.waitForSelector('[data-act="start"]', { timeout: 30000 });

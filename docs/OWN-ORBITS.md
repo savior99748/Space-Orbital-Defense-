@@ -1,8 +1,8 @@
-# Experiment: Own Orbits
+# Own Orbits
 
-A trial of more realistic orbital mechanics. **Off by default.** It only runs when the link ends in `?exp=orbits`
-(3D view only), e.g. `index.html?exp=orbits`. Normal players, the CrazyGames builds (Versions A/B/C) and the desktop
-edition never see it.
+How the 3D game plays (it started as an experiment behind `?exp=orbits`; since Version C it's the default).
+Classic 2D keeps the old shared ring slots. `?orbits=classic` (or localStorage `od_orbits` = `classic`) brings the old
+slot rules back in 3D; the older automated tests use it.
 
 ## Rules
 - **Launch:** pick a satellite and a launch panel opens: choose the zone (**LEO / MEO / HEO**), the body to launch from
@@ -21,9 +21,10 @@ edition never see it.
 - **Invaders are 20% slower** than in the normal game.
 - Missile Silos are on the ground: no fuel, no orbits. Upgrades work as normal.
 
-## Kept apart
-Its own saved run (`od_run3d_exp`) and records. It sends no stats, unlocks no achievements and posts no leaderboard scores.
+## Saves
+Own Orbits runs save under `od_run3d_exp`, so a run saved with the old slot rules isn't loaded into it. Records,
+achievements, leaderboards and stats work as normal.
 
 ## Code
-Flag `OD.EXP` in `js/mode.js`; rules in `js/game.js` (search "Own Orbits"); visuals in `js/view3d.js`; test
-`tests/exp-orbits.test.cjs`. Turning it off for good = deleting those blocks.
+Flag `OD.EXP` in `js/mode.js` (on in 3D unless `orbits=classic`); rules in `js/game.js` (search "Own Orbits"); visuals in `js/view3d.js`; test
+`tests/exp-orbits.test.cjs`. 

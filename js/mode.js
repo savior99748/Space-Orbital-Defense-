@@ -18,9 +18,12 @@ window.OD = window.OD || {};
   OD.view = view;
   OD.is3D = view === "3d";
   OD.headless = params.get("headless") === "1";
-  // ?exp=orbits: EXPERIMENT "Own Orbits" (each satellite on its own orbit, fuel, LEO → MEO → HEO). Off unless the
-  // link asks for it; 3D only. Uses its own saves and records, and sends no stats, achievements or leaderboard scores.
-  OD.EXP = OD.is3D && params.get("exp") === "orbits" ? "orbits" : null;
+  // Own Orbits (the 3D game): every satellite launches onto its own orbit (LEO / MEO / HEO) and carries fuel.
+  // Classic 2D keeps the shared ring slots. ?orbits=classic (or localStorage od_orbits = "classic") brings the old
+  // slot rules back in 3D: used by the automated tests of the slot-based mechanics.
+  let orbits = params.get("orbits");
+  if (!orbits) try { orbits = localStorage.getItem("od_orbits"); } catch { /* storage blocked */ }
+  OD.EXP = OD.is3D && orbits !== "classic" ? "orbits" : null;
   if (OD.is3D) {
     window.OD_NO2D = true;            // the 3D view does the drawing
     OD.apply3DMaps();                 // bigger planets, tilted orbits

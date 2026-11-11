@@ -10,7 +10,7 @@
   const sfx = name => audio.play(name);
 
   const OVERDRIVE = { duration: 6, cooldown: 30, ringMul: 5, rateMul: 1.3 };
-  // EXPERIMENT "Own Orbits" (?exp=orbits, see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
+  // Own Orbits (the 3D game; see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
   // lanes never cross (each has its own radius), so satellites can't collide. Satellites carry fuel for FUEL_MAX waves
   // and burn up when it runs out; Overdrive burns OD_FUEL extra. Picking a satellite opens a launch panel: choose the
   // zone (LEO / MEO / HEO) and the body to launch from, then LAUNCH. A satellite can change zone later for 1 fuel per zone.
@@ -980,7 +980,7 @@
   // ---------- records ----------
   // 3D and Classic 2D play differently, so each view keeps its own records, saved game and leaderboards.
   const VIEW_TAG = OD.is3D ? "3d" : "";
-  const recKey = (map, diff) => `od_rec${VIEW_TAG}${EXP ? "exp" : ""}_${map}_${diff}`;
+  const recKey = (map, diff) => `od_rec${VIEW_TAG}_${map}_${diff}`;
   function getRec(map, diff) { try { return JSON.parse(store.get(recKey(map, diff)) || "null"); } catch { return null; } }
   function saveRec() {
     const old = getRec(S.mapKey, S.diffKey) || {};
@@ -991,7 +991,7 @@
 
   // ---------- saved game (resume) ----------
   // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
-  const RUN_KEY = `od_run${VIEW_TAG}${EXP ? "_exp" : ""}`;
+  const RUN_KEY = `od_run${VIEW_TAG}${EXP ? "_exp" : ""}`; // Own Orbits runs: saves from the old slot rules don't load into it
   const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
     dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0, asc: t.asc || 0, fuel: t.fuel, orbit: t.orbit });
   function saveRun() {
@@ -1049,7 +1049,6 @@
   ];
   function getAch() { try { return JSON.parse(store.get("od_ach") || "{}"); } catch { return {}; } }
   function unlock(id) {
-    if (EXP) return;
     const got = getAch();
     if (got[id]) return;
     const a = ACHIEVEMENTS.find(x => x.id === id);
@@ -1108,7 +1107,7 @@
     sfx("lose");
     if (S.endless) {
       stats.track(`endless-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
-      S.lastLb = EXP ? null : LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
+      S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
       showStats("over", null, false, S.lastLb);
     } else {
       stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
@@ -1472,7 +1471,7 @@
     const nb = ui.shop.querySelector(`[data-type="${type}"]`); if (nb) nb.classList.remove("new");
     S.selectedTower = null;
     S.selectedType = S.selectedType === type ? null : type;
-    if (S.selectedType) toast(`Tap a glowing slot to build ${TOWERS[type].name}`, 1400);
+    if (S.selectedType) toast(EXP && !TOWERS[type].ground ? `Choose an orbit, then 🚀 LAUNCH ${TOWERS[type].name}` : `Tap a glowing slot to build ${TOWERS[type].name}`, 1400);
     renderInfo(); updateUI(true);
   }
 
@@ -1728,7 +1727,7 @@
     ui.lives.classList.toggle("danger", S.lives / S.diff.lives < 0.3);
     ui.money.textContent = S.money.toLocaleString();
     ui.score.textContent = S.score.toLocaleString();
-    ui.diff.textContent = S.diff.name + (EXP ? " · 🧪 Own Orbits" : ""); ui.diff.style.color = S.diff.color;
+    ui.diff.textContent = S.diff.name; ui.diff.style.color = S.diff.color;
     ui.waveBtn.disabled = S.waveActive || S.over;
     ui.waveBtn.innerHTML = S.waveActive ? `Wave ${S.wave}…` : `Launch Wave ${S.wave + 1} ▶`;
     // early waves: the launch button pulses while it's waiting for the player (never auto-launches)
@@ -2033,7 +2032,7 @@
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
     stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : ""}`);
     clearRun(); saveRun();
-    if (EXP) { toast(`🧪 Own Orbits test: each satellite gets its own orbit and ${FUEL_MAX} waves of fuel. Pick a satellite, choose LEO / MEO / HEO, then 🚀 LAUNCH.`, 5000); sfx("wave"); return; }
+    if (EXP) tip("launch", "🛰 Pick a satellite, choose its orbit (LEO / MEO / HEO), then 🚀 LAUNCH. Every satellite gets its own orbit.", 3800, 5500);
     toast(S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
   }
@@ -2066,7 +2065,8 @@
   const TUT_STEPS = [
     { text: "<b>Welcome, Commander!</b> Aliens are coming for Earth. Tap the <b>Laser Sat</b> below.",
       el: laserBtn, done: () => S.selectedType === "laser" || S.towers.length > 0 },
-    { text: "Tap a <b>glowing slot</b> to launch it into orbit.", world: slotTarget, done: () => S.towers.length > 0 },
+    EXP ? { text: "Press <b>🚀 LAUNCH</b> to send it into orbit.", el: () => document.querySelector("#launchPad [data-launch]"), done: () => S.towers.length > 0 }
+      : { text: "Tap a <b>glowing slot</b> to launch it into orbit.", world: slotTarget, done: () => S.towers.length > 0 },
     { text: "", countdown: true, enter: () => { tut.launchAt = performance.now() + TUT_COUNTDOWN; },
       done: () => S.waveActive || S.wave > 0 },
     { text: "Your satellite fires on its own. <b>Clear the wave!</b>", done: () => S.wave >= 1 && !S.waveActive },
@@ -2399,7 +2399,7 @@
     stats.sessionStart();
     // A brand-new player goes straight into the guided first game (aliens within seconds) instead of the
     // menu; everyone else, and editions that open on a title screen (desktop), gets the menu.
-    if (!P.titleFirst && !tutDone() && !loadRun() && !EXP) startTutorial();
+    if (!P.titleFirst && !tutDone() && !loadRun()) startTutorial();
     else mainMenu();
   });
 })(window.OD);
