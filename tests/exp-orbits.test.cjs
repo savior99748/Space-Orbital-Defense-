@@ -25,7 +25,8 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     await pg.waitForFunction(() => window.__od.tut(), null, { timeout: 30000 });
     await pg.click('#shop [data-type="laser"]'); await pg.waitForTimeout(300);
     const s2 = await pg.evaluate(() => ({ i: window.__od.tut().i, text: document.getElementById('coachText').textContent, glow: !!document.querySelector('#launchPad [data-launch].coach-glow') || !!document.querySelector('#launchPad [data-launch]') }));
-    await pg.click('#launchPad [data-launch]'); await pg.waitForTimeout(300);
+    await pg.click('#launchPad [data-launch]');
+    await pg.waitForFunction(() => window.__od.tut().i >= 2, null, { timeout: 10000 }).catch(() => {}); // next rendered frame (slow on CI)
     const s3 = await pg.evaluate(() => ({ i: window.__od.tut().i, towers: window.__od.state().towers.length, fuel: window.__od.state().towers[0] && window.__od.state().towers[0].fuel }));
     ok(s2.i === 1 && /LAUNCH/.test(s2.text) && s2.glow, `${q || '2D default'} tutorial step 2: "${s2.text}"`);
     ok(s3.towers === 1 && s3.fuel === 20 && s3.i >= 2, `${q || '2D default'} tutorial: LAUNCH puts the first satellite on its own orbit, Wave 1 countdown starts ${JSON.stringify(s3)}`);
