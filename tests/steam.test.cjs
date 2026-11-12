@@ -40,7 +40,7 @@ const readJson = f => { try { return JSON.parse(fs.readFileSync(path.join(userDa
   ok(r.gained > 0, `free 🎁 bonus credits on Steam (+${r.gained})`);
   await win.waitForTimeout(800);
   const saved = readJson('saves.json');
-  const run = saved && (saved.od_run3d_exp || saved.od_run3d || saved.od_run); // 3D Own Orbits runs: od_run3d_exp
+  const run = saved && (saved.od_run_exp || saved.od_run3d_exp || saved.od_run3d || saved.od_run); // Own Orbits runs: od_run_exp (2D, the default) / od_run3d_exp (3D)
   ok(run && JSON.parse(run).wave === 2, 'progress is written to saves.json (the file Steam Cloud syncs)');
   // quit from the menu, relaunch: the run is still there
   await win.evaluate(() => window.__od.mainMenu());
