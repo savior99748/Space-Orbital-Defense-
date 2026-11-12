@@ -84,18 +84,19 @@
   function addLanes(rings, bodies, nOrbit, seed) {
     let a = seed >>> 0;
     const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-    const LANE = 10 * Math.max(0.33, MAP.satScale || 1);
+    const flat = !OD.is3D; // Classic 2D: flat orbits, spaced for the bigger 2D satellite art
+    const LANE = (flat ? 16 : 10) * Math.max(0.33, MAP.satScale || 1);
     bodies.forEach((b, bi) => {
       const own = rings.slice(0, nOrbit).filter(r => r.body === bi).sort((x, y) => x.r - y.r);
       if (!own.length) return;
-      const lo = own[0].r, hi = own[own.length - 1].r;
+      const lo = own[0].r * (flat && own.length > 1 ? 0.85 : 1), hi = own[own.length - 1].r * (flat && own.length > 1 ? 1.25 : 1);
       const centers = own.length > 1 ? [lo, (lo + hi) / 2, hi] : [lo * 0.8, lo * 1.15, lo * 1.5];
       const n = Math.max(1, Math.floor((centers[1] - centers[0]) * 0.8 / LANE) + 1);
       const w0 = Math.abs(own[0].speed) || 0.1, dir = Math.sign(own[0].speed) || 1;
       centers.forEach((c, band) => {
         for (let k = 0; k < n; k++) {
           const r = c + (k - (n - 1) / 2) * LANE;
-          rings.push({ body: bi, r, slots: 1, speed: dir * w0 * (centers[0] / r) ** 1.5, angle: rnd() * TAU, incl: rnd() * 0.9, node: rnd() * TAU, lane: true, band });
+          rings.push({ body: bi, r, slots: 1, speed: dir * w0 * (centers[0] / r) ** 1.5, angle: rnd() * TAU, incl: flat ? 0 : rnd() * 0.9, node: rnd() * TAU, lane: true, band });
         }
       });
       rings.push({ body: bi, r: 0, slots: 1, speed: 0, angle: 0, incl: 0, node: 0, launch: true });
@@ -1262,10 +1263,12 @@
     // turret rings + empty slots
     const odActive = S && S.overdrive > 0;
     const hoverSlot = S && S.hover;
-    B.rings.forEach(ring => {
-      if (ring.surface) return;
+    const usedLanes = EXP && S ? new Set(S.towers.map(t => B.slots[t.slot].ring)) : null;
+    B.rings.forEach((ring, ri) => {
+      if (ring.surface || ring.hidden || ring.launch) return;
+      if (ring.lane && (!usedLanes || !usedLanes.has(ri) || OD.orbitLines === false)) return; // Own Orbits: only orbits in use
       const b = B.bodies[ring.body];
-      ctx.strokeStyle = odActive ? "rgba(255,209,102,0.4)" : "rgba(108,240,255,0.18)";
+      ctx.strokeStyle = odActive ? "rgba(255,209,102,0.4)" : ring.lane ? ["rgba(108,240,255,0.3)", "rgba(125,255,154,0.3)", "rgba(193,140,255,0.3)"][ring.band] : "rgba(108,240,255,0.18)";
       ctx.lineWidth = odActive ? 2.5 : 1.5;
       ctx.setLineDash([4, 8]);
       ctx.lineDashOffset = -ring.angle * ring.r;
@@ -1341,6 +1344,7 @@
     for (const t of S.towers) {
       const p = t.x == null ? slotPos(t.slot) : { x: t.x, y: t.y, a: t.ringA };
       drawTowerAt(t, p, time);
+      if (t.fuel != null && t.fuel <= 3) { ctx.strokeStyle = `rgba(255,92,92,${0.45 + 0.4 * Math.sin(time * 6)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, TAU); ctx.stroke(); } // low on fuel
     }
     for (const t of S.towers) if (t.crafts) for (const f of t.crafts) OD.drawCraft(ctx, f, t, time);
     const tw = tutWorldTarget();
@@ -2213,7 +2217,12 @@
   function handleTap(sx, sy, touch) {
     if (!S || S.over || S.paused) return;
     const w = toWorld(sx, sy);
-    tapSlot(nearestSlot(w.x, w.y, hitRadius(touch)), touch);
+    const slot = nearestSlot(w.x, w.y, hitRadius(touch));
+    if (slot == null && EXP && S.selectedType) { // Own Orbits: tapping a planet or moon picks where to launch from
+      const bi = B.bodies.findIndex(b => dist2(w.x, w.y, b.x, b.y) <= Math.max(b.r + 8, hitRadius(touch)) ** 2);
+      if (bi >= 0 && pickLaunchSite(bi)) return;
+    }
+    tapSlot(slot, touch);
   }
   // Act on a tapped slot (or empty space when slot is null). Also used by the 3D view.
   function tapSlot(slot, touch) {

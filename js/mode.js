@@ -8,7 +8,7 @@ window.OD = window.OD || {};
   const params = new URLSearchParams(location.search);
   let saved = null;
   try { saved = localStorage.getItem("od_view"); } catch { /* storage blocked */ }
-  let view = params.get("view") || saved || "3d";
+  let view = params.get("view") || saved || "2d"; // everyone starts in 2D (Version C); 3D is one tap away in the menu
   const webgl = (() => {
     try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl"))); }
     catch { return false; }
@@ -18,12 +18,12 @@ window.OD = window.OD || {};
   OD.view = view;
   OD.is3D = view === "3d";
   OD.headless = params.get("headless") === "1";
-  // Own Orbits (the 3D game): every satellite launches onto its own orbit (LEO / MEO / HEO) and carries fuel.
-  // Classic 2D keeps the shared ring slots. ?orbits=classic (or localStorage od_orbits = "classic") brings the old
-  // slot rules back in 3D: used by the automated tests of the slot-based mechanics.
+  // Own Orbits (2D and 3D): every satellite launches onto its own orbit (LEO / MEO / HEO) and carries fuel.
+  // ?orbits=classic (or localStorage od_orbits = "classic") brings the old shared ring slots back: used by the
+  // automated tests of the slot-based mechanics.
   let orbits = params.get("orbits");
   if (!orbits) try { orbits = localStorage.getItem("od_orbits"); } catch { /* storage blocked */ }
-  OD.EXP = OD.is3D && orbits !== "classic" ? "orbits" : null;
+  OD.EXP = orbits !== "classic" ? "orbits" : null;
   if (OD.is3D) {
     window.OD_NO2D = true;            // the 3D view does the drawing
     OD.apply3DMaps();                 // bigger planets, tilted orbits

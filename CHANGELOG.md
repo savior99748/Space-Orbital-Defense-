@@ -3,6 +3,8 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Everyone starts in 2D** (Version C). 3D is one tap away in the menu and is remembered. Own Orbits works in both
+  views: in 2D the orbits are flat and spaced wider for the bigger 2D art (Earth: 5 per zone, plus the Moon).
 - **Own Orbits (the 3D game now plays this way):** pick a satellite, choose its orbit zone (**LEO / MEO / HEO**) and
   where to launch from (planet or moon), then press **🚀 LAUNCH**. Every satellite flies to its own orbit (its own
   radius, so they never collide; tilt and position random). Each zone has limited room per body (Earth 6, Moon 2).

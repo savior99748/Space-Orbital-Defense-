@@ -8,7 +8,7 @@ let lastStep;
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
-  await pg.goto('file://' + ROOT + '/index.html?view=2d');
+  await pg.goto('file://' + ROOT + '/index.html?view=2d&orbits=classic'); // the classic slot tutorial (Own Orbits' LAUNCH tutorial: exp-orbits test)
   await pg.waitForFunction(() => window.__od && window.__od.tut(), null, { timeout: 15000 });
   const step = async () => { await pg.waitForTimeout(150); return pg.evaluate(() => window.__od.tut() ? window.__od.tut().i : null); };
   const tapWorld = async (x, y) => {

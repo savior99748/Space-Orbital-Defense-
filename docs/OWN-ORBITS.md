@@ -1,7 +1,7 @@
 # Own Orbits
 
-How the 3D game plays (it started as an experiment behind `?exp=orbits`; since Version C it's the default).
-Classic 2D keeps the old shared ring slots. `?orbits=classic` (or localStorage `od_orbits` = `classic`) brings the old
+How the game plays in 2D (the default view since Version C) and 3D. It started as an experiment behind `?exp=orbits`.
+In 2D the orbits are flat and spaced wider (the 2D satellite art is bigger). `?orbits=classic` (or localStorage `od_orbits` = `classic`) brings the old
 slot rules back in 3D; the older automated tests use it.
 
 ## Rules
