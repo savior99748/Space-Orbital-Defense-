@@ -58,13 +58,14 @@ function rememberWindow(win) {
 }
 
 // ---- Steam (optional) ----
-// Set your Steam App ID in steam_appid.txt next to this file (or STEAM_APP_ID env var) once Valve
-// gives you one. Until then the game runs normally without Steam.
+// Steam App ID: "steamAppId" in package.json (packed into the build), or steam_appid.txt next to this file / the
+// STEAM_APP_ID env var while developing. 0 = not set yet: the game runs normally without Steam.
 let steam = null;
 function initSteam() {
   let appId = Number(process.env.STEAM_APP_ID || 0);
   const idFile = path.join(__dirname, "steam_appid.txt");
   if (!appId && fs.existsSync(idFile)) appId = Number(fs.readFileSync(idFile, "utf8").trim());
+  if (!appId) try { appId = Number(require("./package.json").steamAppId || 0); } catch { /* no package.json */ }
   if (!appId) return;
   try {
     steam = require("steamworks.js").init(appId);

@@ -77,15 +77,15 @@ Steamworks field names]**. No code change is needed for Auto-Cloud.
 Steam setup:
 1. Create a Steamworks partner account, pay the Steam Direct app fee **[verify current amount]** and get your
    **App ID**.
-2. Put the App ID in `platforms/electron/steam_appid.txt`. The app connects to Steam through `steamworks.js` and
+2. Put the App ID in `"steamAppId"` in `platforms/electron/package.json` (or `steam_appid.txt` while developing). The app connects to Steam through `steamworks.js` and
    shows the overlay (Shift+Tab). Test the overlay early: it is known to be fragile with Electron **[verify]**.
 3. In Steamworks, create achievements with these API names (the game's ids in capitals):
    `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`, `ENDLESS_50`, `ENDLESS_100`.
 4. Set up Auto-Cloud (above).
 5. Put the store page up as **Coming Soon** early: Steam requires it to be visible for a minimum time before
    release **[verify]**, and wishlists collected meanwhile drive launch visibility.
-6. Upload the build with Valve's SteamPipe tools, or tag `steam-v1.0.0` to get the installer attached to a GitHub
-   release.
+6. Upload the build with Valve's SteamPipe tools: step by step in **`tools/steam/README.md`** (Steam gets the
+   unpacked game folder, artifact `ringwarden-steam-windows`, not the installer).
 
 macOS builds must be made (and signed) on a Mac. Windows builds: GitHub Actions (above), your Windows PC, or Linux
 with Wine.

@@ -1,0 +1,20 @@
+"AppBuild"
+{
+	"AppID" "APPID" // your App ID from Steamworks
+	"Desc" "Ringwarden build" // internal note shown in Steamworks → Builds
+	"ContentRoot" "..\content\ringwarden_windows\" // the unzipped ringwarden-steam-windows folder
+	"BuildOutput" "..\output\" // logs and build cache
+	"Preview" "0" // 1 = dry run: checks the files, uploads nothing
+	"Depots"
+	{
+		"DEPOTID" // your Windows depot ID (Steamworks → SteamPipe → Depots)
+		{
+			"FileMapping"
+			{
+				"LocalPath" "*"
+				"DepotPath" "."
+				"recursive" "1"
+			}
+		}
+	}
+}

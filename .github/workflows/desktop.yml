@@ -1,4 +1,4 @@
-# Builds the Windows installer for the Steam / desktop edition on a Windows machine.
+# Builds the Windows installer and the Steam upload folder for the desktop edition on a Windows machine.
 # Run it any time: Actions → "Desktop build" → Run workflow, then download the installer from the run's
 # Artifacts. A tag like steam-v1.0.0 also builds it and attaches it to that GitHub release.
 name: Desktop build
@@ -29,6 +29,12 @@ jobs:
         with:
           name: ringwarden-windows-installer
           path: platforms/electron/release/*.exe
+          retention-days: 30
+      # Steam installs games itself: it gets the unpacked game folder, not the installer (see tools/steam/README.md)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ringwarden-steam-windows
+          path: platforms/electron/release/win-unpacked/
           retention-days: 30
       - name: Attach to the GitHub release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
