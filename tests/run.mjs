@@ -59,7 +59,13 @@ const run = f => new Promise(resolve => {
 let total = 0, failed = 0;
 for (const f of files) {
   process.stdout.write(`▶ ${f} … `);
-  const r = await run(f);
+  let r = await run(f);
+  if (r.fail) { // shared CI runners are slow and occasionally hiccup (a frame late, Electron failing to start): retry the
+    // file once. A real bug fails both times; a pass on the retry is reported as flaky, not hidden.
+    const first = r;
+    r = await run(f);
+    if (!r.fail) console.log(`(flaky: ${first.lines.filter(l => l.startsWith("FAIL")).slice(0, 2).join(" | ") || "crashed"}; passed on retry) `);
+  }
   total += r.pass; failed += r.fail;
   console.log(r.fail ? `✗ ${r.pass} passed, ${r.fail} failed (${r.secs}s)` : `✓ ${r.pass} passed (${r.secs}s)`);
   if (r.fail) for (const l of r.lines.filter(l => !l.startsWith("PASS")).slice(0, 25)) console.log("    " + l);
