@@ -7,7 +7,10 @@ window.OD = window.OD || {};
   "use strict";
   const params = new URLSearchParams(location.search);
   let saved = null;
-  try { saved = localStorage.getItem("od_view"); } catch { /* storage blocked */ }
+  // "od_view_c": the view choice since Version C (2D default). Choices saved before it (od_view, when 3D was the
+  // default) are ignored once, so everyone starts in 2D; picking 3D again is remembered from then on.
+  const VIEW_KEY = "od_view_c";
+  try { saved = localStorage.getItem(VIEW_KEY); } catch { /* storage blocked */ }
   let view = params.get("view") || saved || "2d"; // everyone starts in 2D (Version C); 3D is one tap away in the menu
   const webgl = (() => {
     try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl"))); }
@@ -31,7 +34,7 @@ window.OD = window.OD || {};
   }
   // Switch view (saved), then reload so the right maps and renderer start fresh.
   OD.setView = function (v) {
-    try { localStorage.setItem("od_view", v); } catch { /* ignore */ }
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
     const url = new URL(location.href); url.searchParams.delete("view");
     location.replace(url.toString());
   };
