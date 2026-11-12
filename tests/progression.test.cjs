@@ -6,7 +6,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
-  await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_stats_off', '1'); } catch {} });
+  await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); } catch {} });
   await pg.goto('http://127.0.0.1:8769/index.html?view=3d');
   await pg.waitForFunction(() => window.__view3d && window.__od, null, { timeout: 30000 });
 

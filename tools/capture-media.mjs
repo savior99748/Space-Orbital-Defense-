@@ -105,7 +105,7 @@ async function record(name, viewport) {
   const segs = {};
   const mark = (seg, fn) => async () => { const s = (Date.now() - t0) / 1000; await fn(); segs[seg] = { start: s, dur: (Date.now() - t0) / 1000 - s }; };
   await page.goto("file://" + path.join(root, "index.html"));
-  await page.evaluate(() => { localStorage.setItem("od_tut_done", "1"); });
+  await page.evaluate(() => { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_orbits", "classic"); });
   await page.reload();
   await page.waitForSelector('[data-act="start"]');
   await page.addStyleTag({ content: CSS });

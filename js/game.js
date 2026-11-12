@@ -10,7 +10,7 @@
   const sfx = name => audio.play(name);
 
   const OVERDRIVE = { duration: 6, cooldown: 30, ringMul: 5, rateMul: 1.3 };
-  // EXPERIMENT "Own Orbits" (?exp=orbits, see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
+  // Own Orbits (the 3D game; see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
   // lanes never cross (each has its own radius), so satellites can't collide. Satellites carry fuel for FUEL_MAX waves
   // and burn up when it runs out; Overdrive burns OD_FUEL extra. Picking a satellite opens a launch panel: choose the
   // zone (LEO / MEO / HEO) and the body to launch from, then LAUNCH. A satellite can change zone later for 1 fuel per zone.
@@ -84,18 +84,19 @@
   function addLanes(rings, bodies, nOrbit, seed) {
     let a = seed >>> 0;
     const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-    const LANE = 10 * Math.max(0.33, MAP.satScale || 1);
+    const flat = !OD.is3D; // Classic 2D: flat orbits, spaced for the bigger 2D satellite art
+    const LANE = (flat ? 16 : 10) * Math.max(0.33, MAP.satScale || 1);
     bodies.forEach((b, bi) => {
       const own = rings.slice(0, nOrbit).filter(r => r.body === bi).sort((x, y) => x.r - y.r);
       if (!own.length) return;
-      const lo = own[0].r, hi = own[own.length - 1].r;
+      const lo = own[0].r * (flat && own.length > 1 ? 0.85 : 1), hi = own[own.length - 1].r * (flat && own.length > 1 ? 1.25 : 1);
       const centers = own.length > 1 ? [lo, (lo + hi) / 2, hi] : [lo * 0.8, lo * 1.15, lo * 1.5];
       const n = Math.max(1, Math.floor((centers[1] - centers[0]) * 0.8 / LANE) + 1);
       const w0 = Math.abs(own[0].speed) || 0.1, dir = Math.sign(own[0].speed) || 1;
       centers.forEach((c, band) => {
         for (let k = 0; k < n; k++) {
           const r = c + (k - (n - 1) / 2) * LANE;
-          rings.push({ body: bi, r, slots: 1, speed: dir * w0 * (centers[0] / r) ** 1.5, angle: rnd() * TAU, incl: rnd() * 0.9, node: rnd() * TAU, lane: true, band });
+          rings.push({ body: bi, r, slots: 1, speed: dir * w0 * (centers[0] / r) ** 1.5, angle: rnd() * TAU, incl: flat ? 0 : rnd() * 0.9, node: rnd() * TAU, lane: true, band });
         }
       });
       rings.push({ body: bi, r: 0, slots: 1, speed: 0, angle: 0, incl: 0, node: 0, launch: true });
@@ -980,7 +981,7 @@
   // ---------- records ----------
   // 3D and Classic 2D play differently, so each view keeps its own records, saved game and leaderboards.
   const VIEW_TAG = OD.is3D ? "3d" : "";
-  const recKey = (map, diff) => `od_rec${VIEW_TAG}${EXP ? "exp" : ""}_${map}_${diff}`;
+  const recKey = (map, diff) => `od_rec${VIEW_TAG}_${map}_${diff}`;
   function getRec(map, diff) { try { return JSON.parse(store.get(recKey(map, diff)) || "null"); } catch { return null; } }
   function saveRec() {
     const old = getRec(S.mapKey, S.diffKey) || {};
@@ -991,7 +992,7 @@
 
   // ---------- saved game (resume) ----------
   // The run is saved between waves (never mid-wave), so Continue restarts at the last cleared wave.
-  const RUN_KEY = `od_run${VIEW_TAG}${EXP ? "_exp" : ""}`;
+  const RUN_KEY = `od_run${VIEW_TAG}${EXP ? "_exp" : ""}`; // Own Orbits runs: saves from the old slot rules don't load into it
   const packTower = t => ({ type: t.type, slot: t.slot, level: t.level, path: t.path, spent: t.spent, targeting: t.targeting,
     dmg: Math.round(t.dmg || 0), kills: t.kills || 0, earned: t.earned || 0, sold: !!t.sold, oc: t.oc || 0, asc: t.asc || 0, fuel: t.fuel, orbit: t.orbit });
   function saveRun() {
@@ -1049,7 +1050,6 @@
   ];
   function getAch() { try { return JSON.parse(store.get("od_ach") || "{}"); } catch { return {}; } }
   function unlock(id) {
-    if (EXP) return;
     const got = getAch();
     if (got[id]) return;
     const a = ACHIEVEMENTS.find(x => x.id === id);
@@ -1108,7 +1108,7 @@
     sfx("lose");
     if (S.endless) {
       stats.track(`endless-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
-      S.lastLb = EXP ? null : LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
+      S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
       showStats("over", null, false, S.lastLb);
     } else {
       stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
@@ -1263,10 +1263,12 @@
     // turret rings + empty slots
     const odActive = S && S.overdrive > 0;
     const hoverSlot = S && S.hover;
-    B.rings.forEach(ring => {
-      if (ring.surface) return;
+    const usedLanes = EXP && S ? new Set(S.towers.map(t => B.slots[t.slot].ring)) : null;
+    B.rings.forEach((ring, ri) => {
+      if (ring.surface || ring.hidden || ring.launch) return;
+      if (ring.lane && (!usedLanes || !usedLanes.has(ri) || OD.orbitLines === false)) return; // Own Orbits: only orbits in use
       const b = B.bodies[ring.body];
-      ctx.strokeStyle = odActive ? "rgba(255,209,102,0.4)" : "rgba(108,240,255,0.18)";
+      ctx.strokeStyle = odActive ? "rgba(255,209,102,0.4)" : ring.lane ? ["rgba(108,240,255,0.3)", "rgba(125,255,154,0.3)", "rgba(193,140,255,0.3)"][ring.band] : "rgba(108,240,255,0.18)";
       ctx.lineWidth = odActive ? 2.5 : 1.5;
       ctx.setLineDash([4, 8]);
       ctx.lineDashOffset = -ring.angle * ring.r;
@@ -1342,6 +1344,7 @@
     for (const t of S.towers) {
       const p = t.x == null ? slotPos(t.slot) : { x: t.x, y: t.y, a: t.ringA };
       drawTowerAt(t, p, time);
+      if (t.fuel != null && t.fuel <= 3) { ctx.strokeStyle = `rgba(255,92,92,${0.45 + 0.4 * Math.sin(time * 6)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, TAU); ctx.stroke(); } // low on fuel
     }
     for (const t of S.towers) if (t.crafts) for (const f of t.crafts) OD.drawCraft(ctx, f, t, time);
     const tw = tutWorldTarget();
@@ -1472,7 +1475,7 @@
     const nb = ui.shop.querySelector(`[data-type="${type}"]`); if (nb) nb.classList.remove("new");
     S.selectedTower = null;
     S.selectedType = S.selectedType === type ? null : type;
-    if (S.selectedType) toast(`Tap a glowing slot to build ${TOWERS[type].name}`, 1400);
+    if (S.selectedType) toast(EXP && !TOWERS[type].ground ? `Choose an orbit, then 🚀 LAUNCH ${TOWERS[type].name}` : `Tap a glowing slot to build ${TOWERS[type].name}`, 1400);
     renderInfo(); updateUI(true);
   }
 
@@ -1728,7 +1731,7 @@
     ui.lives.classList.toggle("danger", S.lives / S.diff.lives < 0.3);
     ui.money.textContent = S.money.toLocaleString();
     ui.score.textContent = S.score.toLocaleString();
-    ui.diff.textContent = S.diff.name + (EXP ? " · 🧪 Own Orbits" : ""); ui.diff.style.color = S.diff.color;
+    ui.diff.textContent = S.diff.name; ui.diff.style.color = S.diff.color;
     ui.waveBtn.disabled = S.waveActive || S.over;
     ui.waveBtn.innerHTML = S.waveActive ? `Wave ${S.wave}…` : `Launch Wave ${S.wave + 1} ▶`;
     // early waves: the launch button pulses while it's waiting for the player (never auto-launches)
@@ -2033,7 +2036,7 @@
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
     stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : ""}`);
     clearRun(); saveRun();
-    if (EXP) { toast(`🧪 Own Orbits test: each satellite gets its own orbit and ${FUEL_MAX} waves of fuel. Pick a satellite, choose LEO / MEO / HEO, then 🚀 LAUNCH.`, 5000); sfx("wave"); return; }
+    if (EXP) tip("launch", "🛰 Pick a satellite, choose its orbit (LEO / MEO / HEO), then 🚀 LAUNCH. Every satellite gets its own orbit.", 3800, 5500);
     toast(S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, 3500);
     sfx("wave");
   }
@@ -2066,7 +2069,8 @@
   const TUT_STEPS = [
     { text: "<b>Welcome, Commander!</b> Aliens are coming for Earth. Tap the <b>Laser Sat</b> below.",
       el: laserBtn, done: () => S.selectedType === "laser" || S.towers.length > 0 },
-    { text: "Tap a <b>glowing slot</b> to launch it into orbit.", world: slotTarget, done: () => S.towers.length > 0 },
+    EXP ? { text: "Press <b>🚀 LAUNCH</b> to send it into orbit.", el: () => document.querySelector("#launchPad [data-launch]"), done: () => S.towers.length > 0 }
+      : { text: "Tap a <b>glowing slot</b> to launch it into orbit.", world: slotTarget, done: () => S.towers.length > 0 },
     { text: "", countdown: true, enter: () => { tut.launchAt = performance.now() + TUT_COUNTDOWN; },
       done: () => S.waveActive || S.wave > 0 },
     { text: "Your satellite fires on its own. <b>Clear the wave!</b>", done: () => S.wave >= 1 && !S.waveActive },
@@ -2213,7 +2217,12 @@
   function handleTap(sx, sy, touch) {
     if (!S || S.over || S.paused) return;
     const w = toWorld(sx, sy);
-    tapSlot(nearestSlot(w.x, w.y, hitRadius(touch)), touch);
+    const slot = nearestSlot(w.x, w.y, hitRadius(touch));
+    if (slot == null && EXP && S.selectedType) { // Own Orbits: tapping a planet or moon picks where to launch from
+      const bi = B.bodies.findIndex(b => dist2(w.x, w.y, b.x, b.y) <= Math.max(b.r + 8, hitRadius(touch)) ** 2);
+      if (bi >= 0 && pickLaunchSite(bi)) return;
+    }
+    tapSlot(slot, touch);
   }
   // Act on a tapped slot (or empty space when slot is null). Also used by the 3D view.
   function tapSlot(slot, touch) {
@@ -2399,7 +2408,7 @@
     stats.sessionStart();
     // A brand-new player goes straight into the guided first game (aliens within seconds) instead of the
     // menu; everyone else, and editions that open on a title screen (desktop), gets the menu.
-    if (!P.titleFirst && !tutDone() && !loadRun() && !EXP) startTutorial();
+    if (!P.titleFirst && !tutDone() && !loadRun()) startTutorial();
     else mainMenu();
   });
 })(window.OD);

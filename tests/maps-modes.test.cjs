@@ -10,7 +10,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } }); const pg = await ctx.newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => m.type() === 'error' && !/goat|zgo|TUNNEL/.test(m.text()) && errs.push(m.text()));
     const missing = []; pg.on('response', r => { if (r.status() >= 400 && r.url().includes('127.0.0.1')) missing.push(r.url()); });
-    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto(`http://127.0.0.1:8769/index.html?view=${view}`);
     await pg.evaluate(() => { localStorage.setItem('od_tut_done','1'); localStorage.setItem('od_stats_off','1'); });
     await pg.reload(); await pg.waitForFunction(v => window.__od && (v === '2d' || window.__view3d), view, { timeout: 20000 });

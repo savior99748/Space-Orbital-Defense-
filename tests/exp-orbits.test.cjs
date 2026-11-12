@@ -1,25 +1,38 @@
 // Part of the automated test suite. Run all with: npm test   (or one: npm test -- exp-orbits)
-// EXPERIMENT "Own Orbits" (?exp=orbits): each satellite on its own orbit, fuel, LEO → MEO → HEO. Without the flag nothing changes.
+// Own Orbits (the 3D game): each satellite on its own orbit, fuel, LEO / MEO / HEO, LAUNCH panel, 3D tutorial.
+// ?orbits=classic brings back the old shared ring slots (used by the older mechanics tests).
 const { chromium } = require('playwright');
 const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const open = async q => {
+  const open = async (q, fresh) => {
     const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message));
-    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_stats_off', '1'); } catch {} });
+    if (!fresh) await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_stats_off', '1'); } catch {} });
     await pg.goto(`http://127.0.0.1:8769/index.html${q}`);
-    await pg.waitForFunction(() => window.__od && window.__view3d, null, { timeout: 30000 });
+    await pg.waitForFunction(() => window.__od && (window.OD.view === '2d' || window.__view3d), null, { timeout: 30000 });
     return { pg, errs };
   };
-  // without the flag: the normal game
-  { const { pg } = await open('');
+  // ?orbits=classic: the old shared ring slots
+  { const { pg } = await open('?orbits=classic');
     const r = await pg.evaluate(() => { const od = window.__od; od.begin('earth', 'easy'); const B = od.board();
       return { exp: !!od.EXP, lanes: B.rings.filter(x => x.lane || x.launch || x.hidden).length, orbitSlots: B.slots.filter(s => !s.surface && od.slotFits(s.id, 'laser')).length }; });
-    ok(!r.exp && r.lanes === 0 && r.orbitSlots > 0, `no flag: normal rings and slots (${r.orbitSlots} orbit slots), no experiment`);
+    ok(!r.exp && r.lanes === 0 && r.orbitSlots > 0, `?orbits=classic: the old shared ring slots (${r.orbitSlots} orbit slots)`);
     await pg.context().close(); }
 
-  const { pg, errs } = await open('?exp=orbits');
+  // a brand-new player (2D, the default, and 3D): the tutorial teaches the LAUNCH button
+  for (const q of ['', '?view=3d']) { const { pg, errs } = await open(q, true);
+    await pg.waitForFunction(() => window.__od.tut(), null, { timeout: 30000 });
+    await pg.click('#shop [data-type="laser"]'); await pg.waitForTimeout(300);
+    const s2 = await pg.evaluate(() => ({ i: window.__od.tut().i, text: document.getElementById('coachText').textContent, glow: !!document.querySelector('#launchPad [data-launch].coach-glow') || !!document.querySelector('#launchPad [data-launch]') }));
+    await pg.click('#launchPad [data-launch]'); await pg.waitForTimeout(300);
+    const s3 = await pg.evaluate(() => ({ i: window.__od.tut().i, towers: window.__od.state().towers.length, fuel: window.__od.state().towers[0] && window.__od.state().towers[0].fuel }));
+    ok(s2.i === 1 && /LAUNCH/.test(s2.text) && s2.glow, `${q || '2D default'} tutorial step 2: "${s2.text}"`);
+    ok(s3.towers === 1 && s3.fuel === 20 && s3.i >= 2, `${q || '2D default'} tutorial: LAUNCH puts the first satellite on its own orbit, Wave 1 countdown starts ${JSON.stringify(s3)}`);
+    ok(errs.length === 0, `${q || '2D default'} tutorial: no page errors ${errs.slice(0, 3).join(' | ')}`);
+    await pg.context().close(); }
+
+  const { pg, errs } = await open('?view=3d');
   const r = await pg.evaluate(async () => {
     const od = window.__od, wait = ms => new Promise(r => setTimeout(r, ms)), out = { maps: {} };
     for (const m of ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'sol']) {

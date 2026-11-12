@@ -3,6 +3,15 @@
 Each release records the exact git commit it was built from. `git checkout <commit>` restores exactly what players got, and `npm run build` rebuilds its upload files. Releases can also be marked on GitHub (Releases → Draft a new release → tag `v1.0.0` → target that commit).
 
 ## Unreleased
+- **Everyone starts in 2D** (Version C). 3D is one tap away in the menu and is remembered. Own Orbits works in both
+  views: in 2D the orbits are flat and spaced wider for the bigger 2D art (Earth: 5 per zone, plus the Moon).
+- **Own Orbits (the 3D game now plays this way):** pick a satellite, choose its orbit zone (**LEO / MEO / HEO**) and
+  where to launch from (planet or moon), then press **🚀 LAUNCH**. Every satellite flies to its own orbit (its own
+  radius, so they never collide; tilt and position random). Each zone has limited room per body (Earth 6, Moon 2).
+  Satellites carry **fuel for 20 waves** (MEO 19, HEO 18), burn up at 0, and can be **refueled** (a full tank costs half
+  of what was spent on the satellite) or moved to another zone (1 fuel per zone). **Overdrive burns 2 fuel.** Invaders
+  are 20% slower. Top-bar **Orbits: On / Off** hides the orbit lines (key L). The tutorial teaches the LAUNCH button.
+  Classic 2D keeps the shared ring slots. Saved games from the old 3D slot rules don't carry over (fresh start).
 - **Solar System: defend every planet.** Each of the 8 planets has 15 HP (shown above it); about half the invaders
   fly at a random planet, the rest at the Sun. A planet at 0 HP is knocked out: it goes dark, its satellites go
   offline, nothing more can be built there, and its attackers turn on the Sun. The Sun is still the game.

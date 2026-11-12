@@ -38,7 +38,7 @@ const CLOCK = () => {
   window.cancelAnimationFrame = () => {};
   window.__step = ms => { now += ms; for (const cb of q.splice(0)) cb(now); };
   window.OD_NO_SW = true;
-  try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_stats_off", "1"); } catch { /* ignore */ }
+  try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_orbits", "classic"); localStorage.setItem("od_stats_off", "1"); } catch { /* ignore */ }
 };
 
 // ---------- in-page: build a busy late-game battle on Earth ----------

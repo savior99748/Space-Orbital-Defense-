@@ -12,12 +12,15 @@ const BASE = 'http://127.0.0.1:8769/';
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error' && !ign(m.text())) errs.push(m.text()); });
-    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto(BASE + 'index.html');
-    await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_stats_off', '1'); });
+    await pg.waitForSelector('[data-view="2d"]');
+    ok(await pg.evaluate(() => OD.view === '2d' && !document.getElementById('game3d')), 'everyone starts in 2D (Version C); 3D is in the menu');
+    await Promise.all([pg.waitForNavigation(), pg.click('[data-view="3d"]')]);
+    await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); });
     await pg.reload(); await pg.waitForSelector('[data-view="3d"]');
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
-    ok(await pg.evaluate(() => OD.is3D && !!document.getElementById('game3d')), 'default view is 3D with the 3D canvas');
+    ok(await pg.evaluate(() => OD.is3D && !!document.getElementById('game3d')), 'switching to 3D: the 3D canvas loads (and is remembered)');
     ok(await pg.evaluate(() => OD.MAPS.earth.rings[2].name === 'HEO' && OD.MAPS.earth.threeD), '3D map layouts applied');
     await pg.screenshot({ path: 'v3-menu.png' });
     // record a 3D leaderboard entry, then switch to 2D
@@ -51,7 +54,7 @@ const BASE = 'http://127.0.0.1:8769/';
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message));
     await pg.addInitScript(() => { try { localStorage.setItem('od_stats_off', '1'); } catch {} });
-    await pg.goto(BASE + 'index.html'); // fresh profile = brand-new player: straight into the tutorial
+    await pg.goto(BASE + 'index.html?view=3d'); // fresh profile = brand-new player: straight into the tutorial
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
     // the tutorial advances on the next rendered frame; on a slow software renderer that can take a moment
     const step = async (want) => { if (want != null) await pg.waitForFunction(w => window.__od.tut() && window.__od.tut().i === w, want, { timeout: 4000 }).catch(() => {}); else await pg.waitForTimeout(200); return pg.evaluate(() => window.__od.tut() ? window.__od.tut().i : null); };
@@ -64,12 +67,10 @@ const BASE = 'http://127.0.0.1:8769/';
     ok(await step(0) === 0, '3D tutorial starts');
     await pg.tap('[data-type="laser"]');
     ok(await step(1) === 1, 'tutorial: select laser');
-    ok(await pg.isVisible('#coachArrow'), 'arrow shows over the 3D slot');
+    ok(await pg.isVisible('#coachArrow') && await pg.isVisible('#launchPad [data-launch]'), 'arrow points at the 🚀 LAUNCH button');
     await pg.screenshot({ path: 'v3-tut-slot.png' });
-    // tap exactly where the arrow points (the suggested slot)
-    const tgt = await pg.evaluate(() => { const od = window.__od, B = od.board(); const sl = B.slots.find(x => x.ring === 0 && !od.towerAt(x.id)); return od.slotPos(sl.id); });
-    await tapWorld(tgt);
-    ok(await pg.evaluate(() => window.__od.state().towers.length === 1), 'tutorial: built first satellite with a 3D tap');
+    await pg.tap('#launchPad [data-launch]'); // Own Orbits: the LAUNCH button sends it to its own orbit
+    ok(await pg.evaluate(() => window.__od.state().towers.length === 1), 'tutorial: launched the first satellite with a real tap');
     await pg.waitForFunction(() => window.__od.state().waveActive, null, { timeout: 15000 });
     ok(true, 'tutorial: Wave 1 launched by itself');
     await pg.evaluate(() => { window.__od.state().speed = 8; });

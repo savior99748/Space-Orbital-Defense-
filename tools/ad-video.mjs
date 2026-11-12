@@ -51,7 +51,7 @@ const CLOCK = () => {
   window.cancelAnimationFrame = () => {};
   window.__step = ms => { now += ms; for (const cb of q.splice(0)) cb(now); };
   window.OD_NO_SW = true;
-  try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_stats_off", "1"); localStorage.setItem("od_shake", "0.4"); } catch { /* ignore */ }
+  try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_orbits", "classic"); localStorage.setItem("od_stats_off", "1"); localStorage.setItem("od_shake", "0.4"); } catch { /* ignore */ }
 };
 async function step(page, ms, n = 1) {
   for (let done = 0; done < n; done += 5) {

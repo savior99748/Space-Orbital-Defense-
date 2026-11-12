@@ -6,7 +6,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   const b = await chromium.launch();
   const pg = await b.newPage({ viewport: { width: 1280, height: 820 } });
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
-  await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); } catch {} }); // skip the brand-new-player tutorial
+  await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} }); // skip the brand-new-player tutorial
   await pg.goto('file://' + ROOT + '/index.html?view=2d');
   await pg.evaluate(() => localStorage.setItem('od_tut_done', '1'));
   await pg.reload(); await pg.waitForSelector('[data-mode="endless"]');

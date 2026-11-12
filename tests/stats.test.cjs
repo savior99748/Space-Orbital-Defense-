@@ -11,7 +11,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     window.goatcounter = Object.assign(window.goatcounter || {}, { count: v => window.__ev.push(v.path + (v.event ? '' : ' (NOT EVENT)')) });` }));
   const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
-  await pg.goto('http://127.0.0.1:8766/index.html?view=2d');
+  await pg.goto('http://127.0.0.1:8766/index.html?view=2d&orbits=classic');
   await pg.waitForFunction(() => window.__od && window.__od.tut()); // a brand-new player starts in the tutorial
   await pg.waitForTimeout(300);
   let ev = await pg.evaluate(() => window.__ev || []);
@@ -54,7 +54,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   const ctx2 = await b.newContext(); let hit = false;
   await ctx2.route('**/js/config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.OD=window.OD||{};OD.CONFIG={goatcounter:"",statsOnPortals:false};' }));
   await ctx2.route('https://gc.zgo.at/**', r => { hit = true; r.abort(); });
-  const p2 = await ctx2.newPage(); await p2.goto('http://127.0.0.1:8766/index.html?view=2d'); await p2.waitForFunction(() => window.__od && window.__od.tut()); await p2.waitForTimeout(500);
+  const p2 = await ctx2.newPage(); await p2.goto('http://127.0.0.1:8766/index.html?view=2d&orbits=classic'); await p2.waitForFunction(() => window.__od && window.__od.tut()); await p2.waitForTimeout(500);
   ok(!hit && !(await p2.isVisible('[data-act="stats-toggle"]')), 'with no site code: no stats script loaded, no toggle shown');
   await b.close();
 })();
