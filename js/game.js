@@ -3,6 +3,7 @@
   "use strict";
   const TAU = Math.PI * 2;
   const { TOWERS, ENEMIES, DIFFICULTY, MAPS, MAP_ORDER, TIERS, tierOf, rgba } = OD;
+  const FX = OD.fx2d; // 2D effects (js/fx2d.js)
   // each map has its own difficulty tier (Beginner / Intermediate / Hard / Expert), like Bloons tracks
   const mapTier = k => TIERS[MAPS[k].tier];
   const diffOf = k => mapTier(k).diff;
@@ -363,6 +364,7 @@
     S.stats.killed++; S.stats.earnedKills += reward;
     const big = e.def.boss;
     burst(e.x, e.y, e.def.color, big ? 60 : 12, big ? 240 : 130, big ? 1.4 : 0.7, e.z);
+    if (!OD.is3D && OD.fx2d) OD.fx2d.kill(e.x, e.y, e.def.color, e.def.size, big, B.time); // 2D flash + shards (visual only)
     if (big) { S.stats.bosses++; unlock("first_boss"); burst(e.x, e.y, "#ffffff", 30, 300, 1, e.z); ringFx(e.x, e.y, e.def.size * 4, e.def.color, 0.8, false, e.z); S.shake = 12; sfx("nova"); }
     else sfx(e.type === "asteroid" ? "crunch" : "pop");
     if (e.def.split) for (let i = 0; i < e.def.split.n; i++) spawnEnemy(e.def.split.type, e.hpScale, e);
@@ -443,8 +445,8 @@
         if (doPush) pushOut(e, st.push * (e.def.boss ? 0.2 : 1));
         if (doFreeze) e.frozen = Math.max(e.frozen, st.freeze * (e.def.boss ? 0.3 : 1));
       }
-      if (doPush) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, TOWERS.tractor.paths.A.color, 0.5, true, t.z); sfx("push"); } }
-      if (doFreeze) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, "#dff8ff", 0.45, false, t.z); sfx("freeze"); } }
+      if (doPush) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, TOWERS.tractor.paths.A.color, 0.5, true, t.z); S.rings[S.rings.length - 1].fx = "push"; sfx("push"); } }
+      if (doFreeze) { t.timer = 0; if (any) { ringFx(t.x, t.y, st.range, "#dff8ff", 0.45, false, t.z); S.rings[S.rings.length - 1].fx = "freeze"; sfx("freeze"); } }
     }
 
     // Weak-Point Scanner (Focus Array path B): invaders in range take more damage
@@ -755,7 +757,7 @@
         const hit = new Set();
         for (let i = 0; i <= st.chains && cur; i++) {
           hit.add(cur);
-          S.beams.push({ x1: prev.x, y1: prev.y, z1: prev.z || 0, x2: cur.x, y2: cur.y, z2: cur.z || 0, life: 0.12, color: "#cfe0ff", w: 2, bolt: true });
+          S.beams.push({ x1: prev.x, y1: prev.y, z1: prev.z || 0, x2: cur.x, y2: cur.y, z2: cur.z || 0, life: 0.12, color: "#cfe0ff", w: 2, bolt: true, fx: "arc" });
           cur.stun = Math.max(cur.stun, st.stun);
           const from = cur;
           damage(cur, st.dmg, t);
@@ -777,7 +779,7 @@
       if (!targets.length) return;
       t.cd = 1 / st.rate;
       for (const e of targets) { e.stun = Math.max(e.stun, st.stun * (e.def.boss ? 0.3 : 1)); damage(e, st.dmg, t); }
-      ringFx(t.x, t.y, st.range, t.path === "A" ? TOWERS.emp.paths.A.color : TOWERS.emp.color, 0.4, false, t.z);
+      ringFx(t.x, t.y, st.range, t.path === "A" ? TOWERS.emp.paths.A.color : TOWERS.emp.color, 0.4, false, t.z); S.rings[S.rings.length - 1].fx = "emp"; // fx: cosmetic tag
       sfx("emp");
       return;
     }
@@ -797,7 +799,7 @@
       if (t.beamTarget === target) t.heat = Math.min(2, (t.heat || 0) + dt); else { t.heat = 0; t.beamTarget = target; }
       const mul = 1 + Math.min(1, t.heat / 2) * (st.ramp - 1);
       damage(target, st.dps * mul * dt, t, { flash: false });
-      S.beams.push({ x1: t.x + Math.cos(t.aim) * 26, y1: t.y + Math.sin(t.aim) * 26, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: dt * 1.5, color: TOWERS.laser.paths.B.color, w: 2 + t.heat * 2.5, core: true });
+      S.beams.push({ x1: t.x + Math.cos(t.aim) * 26, y1: t.y + Math.sin(t.aim) * 26, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: dt * 1.5, color: TOWERS.laser.paths.B.color, w: 2 + t.heat * 2.5, core: true, fx: "lance" });
       if (Math.random() < 0.3) burst(target.x, target.y, "#ffd27a", 1, 60, 0.3, target.z);
       sfx("lance");
       return;
@@ -813,13 +815,13 @@
       const nx = -Math.sin(t.aim), ny = Math.cos(t.aim);
       const ox = t.x + Math.cos(t.aim) * 15 + nx * off, oy = t.y + Math.sin(t.aim) * 15 + ny * off;
       damage(target, st.dmg, t, { flash: false });
-      S.beams.push({ x1: ox, y1: oy, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: 0.07, color: t.path === "A" ? "#ffffff" : TOWERS.laser.color, w: 2 });
+      S.beams.push({ x1: ox, y1: oy, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: 0.07, color: t.path === "A" ? "#ffffff" : TOWERS.laser.color, w: 2, fx: "laser" });
       if (st.chain) {
         const hues = ["#ff5c7a", "#ffd166", "#7dff9a", "#6cf0ff", "#c18cff"];
         const others = S.enemies.filter(e => !e.dead && e !== target && d3(e, target) < 130 * 130)
           .sort((a, b) => d3(a, target) - d3(b, target)).slice(0, st.chain);
         others.forEach((e, i) => {
-          S.beams.push({ x1: target.x, y1: target.y, z1: target.z || 0, x2: e.x, y2: e.y, z2: e.z || 0, life: 0.08, color: hues[i % hues.length], w: 1.5 });
+          S.beams.push({ x1: target.x, y1: target.y, z1: target.z || 0, x2: e.x, y2: e.y, z2: e.z || 0, life: 0.08, color: hues[i % hues.length], w: 1.5, fx: "prism" });
           damage(e, st.dmg * 0.6, t, { flash: false });
         });
         sfx("prism");
@@ -830,7 +832,7 @@
       const col = t.path ? TOWERS.flak.paths[t.path].color : TOWERS.flak.color;
       for (const e of hits) {
         damage(e, st.dmg, t, { flash: false, pierceArmor: !!st.pierceArmor });
-        S.beams.push({ x1: t.x, y1: t.y, z1: t.z || 0, x2: e.x, y2: e.y, z2: e.z || 0, life: 0.06, color: col, w: 1.5, bolt: true });
+        S.beams.push({ x1: t.x, y1: t.y, z1: t.z || 0, x2: e.x, y2: e.y, z2: e.z || 0, life: 0.06, color: col, w: 1.5, bolt: true, fx: "bolt" });
         burst(e.x, e.y, col, 2, 70, 0.25, e.z);
       }
       sfx("pew");
@@ -854,10 +856,10 @@
         for (const e of S.enemies) {
           if (!e.dead && segDist3(t, { x: ex, y: ey, z: ez }, e) <= (e.def.size + 5) ** 2) damage(e, st.dmg, t, { rail: true });
         }
-        S.beams.push({ x1: t.x, y1: t.y, z1: t.z, x2: ex, y2: ey, z2: ez, life: t.path === "B" ? 0.08 : 0.25, color, w: t.path === "A" ? 6 : t.path === "B" ? 2 : 4, core: true });
+        S.beams.push({ x1: t.x, y1: t.y, z1: t.z, x2: ex, y2: ey, z2: ez, life: t.path === "B" ? 0.08 : 0.25, color, w: t.path === "A" ? 6 : t.path === "B" ? 2 : 4, core: true, fx: t.path === "B" ? "railB" : "rail" });
       } else {
         damage(target, st.dmg, t, { rail: true });
-        S.beams.push({ x1: t.x, y1: t.y, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: 0.25, color, w: 4, core: true });
+        S.beams.push({ x1: t.x, y1: t.y, z1: t.z, x2: target.x, y2: target.y, z2: target.z || 0, life: 0.25, color, w: 4, core: true, fx: "rail" });
       }
       burst(target.x, target.y, color, t.path === "B" ? 3 : 8, 90, 0.7, target.z);
       sfx(t.path === "B" ? "coil" : "rail");
@@ -971,7 +973,7 @@
         } else if (!bomber && d2 < 110 * 110) {
           f.cd = 1 / st.rate;
           damage(tgt, st.dmg, t, { flash: false });
-          S.beams.push({ x1: f.x, y1: f.y, z1: f.z, x2: tgt.x, y2: tgt.y, z2: tgt.z || 0, life: 0.05, color: "#ffc4ee", w: 1.2 });
+          S.beams.push({ x1: f.x, y1: f.y, z1: f.z, x2: tgt.x, y2: tgt.y, z2: tgt.z || 0, life: 0.05, color: "#ffc4ee", w: 1.2, fx: "fighter" });
           sfx("pew");
         }
       });
@@ -1299,12 +1301,7 @@
       if (hurt) { ctx.strokeStyle = `rgba(255,92,122,${0.4 + 0.3 * Math.sin(time * 6)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(root.x, root.y, root.r + 6, 0, TAU); ctx.stroke(); }
     }
     for (const s of B.slots) if (s.surface) drawSlot(s); // ground pads sit on top of the planets
-    if (S) for (const m of S.mines) { // Mine Layer mines: a blinking red light
-      const on = m.arm <= 0 && Math.sin(time * 8 + m.seed) > 0;
-      ctx.fillStyle = m.nuke ? "#ff4a4a" : TOWERS.mines.color;
-      ctx.beginPath(); ctx.arc(m.x, m.y, m.nuke ? 4 : 3, 0, TAU); ctx.fill();
-      if (on) { ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.arc(m.x, m.y, 1.5, 0, TAU); ctx.fill(); }
-    }
+    if (S) for (const m of S.mines) FX.mine(ctx, m, time, TOWERS.mines.color); // Mine Layer mines: spiked, blinking
     // body labels (small)
     if (B.bodies.length > 1) {
       ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(200,210,255,0.45)";
@@ -1340,6 +1337,7 @@
       ctx.beginPath(); ctx.arc(t.x, t.y, t.st.range * (t.path === "A" ? 1 - pulse : pulse), 0, TAU); ctx.stroke();
     }
 
+    FX.now = S.time; // shield-hit ripples read the game clock
     for (const e of S.enemies) OD.drawEnemy(ctx, e, time, CX, CY);
     for (const t of S.towers) {
       const p = t.x == null ? slotPos(t.slot) : { x: t.x, y: t.y, a: t.ringA };
@@ -1361,43 +1359,20 @@
       ctx.globalAlpha = 1;
     }
 
-    for (const m of S.shots) {
-      if (m.kind === "bomblet") { ctx.fillStyle = "#ffd166"; ctx.fillRect(m.x - 1.5, m.y - 1.5, 3, 3); continue; }
-      ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(Math.atan2(m.vy, m.vx));
-      ctx.fillStyle = m.nova ? "#ffd0a0" : "#ffe0b0";
-      if (m.nova) { ctx.fillRect(-6, -3, 12, 6); ctx.fillStyle = "#ff5c5c"; ctx.beginPath(); ctx.moveTo(6, -3); ctx.lineTo(10, 0); ctx.lineTo(6, 3); ctx.fill(); }
-      else ctx.fillRect(-4, -1.5, 8, 3);
-      ctx.restore();
-    }
-
-    for (const b of S.beams) {
-      ctx.globalAlpha = Math.min(1, b.life * 10);
-      ctx.strokeStyle = b.color; ctx.lineWidth = b.w; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(b.x1, b.y1);
-      if (b.bolt) {
-        const n = 6;
-        for (let i = 1; i < n; i++) ctx.lineTo(b.x1 + (b.x2 - b.x1) * i / n + (Math.random() - 0.5) * 14, b.y1 + (b.y2 - b.y1) * i / n + (Math.random() - 0.5) * 14);
-      }
-      ctx.lineTo(b.x2, b.y2); ctx.stroke();
-      if (b.core) { ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = Math.max(1, b.w * 0.35); ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke(); }
-    }
-    ctx.globalAlpha = 1;
-
-    for (const r of S.rings) {
-      const k = 1 - r.life / r.max;
-      ctx.strokeStyle = rgba(r.color, 1 - k); ctx.lineWidth = 3 * (1 - k) + 1;
-      ctx.beginPath(); ctx.arc(r.x, r.y, Math.max(1, r.r * (r.inward ? 1 - k * 0.8 : 0.3 + k * 0.7)), 0, TAU); ctx.stroke();
-    }
-    for (const p of S.particles) {
-      ctx.globalAlpha = Math.max(0, p.life / p.max);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
-    }
+    // combat effects (js/fx2d.js): additive light for beams, blasts and sparks
+    ctx.globalCompositeOperation = "lighter";
+    for (const r of S.rings) FX.ring(ctx, r);
+    for (const b of S.beams) FX.beam(ctx, b);
+    for (const m of S.shots) FX.shot(ctx, m, time);
+    FX.particles(ctx, S.particles);
+    ctx.globalCompositeOperation = "source-over";
+    FX.drawKills(ctx, time);
     ctx.globalAlpha = 1;
     ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "center";
-    for (const f of S.floaters) {
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(5,6,15,0.85)"; ctx.lineJoin = "round";
+    for (const f of S.floaters) { // outlined so they read over planets and explosions
       ctx.globalAlpha = Math.min(1, f.life * 2);
-      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+      ctx.strokeText(f.text, f.x, f.y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1798,7 +1773,7 @@
   const displayBtn = () => (P.display ? `<button data-act="display" title="F11 or Alt+Enter">${P.display.get().fullscreen ? "🖥 Fullscreen" : "🗗 Windowed"}</button>` : "");
   function soundButtons() {
     const statBtn = stats.configured ? `<button data-act="stats-toggle" title="Anonymous gameplay stats, no personal data">${stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"}</button>` : "";
-    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button>${OD.is3D ? `<button data-act="gfx" title="Auto lowers detail on slow devices">${gfxLabel()}</button>` : ""}${displayBtn()}${statBtn}</div>`;
+    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button><button data-act="gfx" title="${OD.is3D ? "Auto lowers detail on slow devices" : "Low: fewer, simpler effects for slow devices"}">${gfxLabel()}</button>${displayBtn()}${statBtn}</div>`;
   }
 
   function mapCard(key) {
@@ -2020,6 +1995,7 @@
     abandonTutorial();
     const seed = pendingSeed != null ? pendingSeed : (Math.random() * 2 ** 31) | 0; pendingSeed = null;
     buildBoard(mapKey, seed); B.key = mapKey;
+    if (OD.fx2d) OD.fx2d.reset();
     resetCamera();
     S = newState(diffKey); S.seed = seed;
     // Solar System: every planet has its own HP (the Sun is still the game)
