@@ -126,10 +126,20 @@ window.OD = window.OD || {};
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const t = cn(x / W, y / H * 0.6, 5), a = Math.max(0, Math.min(1, (t - 0.57) * 3.2)); const i = (y * W + x) * 4; cp[i] = cp[i + 1] = cp[i + 2] = 255; cp[i + 3] = a * 210; }
       cg.putImageData(ci, 0, 0);
     }
+    let lights = null;
+    if (st.land) { // city lights for the night side: small warm dots on land, more on coasts
+      lights = document.createElement("canvas"); lights.width = W; lights.height = H;
+      const lg = lights.getContext("2d"), lr = rng(style + "lights");
+      for (let k = 0; k < 2600; k++) {
+        const x = lr() * W, y = H * (0.12 + lr() * 0.76), h = land(x / W, y / H, 5) + (n(x / W, y / H, 3) - 0.5) * 0.12;
+        if (h <= seaLevel || h > seaLevel + 0.12 + lr() * 0.1) continue;
+        lg.fillStyle = lr() < 0.2 ? "rgba(255,240,200,0.95)" : "rgba(255,190,90,0.8)"; lg.fillRect(x, y, lr() < 0.15 ? 2 : 1, 1);
+      }
+    }
     if (st.swirl || st.haze) { // thick atmospheres (Venus, Titan): soften the ground
       g.fillStyle = st.swirl ? "rgba(255,236,190,0.35)" : "rgba(255,190,100,0.3)"; g.fillRect(0, 0, W, H);
     }
-    return (texCache[style] = { tex: c, clouds });
+    return (texCache[style] = { tex: c, clouds, lights });
   }
 
   // Saturn's rings and Uranus's faint ring are drawn behind the planet (top-down view = circles).
@@ -177,6 +187,13 @@ window.OD = window.OD || {};
     const shade = ctx.createLinearGradient(lightX * r, lightY * r, -lightX * r, -lightY * r);
     shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(0.5, "rgba(0,0,10,0.08)"); shade.addColorStop(0.8, "rgba(0,0,14,0.6)"); shade.addColorStop(1, "rgba(0,0,18,0.82)");
     ctx.fillStyle = shade; ctx.fillRect(-r, -r, 2 * r, 2 * r);
+    if (sf.lights && r > 12) { // city lights, only on the night side
+      const la = Math.atan2(lightY, lightX);
+      ctx.save(); ctx.rotate(la + Math.PI); ctx.beginPath(); ctx.rect(r * 0.32, -r, r, 2 * r); ctx.clip(); ctx.rotate(-(la + Math.PI));
+      ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.7;
+      ctx.drawImage(sf.lights, -r - off, -r, w, 2 * r); ctx.drawImage(sf.lights, -r - off + w, -r, w, 2 * r);
+      ctx.restore();
+    }
     ctx.restore();
     // rim light on the sunlit edge
     if (r > 6) {

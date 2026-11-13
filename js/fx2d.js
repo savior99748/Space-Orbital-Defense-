@@ -151,7 +151,50 @@ window.OD = window.OD || {};
 
   // ---------- kill bursts (render-only: a flash, a shockwave and a few hull shards) ----------
   const kills = [];
-  FX.reset = () => { kills.length = 0; };
+  FX.reset = () => { kills.length = 0; known.clear(); lastSlot.clear(); lastPos.clear(); flights.clear(); fresh = true; };
+
+  // ---------- launches and orbit changes (drawing only: the satellite's real position is untouched) ----------
+  // A new satellite lifts off its planet or moon and climbs to its orbit on an arc, engine blazing; one that changes
+  // orbit flies across. Satellites already there when a game starts or resumes don't launch.
+  const known = new Set(), lastSlot = new Map(), lastPos = new Map(), flights = new Map();
+  let fresh = true;
+  const LAUNCH = 0.9, MOVE = 0.8, ease = k => 1 - (1 - k) ** 3;
+  FX.flight = function (ctx, t, p, body, ground) {
+    const now = performance.now() / 1000;
+    if (!known.has(t.id)) {
+      known.add(t.id); lastSlot.set(t.id, t.slot);
+      if (!fresh && !ground && body) flights.set(t.id, { t0: now, launch: true });
+    } else if (lastSlot.get(t.id) !== t.slot) {
+      const from = lastPos.get(t.id);
+      lastSlot.set(t.id, t.slot);
+      if (from) flights.set(t.id, { t0: now, launch: false, fx: from.x, fy: from.y });
+    }
+    const f = flights.get(t.id);
+    let out = p;
+    if (f) {
+      const k = (now - f.t0) / (f.launch ? LAUNCH : MOVE);
+      if (k >= 1 || k < 0) flights.delete(t.id);
+      else {
+        const pos = k2 => { // position along the flight at progress k2
+          const e = ease(Math.max(0, k2));
+          let fx, fy;
+          if (f.launch) { const dx = p.x - body.x, dy = p.y - body.y, d = Math.hypot(dx, dy) || 1; fx = body.x + dx / d * body.r * 0.95; fy = body.y + dy / d * body.r * 0.95; }
+          else { fx = f.fx; fy = f.fy; }
+          const x = fx + (p.x - fx) * e, y = fy + (p.y - fy) * e, dx = p.x - fx, dy = p.y - fy, L = Math.hypot(dx, dy) || 1, bulge = Math.sin(Math.max(0, k2) * Math.PI) * Math.min(L * 0.3, (body ? body.r : 20) * 0.5);
+          return { x: x - dy / L * bulge, y: y + dx / L * bulge };
+        };
+        const q = pos(k);
+        out = { x: q.x, y: q.y, a: p.a, sc: f.launch ? 0.4 + 0.6 * ease(k) : 1 };
+        ctx.globalCompositeOperation = "lighter"; // exhaust trail + engine
+        for (let j = 6; j >= 1; j--) { const r = pos(k - j * 0.045); glow(ctx, r.x, r.y, (9 - j) * (low() ? 0.8 : 1.1), j < 3 ? "#ffb070" : "#9aa8c8", (1 - j / 7) * (1 - k * 0.6)); }
+        glow(ctx, q.x, q.y, 16, "#ffd08a", 1 - k * 0.5, "core");
+        ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+      }
+    }
+    lastPos.set(t.id, out);
+    return out;
+  };
+  FX.settle = towers => { if (fresh) { for (const t of towers) { known.add(t.id); lastSlot.set(t.id, t.slot); } fresh = false; } };
   FX.kill = function (x, y, color, size, big, time) {
     if (kills.length > (low() ? 20 : 70)) kills.shift();
     const shards = [];

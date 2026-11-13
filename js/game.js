@@ -158,6 +158,7 @@
   }
 
   let stars = [];
+  const MUZZLE2D = { laser: "#bff8ff", missile: "#ffb347", rail: "#c9ffb0", flak: "#ffe08a" };
   const STAR_TINTS = ["#cfd8ff", "#ffffff", "#ffe9c8", "#c8e0ff", "#ffffff", "#ffd2d2", "#dcd0ff"];
   function makeStars() {
     stars = Array.from({ length: Math.round(W * H / 3000) }, () => ({
@@ -1361,9 +1362,18 @@
 
     FX.now = S.time; // shield-hit ripples read the game clock
     for (const e of S.enemies) OD.drawEnemy(ctx, e, time, CX, CY);
+    FX.settle(S.towers); // satellites already in orbit when a game starts or resumes don't launch
     for (const t of S.towers) {
-      const p = t.x == null ? slotPos(t.slot) : { x: t.x, y: t.y, a: t.ringA };
-      drawTowerAt(t, p, time);
+      const p0 = t.x == null ? slotPos(t.slot) : { x: t.x, y: t.y, a: t.ringA };
+      const ring = B.rings[B.slots[t.slot].ring], p = FX.flight(ctx, t, p0, B.bodies[ring.body], !!TOWERS[t.type].ground); // launch / orbit change (drawing only)
+      if (p.sc && p.sc < 1) { ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.sc, p.sc); ctx.translate(-p.x, -p.y); drawTowerAt(t, p, time); ctx.restore(); }
+      else drawTowerAt(t, p, time);
+      const mz = MUZZLE2D[t.type], st = t.st; // muzzle flash right after each shot (read from the cooldown)
+      if (mz && st && st.rate && !st.dps && t.aim != null && p === p0) {
+        const since = 1 / st.rate - (t.cd || 0);
+        if (since >= 0 && since < 0.09) { const sc = MAP.satScale ? MAP.satScale + 0.15 : ring.r < 35 ? 0.75 : 1, L = (t.type === "rail" ? 27 : t.type === "flak" ? 17 : 18) * sc;
+          ctx.globalCompositeOperation = "lighter"; FX.glow(ctx, p.x + Math.cos(t.aim) * L, p.y + Math.sin(t.aim) * L, 9 * sc, mz, 1 - since / 0.09, "core"); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1; }
+      }
       if (t.fuel != null && t.fuel <= 3) { ctx.strokeStyle = `rgba(255,92,92,${0.45 + 0.4 * Math.sin(time * 6)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, TAU); ctx.stroke(); } // low on fuel
     }
     for (const t of S.towers) if (t.crafts) for (const f of t.crafts) OD.drawCraft(ctx, f, t, time);
