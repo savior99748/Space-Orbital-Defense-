@@ -2028,7 +2028,7 @@
     const seed = pendingSeed != null ? pendingSeed : (Math.random() * 2 ** 31) | 0; pendingSeed = null;
     buildBoard(mapKey, seed); B.key = mapKey;
     if (OD.fx2d) OD.fx2d.reset();
-    resetCamera();
+    homeCamera();
     S = newState(diffKey); S.seed = seed;
     // Solar System: every planet has its own HP (the Sun is still the game)
     S.bodyHp = MAP.planetHp ? B.bodies.map(b => (b.root ? 0 : MAP.planetHp)) : null;
@@ -2197,6 +2197,8 @@
     clampCam(); updateZoomUI();
   }
   function resetCamera() { zoom = 1; camX = CX; camY = CY; updateZoomUI(); }
+  // where a game starts: 1.5× on the planet (1× felt far away); the Solar System starts at 1× so every planet is in view
+  function homeCamera() { zoom = MAP.final ? 1 : 1.5; camX = CX; camY = CY; clampCam(); updateZoomUI(); }
   // +/- buttons: step through 1×, 1.5×, 2×, 3×, zooming toward the selected satellite if there is one
   function zoomStep(dir) {
     let sx = cssW / 2, sy = cssH / 2;
