@@ -158,6 +158,7 @@
   }
 
   let stars = [];
+  const STAR_TINTS = ["#cfd8ff", "#ffffff", "#ffe9c8", "#c8e0ff", "#ffffff", "#ffd2d2", "#dcd0ff"];
   function makeStars() {
     stars = Array.from({ length: Math.round(W * H / 3000) }, () => ({
       x: Math.random() * W, y: Math.random() * H, s: Math.random() * 1.6 + 0.2, tw: Math.random() * TAU,
@@ -1211,6 +1212,29 @@
   }
 
   // ---------- render ----------
+  // the static background (world coordinates 0..W × 0..H) at screen resolution
+  let bd = null, bdKey = "";
+  function backdrop() {
+    const key = `${MAP_KEY}|${Math.round(W)}|${Math.round(H)}|${canvas.width}|${canvas.height}`;
+    if (bd && bdKey === key) return bd;
+    bdKey = key; bd = bd || document.createElement("canvas");
+    const s = Math.min(2, Math.max(canvas.width / W, canvas.height / H)); // pixels per world unit (at zoom 1)
+    bd.width = Math.max(1, Math.round(W * s)); bd.height = Math.max(1, Math.round(H * s));
+    const g = bd.getContext("2d"); g.setTransform(s, 0, 0, s, 0, 0);
+    g.fillStyle = "#05060f"; g.fillRect(0, 0, W, H);
+    const neb = g.createRadialGradient(CX, CY, 20, CX, CY, MAP.view * 0.75);
+    neb.addColorStop(0, rgba(MAP.bg, 0.55)); neb.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = neb; g.fillRect(0, 0, W, H);
+    if (OD.nebula) { g.globalAlpha = 0.32; g.drawImage(OD.nebula(MAP_KEY, MAP.bg), -W * 0.1, -H * 0.1, W * 1.2, H * 1.2); g.globalAlpha = 1; }
+    if (!MAP.final) {
+      const idx = MAP_ORDER.indexOf(MAP_KEY), glare = 0.55 - idx * 0.06;
+      const gx = CX - 0.7 * W * 0.7, gy = CY - 0.7 * H * 0.9;
+      const sg = g.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.6);
+      sg.addColorStop(0, `rgba(255,220,150,${glare})`); sg.addColorStop(1, "rgba(255,200,120,0)");
+      g.fillStyle = sg; g.fillRect(0, 0, W, H);
+    }
+    return bd;
+  }
   function render() {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1221,23 +1245,21 @@
     const time = B.time;
     if (S && S.shake && OD.shake) ctx.translate((Math.random() - 0.5) * S.shake * OD.shake, (Math.random() - 0.5) * S.shake * OD.shake);
 
-    // map-tinted nebula + distant sunlight
-    const neb = ctx.createRadialGradient(CX, CY, 20, CX, CY, MAP.view * 0.75);
-    neb.addColorStop(0, rgba(MAP.bg, 0.55)); neb.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = neb; ctx.fillRect(0, 0, W, H);
-    for (const s of stars) {
-      const a = 0.5 + 0.5 * Math.sin(time * 1.5 + s.tw);
-      ctx.fillStyle = `rgba(200,210,255,${0.25 + a * 0.6})`;
-      ctx.fillRect(s.x, s.y, s.s, s.s);
+    // map-tinted glow, nebula and distant sunlight: pre-rendered once per map and screen size, one copy per frame
+    ctx.drawImage(backdrop(), 0, 0, W, H);
+    // stars: mostly faint and still, a few tinted, the brightest twinkle with a soft glow
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i], h = (i * 2654435761) >>> 0, tint = STAR_TINTS[h % 7];
+      if (h % 23 === 0 && !FX.low()) { // bright star
+        const a = 0.55 + 0.45 * Math.sin(time * 1.5 + s.tw);
+        FX.glow(ctx, s.x, s.y, 4 + s.s * 2, tint, 0.35 * a);
+        ctx.globalAlpha = 1; ctx.fillStyle = "#ffffff"; ctx.fillRect(s.x - 0.6, s.y - 0.6, 1.2 + s.s * 0.5, 1.2 + s.s * 0.5);
+        continue;
+      }
+      ctx.globalAlpha = 0.25 + (h % 5 === 0 ? 0.3 + 0.3 * Math.sin(time * 1.5 + s.tw) : 0.35 * (s.s / 1.8));
+      ctx.fillStyle = tint; ctx.fillRect(s.x, s.y, s.s, s.s);
     }
-    if (!MAP.final) {
-      const idx = MAP_ORDER.indexOf(MAP_KEY), glare = 0.55 - idx * 0.06;
-      const gx = CX - 0.7 * W * 0.7, gy = CY - 0.7 * H * 0.9;
-      const sg = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.6);
-      sg.addColorStop(0, `rgba(255,220,150,${glare})`); sg.addColorStop(1, "rgba(255,200,120,0)");
-      ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H);
-    }
-
+    ctx.globalAlpha = 1;
     // orbits of moons / planets
     ctx.lineWidth = 1;
     for (const b of B.bodies) {

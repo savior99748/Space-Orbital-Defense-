@@ -43,8 +43,7 @@ window.OD = window.OD || {};
   function metal(ctx, x, y, w, h, fill) {
     ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
     if (Math.abs(h) < 1.6 || Math.abs(w) < 1.6) return;
-    ctx.fillStyle = "rgba(255,255,255,0.32)"; ctx.fillRect(x, y, w, h * 0.3);
-    ctx.fillStyle = "rgba(0,0,12,0.32)"; ctx.fillRect(x, y + h * 0.72, w, h * 0.28);
+    ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fillRect(x, y, w, h * 0.32);
   }
   function poly(ctx, n, r, rot = 0) {
     ctx.beginPath();
@@ -70,7 +69,6 @@ window.OD = window.OD || {};
       for (let i = 0; i < cells; i++) {
         ctx.fillStyle = cell; ctx.fillRect(-w / 2 + 1, y0 + 1 + i * (ch + 1), w - 2, ch);
         ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(-w / 2 + 1, y0 + 1 + i * (ch + 1), (w - 2) * 0.4, ch); // sheen
-        ctx.fillStyle = "rgba(0,0,20,0.35)"; ctx.fillRect(-w / 2 + 1, y0 + 1 + i * (ch + 1) + ch * 0.5, w - 2, 0.6); // cell line
       }
       if (lvl >= 2) { // second, angled wing pair
         ctx.save(); ctx.rotate(s * 0.5);
@@ -81,14 +79,23 @@ window.OD = window.OD || {};
   }
 
   // satellite hull: shaded metal disc, coloured rim, inner panel ring and a specular highlight (lit from top-left)
-  function body(ctx, r, color, fill) {
-    const key = "hull" + Math.round(r * 4);
-    const g = grad(ctx, key, () => { const q = ctx.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.1, 0, 0, r); q.addColorStop(0, "#56607e"); q.addColorStop(0.55, "#262d48"); q.addColorStop(1, "#0d1124"); return q; });
-    circle(ctx, 0, 0, r + 1.6, "rgba(4,6,16,0.75)"); // dark outline: reads over bright planets
-    circle(ctx, 0, 0, r, g, color, 2);
-    circle(ctx, 0, 0, r * 0.62, null, isHex(color) ? rgba(color, 0.35) : "rgba(255,255,255,0.2)", 1);
-    ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1.1;
-    ctx.beginPath(); ctx.arc(0, 0, r - 1.6, -2.6, -1.35); ctx.stroke();
+  // Pre-rendered once per size and colour (4× resolution) and stamped with drawImage: one cheap draw per satellite.
+  const hullCache = new Map();
+  function body(ctx, r, color) {
+    const key = color + "|" + Math.round(r * 4);
+    let c = hullCache.get(key);
+    if (!c) {
+      const k = 4, R = r + 2, N = Math.ceil(R * 2 * k);
+      c = document.createElement("canvas"); c.width = N; c.height = N;
+      const g = c.getContext("2d"); g.setTransform(k, 0, 0, k, N / 2, N / 2);
+      const q = g.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.1, 0, 0, r); q.addColorStop(0, "#56607e"); q.addColorStop(0.55, "#262d48"); q.addColorStop(1, "#0d1124");
+      circle(g, 0, 0, r + 1.6, "rgba(4,6,16,0.75)"); // dark outline: reads over bright planets
+      circle(g, 0, 0, r, q, color, 2);
+      circle(g, 0, 0, r * 0.62, null, isHex(color) ? rgba(color, 0.35) : "rgba(255,255,255,0.2)", 1);
+      g.strokeStyle = "rgba(255,255,255,0.45)"; g.lineWidth = 1.1; g.beginPath(); g.arc(0, 0, r - 1.6, -2.6, -1.35); g.stroke();
+      hullCache.set(key, c);
+    }
+    const R = c.width / 8; ctx.drawImage(c, -R, -R, R * 2, R * 2);
   }
 
   // ---------- satellites ----------
@@ -376,8 +383,7 @@ window.OD = window.OD || {};
     const c = def.color, pc = path ? def.paths[path].color : c;
     ctx.save();
     ctx.translate(x, y);
-    if (OD.fx2d) { const ga = ctx.globalAlpha; OD.fx2d.glow(ctx, 0, 0, 24, "#000008", 0.55 * ga); ctx.globalAlpha = ga; } // contact shadow
-    if (lvl >= 3) glow(ctx, 0, 0, 26 + lvl * 2, pc, lvl >= 4 ? 0.22 + 0.08 * Math.sin(time * 2) : 0.12); // specialised: a halo in the path colour
+    if (lvl >= 4) glow(ctx, 0, 0, 34, pc, 0.22 + 0.08 * Math.sin(time * 2)); // fully upgraded: a halo in the path colour
     ctx.save(); ctx.rotate(ringAngle);
     if (t.type !== "carrier" && t.type !== "silo" && t.type !== "mines") panels(ctx, lvl, pc);
     if (t.type === "miner" || t.type === "carrier") ART[t.type](ctx, lvl, path, c, pc, time, t);
@@ -585,7 +591,8 @@ window.OD = window.OD || {};
     // health + shield bars
     if (e.hp < e.maxHp || (e.maxShield && e.shield < e.maxShield)) {
       const w = Math.max(18, s * 2), y = e.y - s - (e.maxShield ? 13 : 9);
-      rect(ctx, e.x - w / 2, y, w, 4, "rgba(0,0,0,0.6)");
+      rect(ctx, e.x - w / 2 - 1, y - 1, w + 2, (e.maxShield ? 9 : 4) + 2, "rgba(4,6,16,0.8)"); // framed backing
+      rect(ctx, e.x - w / 2, y, w, 4, "rgba(255,255,255,0.08)");
       rect(ctx, e.x - w / 2, y, w * Math.max(0, e.hp / e.maxHp), 4, e.hp / e.maxHp > 0.4 ? "#7dff9a" : "#ff5c7a");
       if (e.maxShield) {
         rect(ctx, e.x - w / 2, y + 5, w, 3, "rgba(0,0,0,0.6)");

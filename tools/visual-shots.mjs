@@ -29,6 +29,7 @@ const CLOCK = () => {
   window.__step = ms => { now += ms; for (const cb of q.splice(0)) cb(now); };
   let s = 12345; Math.random = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   window.OD_NO_SW = true;
+  try { if (window.__GFX) localStorage.setItem("od_gfx", window.__GFX); } catch { /* ignore */ }
   try { localStorage.setItem("od_tut_done", "1"); localStorage.setItem("od_stats_off", "1"); localStorage.setItem("od_shake", "0"); } catch { /* ignore */ }
 };
 
@@ -77,6 +78,7 @@ const perf = {};
 try {
   for (const sc of SCENES.filter(s => !ONLY || ONLY.includes(s.name))) {
     const ctx = await browser.newContext(sc.phone ? { ...devices["iPhone 13"] } : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1.5 });
+    if (process.env.GFX) await ctx.addInitScript(g => { window.__GFX = g; }, process.env.GFX);
     await ctx.addInitScript(CLOCK);
     const page = await ctx.newPage();
     page.on("pageerror", e => console.warn(sc.name, "page error:", e.message));
@@ -91,6 +93,7 @@ try {
     if (sc.select) await page.evaluate(() => { const od = window.__od, S = od.state(); od.tapSlot(S.towers[0].slot); });
     if (sc.pick) await page.click(`#shop [data-type="${sc.pick}"]`);
     await page.evaluate(() => { for (let i = 0; i < 3; i++) window.__step(1000 / 60); });
+    if (process.env.NOOP) await page.evaluate(names => { for (const n of names.split(",")) window.OD[n] = () => {}; }, process.env.NOOP); // diagnostics: skip a drawing function
     // render cost: time real JS work per frame (update + draw) over 120 frames
     const t = await page.evaluate(() => {
       const real = performance.constructor.prototype.now.bind(performance), times = [];
