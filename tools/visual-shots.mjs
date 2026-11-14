@@ -35,6 +35,8 @@ const CLOCK = () => {
 
 // scenes: a map, a wave, how much to build, how long to let it run before the shot
 const SCENES = [
+  { name: "heo-earth", map: "earth", wave: 3, build: [["laser", 2, 0], ["missile", 2, 0], ["rail", 2, 0], ["laser", 0, 0], ["flak", 1, 0], ["laser", 0, 1], ["missile", 2, 1]], run: 21000, zoom: 1.5 },
+  { name: "heo-saturn", map: "saturn", wave: 3, build: [["laser", 2, 0], ["missile", 2, 0], ["rail", 2, 0], ["laser", 0, 0], ["flak", 1, 0], ["laser", 0, 1], ["laser", 0, 2]], run: 21000, zoom: 1 },
   { name: "early-earth", map: "earth", wave: 3, build: [["laser", 0, 1], ["laser", 0, 0], ["missile", 1, 1]], run: 9000, zoom: 1.5 },
   { name: "mid-mars", map: "mars", wave: 12, fill: 0.5, tier: 2, run: 7000, zoom: 1.3 },
   { name: "crowded-saturn", map: "saturn", wave: 28, fill: 1, tier: 4, swarm: true, run: 6000, zoom: 1.15 },
