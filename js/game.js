@@ -94,6 +94,10 @@
       const lo = own[0].r * (flat && own.length > 1 ? 0.85 : 1), hi = own[own.length - 1].r * (flat && own.length > 1 ? 1.25 : 1);
       const centers = own.length > 1 ? [lo, (lo + hi) / 2, hi] : [lo * 0.8, lo * 1.15, lo * 1.5];
       const n = Math.max(1, Math.floor((centers[1] - centers[0]) * 0.8 / LANE) + 1);
+      { // keep the lowest lane clear of the surface (a satellite is ~20 units wide)
+        const lowest = centers[0] - (n - 1) / 2 * LANE, need = b.r + (flat ? 26 : 18) * Math.max(0.33, MAP.satScale || 1);
+        if (lowest < need) for (let i = 0; i < 3; i++) centers[i] += need - lowest;
+      }
       const w0 = Math.abs(own[0].speed) || 0.1, dir = Math.sign(own[0].speed) || 1;
       centers.forEach((c, band) => {
         for (let k = 0; k < n; k++) {
