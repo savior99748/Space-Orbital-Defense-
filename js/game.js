@@ -2717,7 +2717,7 @@
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
     getStars, totalStars, mapUnlocked, daily, CHALLENGES, mapChallenges, ACHIEVEMENTS: () => ACHIEVEMENTS,
-    EXP, launchSlot, freeLanes, setOrbit, FUEL_MAX, launchNow, pickLaunchSite, refuel, refuelCost,
+    EXP, launchSlot, freeLanes, setOrbit, nextOrbit, FUEL_MAX, launchNow, pickLaunchSite, refuel, refuelCost,
   };
 
   // desktop: keep the Fullscreen / Windowed label right when F11 or Alt+Enter switches it
