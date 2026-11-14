@@ -30,7 +30,7 @@ const readJson = f => { try { return JSON.parse(fs.readFileSync(path.join(userDa
   await win.click('[data-act="display"]'); await win.waitForTimeout(1500);
   ok(!(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())), 'and back to windowed');
   // play: free bonus, then save
-  await win.evaluate(() => { localStorage.setItem('od_tut_done', '1'); });
+  await win.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); });
   const r = await win.evaluate(async () => {
     const od = window.__od; od.begin('earth', 'medium'); const S = od.state(); od.placeTower(od.EXP ? od.launchSlot(0) : 0, 'laser'); S.wave = 2; // Own Orbits: launched onto its own orbit S.waveActive = false;
     await new Promise(r => setTimeout(r, 400));
