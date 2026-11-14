@@ -227,6 +227,7 @@ window.OD = window.OD || {};
 
   // ---------- mines ----------
   FX.mine = function (ctx, m, time, color) {
+    if (m.fly > 0) { ctx.globalCompositeOperation = "lighter"; glow(ctx, m.x, m.y, 8, m.nuke ? "#ff4a4a" : color, 0.7, "core"); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1; } // tossed into place
     const r = m.nuke ? 4.2 : 3.2, on = m.arm <= 0 && Math.sin(time * 8 + m.seed) > 0;
     ctx.fillStyle = "#1a1d26"; ctx.strokeStyle = m.nuke ? "#ff4a4a" : color; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TAU); ctx.fill(); ctx.stroke();

@@ -737,13 +737,28 @@
       return;
     }
     if (kind === "carrier" || kind === "focus") return;
-    if (kind === "mines") { // drops a mine where it is on its orbit, up to `max` at a time, during waves
+    if (kind === "mines") { // tosses mines ahead along its orbit, spread evenly around it, up to `max` at a time, during waves
       if (!S.waveActive) return;
       t.timer = (t.timer || 0) + dt;
-      if (t.timer >= st.every && S.mines.filter(m => m.tower === t).length < st.max) {
-        t.timer = 0; t.flash = 1;
-        S.mines.push({ x: t.x, y: t.y, z: t.z || 0, tower: t, dmg: st.dmg, splash: st.splash, trigger: st.range, arm: 0.6, life: 40, nuke: t.path === "B", seed: Math.random() * 10 });
-        sfx("pew");
+      const mine = S.mines.filter(m => m.tower === t);
+      if (t.timer >= st.every && mine.length < st.max) {
+        // the orbit is split into `max` evenly spaced stations; the mine flies to the next free one ahead of the satellite
+        const ring = B.rings[B.slots[t.slot].ring], step = TAU / st.max, dir = ring.speed < 0 ? -1 : 1, phase = (t.id * 1.37) % TAU;
+        const diff = (a, b) => Math.abs(((a - b) % TAU + TAU + Math.PI) % TAU - Math.PI);
+        let best = null, bestD = Infinity;
+        for (let j = 0; j < st.max; j++) {
+          const a = phase + j * step;
+          if (mine.some(m => m.sa != null && diff(m.sa, a) < step / 2)) continue; // station taken
+          const ahead = (((a - (t.ringA || 0)) * dir) % TAU + TAU) % TAU;
+          if (ahead < bestD) { bestD = ahead; best = a; }
+        }
+        if (best != null) {
+          const p = ringPoint(ring, best);
+          t.timer = 0; t.flash = 1;
+          S.mines.push({ x: t.x, y: t.y, z: t.z || 0, fx: t.x, fy: t.y, fz: t.z || 0, tx: p.x, ty: p.y, tz: p.z || 0, sa: best, fly: 1.1, flyMax: 1.1,
+            tower: t, dmg: st.dmg, splash: st.splash, trigger: st.range, arm: 1.3, life: 40, nuke: t.path === "B", seed: Math.random() * 10 });
+          sfx("pew");
+        }
       }
       return;
     }
@@ -891,6 +906,12 @@
     for (const m of S.mines) {
       m.arm -= dt; m.life -= dt;
       if (m.life <= 0 || !S.towers.includes(m.tower)) { m.dead = true; continue; }
+      if (m.fly > 0) { // in flight to its station (armed only after it lands)
+        m.fly = Math.max(0, m.fly - dt);
+        const k = 1 - m.fly / m.flyMax, e = 1 - (1 - k) ** 2;
+        m.x = m.fx + (m.tx - m.fx) * e; m.y = m.fy + (m.ty - m.fy) * e; m.z = m.fz + (m.tz - m.fz) * e;
+        continue;
+      }
       if (m.arm > 0) continue;
       const hit = S.enemies.some(e => !e.dead && d3(m, e) < (m.trigger + e.def.size) ** 2);
       if (!hit) continue;
