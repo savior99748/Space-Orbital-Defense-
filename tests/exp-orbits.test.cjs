@@ -76,6 +76,13 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     // orbit lines toggle (top bar): hides the lines, and back
     const btn = document.getElementById('linesBtn'); out.linesBtn = !!btn && OD.orbitLines === true;
     btn.click(); out.linesOff = OD.orbitLines === false && localStorage.getItem('od_exp_lines') === '0'; btn.click(); out.linesOn = OD.orbitLines === true;
+    // low-fuel alert: shows at 25% or less, flashes (crit) at 10% or less, tap selects the emptiest satellite
+    S.selectedType = null; od.tapSlot(null);
+    const fa = () => document.getElementById('fuelAlert');
+    S.towers[0].fuel = 5; await wait(400); out.alertLow = !!fa() && fa().classList.contains('show') && !fa().classList.contains('crit');
+    S.towers[1].fuel = 2; await wait(400); out.alertCrit = fa().classList.contains('crit');
+    fa().click(); out.alertPick = S.selectedTower === S.towers[1];
+    S.towers[0].fuel = 20; S.towers[1].fuel = 20; S.selectedTower = null; od.tapSlot(null); await wait(400); out.alertGone = !fa().classList.contains('show');
     S.launchBand = 0; const leo = od.freeLanes(0, 0).length; for (let i = 0; i < leo; i++) od.placeTower(L, 'laser');
     const n = S.towers.length; od.placeTower(L, 'laser'); out.leoFull = S.towers.length === n;
     // fuel: 1 per wave, Overdrive burns 2, out of fuel → burns up
@@ -103,6 +110,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(r.moved && r.tier5, 'changing zone costs 1 fuel per zone; upgrades no longer need an orbit');
   ok(r.refuel, `refuel tops up to 20 and costs a lot (${r.refuelCost} cr for a satellite worth ${r.spent} cr)`);
   ok(r.linesBtn && r.linesOff && r.linesOn, 'top-bar button turns the orbit lines off and back on (remembered)');
+  ok(r.alertLow && r.alertCrit && r.alertPick && r.alertGone, 'low-fuel alert: shows at 25%, flashes at 10%, tap selects the emptiest satellite, hides when refuelled');
   ok(r.leoFull, 'launching into a full LEO is refused');
   ok(r.fuelAfterWave === 19 && r.fuelAfterOd === 17, `1 fuel per wave (${r.fuelAfterWave}), Overdrive burns 2 more (${r.fuelAfterOd})`);
   ok(r.burned > 0 && r.left === 0, `satellites out of fuel burn up (${r.burned})`);

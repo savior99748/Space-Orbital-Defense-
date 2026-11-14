@@ -647,6 +647,35 @@
     linesBtn.onclick = toggleOrbitLines; ui.autoBtn.parentNode.insertBefore(linesBtn, ui.autoBtn);
     window.addEventListener("keydown", ev => { if ((ev.key === "l" || ev.key === "L") && S && !(ev.target.closest && ev.target.closest("input,select"))) toggleOrbitLines(); });
   }
+  // Low-fuel alert: a ⛽ badge on the screen edge when any satellite is at 25% fuel or less; it turns red and flashes
+  // at 10% or less. Tapping it selects the emptiest satellite (Refuel is right there) and, in 2D, moves the camera to
+  // it; tapping again cycles through the low ones. Works in 2D and 3D.
+  const FUEL_LOW = 0.25, FUEL_CRIT = 0.1;
+  let fuelEl = null, fuelKey = "", fuelCycle = 0;
+  const lowFuel = () => (S && !S.over ? S.towers.filter(t => t.fuel != null && t.fuel / FUEL_MAX <= FUEL_LOW).sort((a, b) => a.fuel - b.fuel) : []);
+  function updateFuelAlert() {
+    if (!EXP) return;
+    if (!fuelEl) {
+      fuelEl = document.createElement("button"); fuelEl.id = "fuelAlert"; fuelEl.type = "button";
+      fuelEl.title = "Satellites low on fuel: tap to select one and refuel it";
+      stage.appendChild(fuelEl);
+      fuelEl.onclick = () => {
+        const low = lowFuel(); if (!low.length) return;
+        const t = low[fuelCycle++ % low.length];
+        S.selectedType = null; S.selectedTower = t; sfx("click");
+        if (!OD.is3D) { if (zoom < 1.5) zoom = 1.5; camX = t.x; camY = t.y; clampCam(); updateZoomUI(); }
+        renderInfo(); updateUI(true);
+      };
+    }
+    const low = lowFuel(), crit = low.filter(t => t.fuel / FUEL_MAX <= FUEL_CRIT).length;
+    const busy = stage.clientWidth < 620 && !!S && (!!S.selectedType || ui.info.classList.contains("open")); // phones: make room for the launch / satellite panel
+    const key = low.length + "|" + crit + "|" + busy;
+    if (key === fuelKey) return; fuelKey = key;
+    fuelEl.classList.toggle("show", low.length > 0 && !busy); fuelEl.classList.toggle("crit", crit > 0);
+    if (!low.length) { fuelCycle = 0; return; }
+    fuelEl.innerHTML = `<span class="fa-icon">⛽</span><span><b>${crit ? `${crit} almost empty` : "Low fuel"}</b><small>${low.length} satellite${low.length > 1 ? "s" : ""} · tap to refuel</small></span>`;
+  }
+  setInterval(updateFuelAlert, 250);
   const pickLaunchSite = bi => { if (!EXP || !S || !S.selectedType || !launchSites().includes(bi)) return false; S.launchFrom = bi; sfx("click"); renderLaunchPad(); return true; };
 
   // Invaders spiral toward the centre; moons/planets bend their path with gravity.
@@ -1396,6 +1425,15 @@
           ctx.globalCompositeOperation = "lighter"; FX.glow(ctx, p.x + Math.cos(t.aim) * L, p.y + Math.sin(t.aim) * L, 9 * sc, mz, 1 - since / 0.09, "core"); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1; }
       }
       if (t.fuel != null && t.fuel <= 3) { ctx.strokeStyle = `rgba(255,92,92,${0.45 + 0.4 * Math.sin(time * 6)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, TAU); ctx.stroke(); } // low on fuel
+      if (t.fuel != null && t.fuel / FUEL_MAX <= FUEL_LOW) { // a small fuel gauge beside it; flashes when almost empty
+        const crit = t.fuel / FUEL_MAX <= FUEL_CRIT, on = !crit || Math.sin(performance.now() / 120) > -0.2, gx = p.x + 13, gy = p.y - 22, k = Math.max(0, t.fuel / FUEL_MAX);
+        if (on) {
+          ctx.fillStyle = "rgba(4,6,16,0.85)"; ctx.fillRect(gx - 1.5, gy - 1.5, 7, 15);
+          ctx.fillStyle = crit ? "#ff4d5e" : "#ffb347"; ctx.fillRect(gx, gy + 12 * (1 - k * 4), 4, 12 * k * 4); // the gauge shows the last quarter of the tank
+          ctx.strokeStyle = crit ? "#ff8a96" : "#ffd08a"; ctx.lineWidth = 1; ctx.strokeRect(gx - 0.5, gy - 0.5, 5, 13);
+          ctx.font = "9px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "#fff"; ctx.fillText("⛽", gx + 6, gy + 9);
+        }
+      }
     }
     for (const t of S.towers) if (t.crafts) for (const f of t.crafts) OD.drawCraft(ctx, f, t, time);
     const tw = tutWorldTarget();
