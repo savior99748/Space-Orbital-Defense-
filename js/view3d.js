@@ -99,7 +99,12 @@ canvas.addEventListener("pointerdown", ev => {
   }
 });
 canvas.addEventListener("pointermove", ev => {
-  const ptr = pointers.get(ev.pointerId); if (!ptr) return;
+  const ptr = pointers.get(ev.pointerId);
+  if (!ptr) { // mouse hover: while commanding a satellite, aim at the invader nearest the pointer
+    const S = od().state();
+    if (S && S.command && ev.pointerType === "mouse") { const p = local(ev); aimAt(p.x, p.y, 90); }
+    return;
+  }
   const p = local(ev), dx = p.x - ptr.x, dy = p.y - ptr.y;
   ptr.x = p.x; ptr.y = p.y;
   if (pointers.size >= 2 && gesture && gesture.pinched) {
@@ -125,8 +130,28 @@ canvas.addEventListener("wheel", ev => { ev.preventDefault(); cam.dist = THREE.M
 
 // Tap: pick the slot whose 3D position is closest on screen (within a finger's width).
 const _v = new THREE.Vector3();
+// Take Command: pick the invader drawn nearest the screen point (within maxPx)
+function aimAt(sx, sy, maxPx) {
+  const S = od().state(); if (!S || !S.command) return;
+  const r = canvas.getBoundingClientRect(), C = od().center();
+  let best = null, bd = maxPx * maxPx;
+  for (const e of S.enemies) {
+    if (e.dead || e.cloaked) continue;
+    _v.set(e.x - C.x, H + (e.z || 0), e.y - C.y).project(camera);
+    const d = ((_v.x + 1) / 2 * r.width - sx) ** 2 + ((1 - _v.y) / 2 * r.height - sy) ** 2;
+    if (d < bd) { bd = d; best = e; }
+  }
+  if (best) { S.cmdPick = best; S.cmdAim = { x: best.x, y: best.y }; }
+}
 function tap(sx, sy, touch) {
   const S = od().state(), B = od().board(); if (!S || !B) return;
+  if (S.command) { // commanding: a tap aims; tapping the commanded satellite itself lets go and opens its panel
+    if (S.paused || S.over) return;
+    const c = S.command, cp = od().slotPos(c.slot), r0 = canvas.getBoundingClientRect(), C0 = od().center();
+    _v.set(cp.x - C0.x, H + (cp.z || 0), cp.y - C0.y).project(camera);
+    if (((_v.x + 1) / 2 * r0.width - sx) ** 2 + ((1 - _v.y) / 2 * r0.height - sy) ** 2 < (touch ? 30 : 20) ** 2) { od().endCommand(); od().tapSlot(c.slot, touch); return; }
+    aimAt(sx, sy, touch ? 70 : 50); return;
+  }
   const r = canvas.getBoundingClientRect(), C = od().center();
   let best = null, bd = (touch ? 34 : 22) ** 2;
   for (const s of B.slots) {
@@ -566,6 +591,8 @@ rangeMesh.rotation.x = -Math.PI / 2;
 const rangeEdge = circleLine(1, 0x6cf0ff, 0.6, false);
 const selRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 32), new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
 selRing.rotation.x = -Math.PI / 2;
+const tgtRing = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 4), new THREE.MeshBasicMaterial({ color: 0xff5c7a, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthTest: false }));
+tgtRing.rotation.x = -Math.PI / 2; tgtRing.renderOrder = 5; // Take Command: lock-on marker on the aimed invader
 const rangeSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), new THREE.MeshBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.07, depthWrite: false }));
 rangeSphere.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 10)), new THREE.LineBasicMaterial({ color: 0x6cf0ff, transparent: true, opacity: 0.18 })));
 // Beam cores: a thin white-hot line inside each colored beam
@@ -627,7 +654,7 @@ const MUZZLE = { laser: "#bff8ff", missile: "#ffb347", rail: "#c9ffb0", emp: "#f
 const ENGINE = { drone: ["#ffb070", 1.3, 1.6], swarm: ["#ff7ab0", 0.9, 1.2], cruiser: ["#9fe0ff", 1.45, 1.4], dread: ["#ff7a3c", 1.3, 1.1], asteroid: ["#ff9a3c", 1.3, 1.3],
   brute: ["#ff7a3c", 1.2, 1.3], phantom: ["#7affd9", 1.2, 1.4], brood: ["#c8ff4a", 1.1, 1.0], aegis: ["#9fe0ff", 1.1, 1.1], titan: ["#c58cff", 1.5, 1.2] };
 const _ev = new THREE.Vector3();
-scene.add(beamMesh, beamCore, shotMesh, craftMesh, particles, glowPoints, rangeMesh, rangeEdge, rangeSphere, selRing, ...ringPool);
+scene.add(beamMesh, beamCore, shotMesh, craftMesh, particles, glowPoints, rangeMesh, rangeEdge, rangeSphere, selRing, tgtRing, ...ringPool);
 for (const o of [beamMesh, beamCore, shotMesh, particles, glowPoints, ...ringPool]) o.layers.enable(GLOW_LAYER); // these bloom
 
 // ---------- per-frame sync with the game state ----------
@@ -910,7 +937,7 @@ function sync() {
   glowMat.uniforms.scale.value = renderer.domElement.height * 0.9;
 
   // selection + range
-  const sel = S && S.selectedTower;
+  const sel = S && (S.selectedTower || S.command);
   const showRange = (x, y, r, color, z) => {
     if (od().map().threeD) { rangeSphere.visible = true; rangeSphere.position.copy(W(x, y, H, z)); rangeSphere.scale.setScalar(r); rangeSphere.material.color.set(color); return; }
     rangeMesh.visible = rangeEdge.visible = true; rangeMesh.position.copy(W(x, y, 0.5)); rangeMesh.scale.setScalar(r); rangeEdge.position.copy(rangeMesh.position); rangeEdge.scale.setScalar(r); rangeMesh.material.color.set(color); rangeEdge.material.color.set(color);
@@ -921,8 +948,11 @@ function sync() {
     const r = st.buffRange || st.focusRange || st.range, col = sel.path ? T.paths[sel.path].color : T.color;
     if (sel.type === "silo") { const B = OD.board(), b = B.bodies[B.rings[B.slots[sel.slot].ring].body]; showRange(b.x, b.y, b.leo, col, 0); } // reach: its low orbit
     else if (r) showRange(sel.x, sel.y, r, col, sel.z);
-    selRing.visible = true; selRing.position.copy(W(sel.x, sel.y, H + 0.5, sel.z)); selRing.scale.setScalar(13);
+    selRing.visible = true; selRing.position.copy(W(sel.x, sel.y, H + 0.5, sel.z)); selRing.scale.setScalar(S.command === sel ? 15 + Math.sin(performance.now() / 160) * 1.5 : 13);
   }
+  const tg = S && S.command && S.cmdTgt && !S.cmdTgt.dead ? S.cmdTgt : null;
+  tgtRing.visible = !!tg;
+  if (tg) { tgtRing.position.copy(W(tg.x, tg.y, H + 0.5, tg.z)); tgtRing.scale.setScalar(tg.def.size + 9); tgtRing.rotation.z = performance.now() / 600; }
 
   // shake
   const shk = S && S.shake ? S.shake * 0.6 * (window.OD.shake ?? 1) : 0;
