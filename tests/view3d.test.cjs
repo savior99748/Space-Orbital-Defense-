@@ -12,12 +12,12 @@ const BASE = 'http://127.0.0.1:8769/';
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error' && !ign(m.text())) errs.push(m.text()); });
-    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} }); // skip the brand-new-player tutorial
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} }); // skip the brand-new-player tutorial
     await pg.goto(BASE + 'index.html');
     await pg.waitForSelector('[data-view="2d"]');
     ok(await pg.evaluate(() => OD.view === '2d' && !document.getElementById('game3d')), 'everyone starts in 2D (Version C); 3D is in the menu');
     await Promise.all([pg.waitForNavigation(), pg.click('[data-view="3d"]')]);
-    await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); });
+    await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); });
     await pg.reload(); await pg.waitForSelector('[data-view="3d"]');
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
     ok(await pg.evaluate(() => OD.is3D && !!document.getElementById('game3d')), 'switching to 3D: the 3D canvas loads (and is remembered)');

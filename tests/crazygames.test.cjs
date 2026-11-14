@@ -14,7 +14,7 @@ const MOCK = `window.__cg=[];window.CrazyGames={SDK:{init:async()=>{__cg.push('i
     await ctx.route('**/*', r => { const u = r.request().url(); if (u.includes('sdk.crazygames.com')) return r.fulfill({ contentType: 'text/javascript', body: MOCK }); if (!u.startsWith('http://127.0.0.1:8771')) { ext.push(u); return r.abort(); } r.continue(); });
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => m.type() === 'error' && errs.push(m.text()));
-    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_view_c', '3d'); } catch {} }); // skip the tutorial; 3D (players start in 2D, see view3d test)
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_view_c', '3d'); } catch {} }); // skip the tutorial; 3D (players start in 2D, see view3d test)
     await pg.goto('http://127.0.0.1:8771/index.html');
     await pg.waitForFunction(() => window.__view3d && window.__od, null, { timeout: 20000 });
     await pg.waitForTimeout(800);
@@ -22,7 +22,7 @@ const MOCK = `window.__cg=[];window.CrazyGames={SDK:{init:async()=>{__cg.push('i
     ok(await pg.evaluate(() => __cg.includes('init') && __cg.includes('loadingStop')), `${name}: SDK init + loadingStop (${await pg.evaluate(() => __cg.join(','))})`);
     ok(await pg.evaluate(() => /v3\.1\.0 · crazygames/.test(document.body.innerText)), `${name}: menu shows v3.1.0 · crazygames`);
     // play
-    await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); });
+    await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); });
     await pg.evaluate(() => { const od = window.__od; od.begin('earth', 'medium'); od.placeTower(0, 'laser'); od.startWave(); });
     await pg.waitForTimeout(3000);
     const st = await pg.evaluate(() => ({ cg: __cg.join(','), enemies: window.__od.state().enemies.length, wave: window.__od.state().wave }));

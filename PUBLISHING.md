@@ -80,7 +80,7 @@ Steam setup:
 2. Put the App ID in `"steamAppId"` in `platforms/electron/package.json` (or `steam_appid.txt` while developing). The app connects to Steam through `steamworks.js` and
    shows the overlay (Shift+Tab). Test the overlay early: it is known to be fragile with Electron **[verify]**.
 3. In Steamworks, create achievements with these API names (the game's ids in capitals):
-   `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`, `ENDLESS_50`, `ENDLESS_100`.
+   `FIRST_WAVE`, `FIRST_BOSS`, `TIER5`, `ARMADA`, `TYCOON`, `FIRST_WIN`, `PERFECT`, `WIN_HARD`, `GRAND_TOUR`, `WIN_SOL`, `ENDLESS_50`, `ENDLESS_100`, `ENDLESS_75`, `STAR_1`, `STARS_3MAP`, `STARS_15`, `STARS_30`, `STARS_ALL`, `UNLOCK_SOL`, `CH_FIRST`, `CH_EACH`, `DAILY_1`, `DAILY_3`, `BOSS_DREAD`, `BOSS_TITAN`, `ASCEND`, `OVERCLOCK5`, `REFUEL10`, `ZONES`, `MINEFIELD`, `FULL_ARSENAL`, `HOARDER` (32 achievements).
 4. Set up Auto-Cloud (above).
 5. Put the store page up as **Coming Soon** early: Steam requires it to be visible for a minimum time before
    release **[verify]**, and wishlists collected meanwhile drive launch visibility.

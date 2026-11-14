@@ -8,7 +8,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   const open = async (q, fresh) => {
     const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message));
-    if (!fresh) await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_stats_off', '1'); } catch {} });
+    if (!fresh) await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_stats_off', '1'); } catch {} });
     await pg.goto(`http://127.0.0.1:8769/index.html${q}`);
     await pg.waitForFunction(() => window.__od && (window.OD.view === '2d' || window.__view3d), null, { timeout: 30000 });
     return { pg, errs };
@@ -22,7 +22,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
 
   // a player who chose 3D before Version C (old od_view) now starts in 2D
   { const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } }); const pg = await ctx.newPage();
-    await pg.addInitScript(() => { try { localStorage.setItem('od_view', '3d'); localStorage.setItem('od_tut_done', '1'); } catch {} });
+    await pg.addInitScript(() => { try { localStorage.setItem('od_view', '3d'); localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); } catch {} });
     await pg.goto('http://127.0.0.1:8769/index.html'); await pg.waitForFunction(() => window.OD && window.OD.view);
     ok(await pg.evaluate(() => OD.view === '2d'), 'a 3D choice saved before Version C is reset: everyone starts in 2D');
     await ctx.close(); }

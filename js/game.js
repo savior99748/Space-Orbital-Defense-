@@ -40,7 +40,8 @@
   let W = 1000, H = 700, CX = 500, CY = 350, SPAWN_R = 640, scale = 1;
   let MAP_KEY = MAP_ORDER.includes(store.get("od_map")) ? store.get("od_map") : "earth";
   let DIFF_KEY = "medium"; // follows the selected map (see diffOf)
-  let MODE = store.get("od_mode") === "endless" ? "endless" : "campaign";
+  let MODE = ["endless", "challenge"].includes(store.get("od_mode")) ? store.get("od_mode") : "campaign";
+  let CH_SEL = store.get("od_ch") || ""; // the challenge picked in the menu
   const LB = OD.leaderboard;
   let lbView = null; // { map, diff } while the leaderboard screen is open
   const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -359,7 +360,8 @@
 
   function kill(e, src) {
     e.dead = true;
-    if (src) src.kills = (src.kills || 0) + 1;
+    if (src) { src.kills = (src.kills || 0) + 1; if (src.type === "mines" && src.kills >= 25) unlock("minefield"); }
+    if (e.type === "dread") unlock("boss_dread"); else if (e.type === "titan") unlock("boss_titan");
     const reward = Math.max(1, Math.round(e.def.reward * S.diff.reward));
     S.money += reward;
     S.score += reward * 10;
@@ -459,7 +461,7 @@
     updateMines(dt);
 
     // invaders speed up a little each wave after wave 10 (up to +25%)
-    const spd = S.diff.speed * (MAP.enemySpeed || 1) * (EXP ? EXP_SPEED : 1) * (1 + Math.min(0.25, Math.max(0, S.wave - 10) * 0.012));
+    const spd = S.diff.speed * (MAP.enemySpeed || 1) * (EXP ? EXP_SPEED : 1) * (chRule("swift") ? 1.25 : 1) * (1 + Math.min(0.25, Math.max(0, S.wave - 10) * 0.012));
     const rootR = B.bodies[0].r;
     for (const e of S.enemies) {
       if (e.dead) continue;
@@ -525,10 +527,11 @@
       S.waveActive = false;
       const bonus = Math.round((25 + S.wave * 4) * S.diff.reward * OD.ECON);
       S.money += bonus; S.stats.earnedBonus += bonus;
+      if (S.money >= 50000) unlock("hoarder");
       sfx("clear");
       unlock("first_wave");
       if ([1, 3, 5, 10, 15, 20, 25, 30].includes(S.wave) || (S.wave > 30 && S.wave % 10 === 0)) stats.track(`wave/${S.mapKey}/${S.wave}`);
-      if (S.wave === OD.WIN_WAVE && !S.won && !S.endless) return victory();
+      if (S.wave === (S.winWave || OD.WIN_WAVE) && !S.won && !S.endless) return victory();
       announceUnlocks();
       if (S.wave === 1) stats.once("first/wave-clear");
       if (S.wave === 3) stats.once("first/wave-3");
@@ -571,11 +574,13 @@
   // Move a satellite to another zone around the same body (like Target: First / Last / ...). 1 fuel per zone moved.
   function setOrbit(t, band) {
     if (!EXP || t.fuel == null || band === (t.orbit || 0) || band < 0 || band > 2) return;
+    if (chRule("leo")) { toast("🛰 Low Orbit: satellites stay in LEO in this challenge"); sfx("deny"); return; }
     const bi = B.rings[B.slots[t.slot].ring].body, burn = Math.abs(band - (t.orbit || 0));
     if (t.fuel <= burn) { toast("Not enough fuel to change orbit"); sfx("deny"); return; }
     const lane = freeLane(bi, band);
     if (lane == null) { toast(`${BAND[band]} around ${B.bodies[bi].name} is full`); sfx("deny"); return; }
     t.fuel -= burn; t.slot = lane; t.orbit = band;
+    if (new Set(S.towers.filter(x => x.orbit != null).map(x => x.orbit)).size >= 3) unlock("zones");
     const p = slotPos(lane);
     burst(p.x, p.y, "#7fd8ff", 18, 100, 0.7, p.z);
     sfx("click"); toast(`🚀 Moved to ${BAND[band]} (−${burn} fuel)`);
@@ -590,6 +595,7 @@
     if (!EXP || !cost) return;
     if (S.money < cost) { toast("Not enough credits to refuel"); sfx("deny"); return; }
     S.money -= cost; S.stats.spent += cost; t.fuel = FUEL_MAX; // upkeep: not added to the sell value
+    if (lifetime("refuels", 1) >= 10) unlock("refuel10");
     burst(t.x, t.y, "#7dff9a", 14, 80, 0.6, t.z);
     sfx("upgrade"); toast(`⛽ Refueled: ${FUEL_MAX} waves`);
     if (!S.waveActive) saveRun();
@@ -617,12 +623,13 @@
     if (!def || def.ground) { padEl.style.display = "none"; padKey = ""; return; }
     const sites = launchSites();
     if (!sites.includes(S.launchFrom)) S.launchFrom = sites[0];
+    if (chRule("leo")) S.launchBand = 0;
     const band = S.launchBand || 0, from = S.launchFrom, free = from == null ? 0 : freeLanes(from, band).length, cost = def.tiers[0].cost;
     const narrow = stage.clientWidth < 620;
     const key = [type, band, from, free, S.money >= cost, sites.join(), narrow].join("|");
     if (key === padKey) return; padKey = key;
     padEl.style.bottom = narrow ? "6px" : "52px"; padEl.style.width = narrow ? "calc(100% - 12px)" : ""; padEl.style.gap = narrow ? "6px" : "8px"; padEl.style.padding = narrow ? "6px" : "8px 10px";
-    const zb = i => `<button data-band="${i}" style="${narrow ? "flex:1;" : ""}padding:6px 11px;border-radius:9px;border:1px solid #7fd8ff;font:inherit;cursor:pointer;${band === i ? "background:#7fd8ff;color:#07182a" : "background:transparent;color:#bfefff"}">${BAND[i]}</button>`;
+    const zb = i => `<button data-band="${i}" ${chRule("leo") && i ? "disabled" : ""} style="${narrow ? "flex:1;" : ""}padding:6px 11px;border-radius:9px;border:1px solid #7fd8ff;font:inherit;cursor:pointer;${band === i ? "background:#7fd8ff;color:#07182a" : "background:transparent;color:#bfefff"}">${BAND[i]}</button>`;
     padEl.innerHTML = `${narrow ? "" : "<span>🛰 Orbit</span>"}${[0, 1, 2].map(zb).join("")}
       ${narrow ? "" : `<span style="margin-left:4px">from</span>`}<select style="${narrow ? "flex:1.6;min-width:0;" : ""}font:inherit;padding:5px;border-radius:8px;background:#0c2238;color:#dfefff;border:1px solid #386782">${sites.map(i => `<option value="${i}" ${i === from ? "selected" : ""}>${B.bodies[i].name} ${narrow ? `· ${freeLanes(i, band).length}` : `(${freeLanes(i, band).length} free)`}</option>`).join("")}</select>
       <button data-launch="1" ${free && S.money >= cost ? "" : "disabled"} style="${narrow ? "width:100%;" : ""}padding:8px 16px;border-radius:10px;border:0;font:800 14px system-ui,sans-serif;letter-spacing:.04em;cursor:pointer;background:${free && S.money >= cost ? "#ffb347" : "#555"};color:#1a0d00">🚀 LAUNCH · ${cost} cr</button>`;
@@ -1053,7 +1060,7 @@
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
       v: 1, map: S.mapKey, diff: S.diffKey, seed: S.seed, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
-      stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless,
+      stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless, challenge: S.challenge || null, daily: !!S.daily,
       towers: S.towers.map(packTower), retired: S.retired.map(packTower),
       board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
     }));
@@ -1065,7 +1072,7 @@
   const clearRun = () => store.remove(RUN_KEY);
   function resumeRun(r) {
     MAP_KEY = r.map; DIFF_KEY = r.diff; pendingSeed = r.seed;
-    begin(r.map, r.diff, true, !!r.endless);
+    begin(r.map, r.diff, true, !!r.endless, r.challenge, r.daily);
     Object.assign(S, { wave: r.wave, lives: r.lives, money: r.money, score: r.score, realTime: r.realTime || 0,
       won: !!r.won, freeplay: !!r.freeplay, revived: !!r.revived, adWave: r.adWave });
     Object.assign(S.stats, r.stats || {});
@@ -1087,6 +1094,59 @@
     toast(`Welcome back! ${MAP.name}, wave ${S.wave} cleared`, 2500);
   }
 
+  // ---------- progression: stars, planet unlocks, challenges, daily challenge ----------
+  // Campaign: ★ win · ★★ win with half the planet's HP left · ★★★ win with 90%. Each map also has 4 challenges
+  // (20 waves under a rule), one ★ each: 7 stars per map. Planets unlock with stars (the first three are free; a planet
+  // already played stays open). The Daily Challenge is the same map + rule for everyone each day, on any planet.
+  const CHALLENGES = {
+    lasers: { name: "Laser Focus", icon: "🔦", desc: "Only Laser Sats can be built." },
+    thrift: { name: "Shoestring", icon: "🪙", desc: "Start with 40% of the usual credits." },
+    glass: { name: "Glass Planet", icon: "💎", desc: "The planet has only 5 HP." },
+    nood: { name: "No Overdrive", icon: "⚡", desc: "Overdrive is offline." },
+    swift: { name: "Rush Hour", icon: "💨", desc: "Invaders fly 25% faster." },
+    leo: { name: "Low Orbit", icon: "🛰", desc: "Satellites can only use LEO (low orbit)." },
+  };
+  const CH_KEYS = Object.keys(CHALLENGES), CH_WAVES = 20, STARS_PER_MAP = 7;
+  const mapChallenges = key => { const i = Math.max(0, MAP_ORDER.indexOf(key)); return [0, 1, 2, 3].map(k => CH_KEYS[(i + k) % CH_KEYS.length]); };
+  const UNLOCK_STARS = { mercury: 0, venus: 0, earth: 0, mars: 3, jupiter: 6, saturn: 10, uranus: 14, neptune: 18, sol: 24 };
+  const getStars = () => { try { return JSON.parse(store.get("od_stars") || "{}") || {}; } catch { return {}; } };
+  const mapStars = (key, st = getStars()) => { const r = st[key] || {}; return (r.s || 0) + Object.keys(r.c || {}).length; };
+  const totalStars = (st = getStars()) => MAP_ORDER.reduce((n, k) => n + mapStars(k, st), 0);
+  const mapUnlocked = key => store.get("od_all_maps") === "1" || (UNLOCK_STARS[key] || 0) <= totalStars() || !!getRec(key, diffOf(key)) || !!LB.bestMap(key) || (loadRun() || {}).map === key;
+  const dayNumber = () => Math.floor(Date.now() / 86400000);
+  const daily = (d = dayNumber()) => ({ day: d, map: MAP_ORDER[(d * 5 + 3) % MAP_ORDER.length], ch: CH_KEYS[(d * 7 + 1) % CH_KEYS.length] });
+  const getDaily = () => { try { return JSON.parse(store.get("od_daily") || "{}") || {}; } catch { return {}; } };
+  const chRule = id => !!(S && S.challenge === id); // is this challenge's rule active in the current game?
+  function awardStars(campaignStars, challenge) { // saves the best result; returns how many new stars were earned
+    const st = getStars(), before = totalStars(st), r = (st[S.mapKey] = st[S.mapKey] || { s: 0, c: {} });
+    if (campaignStars) r.s = Math.max(r.s || 0, campaignStars);
+    if (challenge) { r.c = r.c || {}; r.c[challenge] = 1; }
+    store.set("od_stars", JSON.stringify(st));
+    const after = totalStars(st);
+    if (after >= 1) unlock("star_1");
+    if (mapStars(S.mapKey, st) >= 3 && (r.s || 0) >= 3) unlock("stars_3map");
+    if (after >= 15) unlock("stars_15");
+    if (after >= 30) unlock("stars_30");
+    if (after >= MAP_ORDER.length * STARS_PER_MAP) unlock("stars_all");
+    if (after >= UNLOCK_STARS.sol) unlock("unlock_sol");
+    if (challenge) {
+      unlock("ch_first");
+      const done = new Set(); for (const k of MAP_ORDER) for (const c of Object.keys((st[k] || {}).c || {})) done.add(c);
+      if (CH_KEYS.every(c => done.has(c))) unlock("ch_each");
+    }
+    const newly = MAP_ORDER.filter(k => UNLOCK_STARS[k] > before && UNLOCK_STARS[k] <= after);
+    return { gained: after - before, newly };
+  }
+  function finishDaily() {
+    const d = getDaily(), today = dayNumber();
+    if (d.done === today) return d.streak || 1;
+    const streak = d.done === today - 1 ? (d.streak || 1) + 1 : 1;
+    store.set("od_daily", JSON.stringify({ done: today, streak }));
+    unlock("daily_1"); if (streak >= 3) unlock("daily_3");
+    return streak;
+  }
+  const lifetime = (k, add = 0) => { const v = (+store.get("od_n_" + k) || 0) + add; if (add) store.set("od_n_" + k, String(v)); return v; };
+
   // ---------- achievements ----------
   const ACHIEVEMENTS = [
     { id: "first_wave", name: "First Contact", desc: "Clear your first wave." },
@@ -1101,6 +1161,26 @@
     { id: "win_sol", name: "Guardian of the Sun", desc: "Win the Solar System map." },
     { id: "endless_50", name: "Deep Space", desc: "Reach wave 50 in Endless mode." },
     { id: "endless_100", name: "Centurion", desc: "Reach wave 100 in Endless mode." },
+    { id: "endless_75", name: "Into the Void", desc: "Reach wave 75 in Endless mode." },
+    { id: "star_1", name: "Rising Star", desc: "Earn your first star." },
+    { id: "stars_3map", name: "Flawless Defense", desc: "Earn all three campaign stars on a planet." },
+    { id: "stars_15", name: "Constellation", desc: "Collect 15 stars." },
+    { id: "stars_30", name: "Star Chart", desc: "Collect 30 stars." },
+    { id: "stars_all", name: "Supernova", desc: "Collect every star in the Solar System." },
+    { id: "unlock_sol", name: "Final Frontier", desc: "Unlock the Solar System." },
+    { id: "ch_first", name: "Challenger", desc: "Complete a challenge." },
+    { id: "ch_each", name: "Jack of All Orbits", desc: "Complete every kind of challenge at least once." },
+    { id: "daily_1", name: "Daily Duty", desc: "Complete a Daily Challenge." },
+    { id: "daily_3", name: "On Call", desc: "Complete the Daily Challenge three days in a row." },
+    { id: "boss_dread", name: "Dreadnought Down", desc: "Destroy a Dreadnought." },
+    { id: "boss_titan", name: "Titan Slayer", desc: "Destroy a Void Titan." },
+    { id: "ascend", name: "Ascended", desc: "Ascend a satellite." },
+    { id: "overclock5", name: "Redline", desc: "Overclock a satellite five times." },
+    { id: "refuel10", name: "Pit Crew", desc: "Refuel 10 satellites." },
+    { id: "zones", name: "Full Spectrum", desc: "Have satellites in LEO, MEO and HEO at the same time." },
+    { id: "minefield", name: "Minefield Master", desc: "Get 25 kills with one Mine Layer." },
+    { id: "full_arsenal", name: "Full Arsenal", desc: "Build every kind of satellite in one game." },
+    { id: "hoarder", name: "War Chest", desc: "Hold 50,000 credits at once." },
   ];
   function getAch() { try { return JSON.parse(store.get("od_ach") || "{}"); } catch { return {}; } }
   function unlock(id) {
@@ -1150,6 +1230,7 @@
     S.shake = Math.max(S.shake, 6);
     stats.track(`endless/milestone-${w}`);
     if (w >= 50) unlock("endless_50");
+    if (w >= 75) unlock("endless_75");
     if (w >= 100) unlock("endless_100");
   }
 
@@ -1164,6 +1245,9 @@
       stats.track(`endless-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
       S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
       showStats("over", null, false, S.lastLb);
+    } else if (S.challenge) {
+      stats.track(`challenge-over/${S.mapKey}/${S.challenge}/w${stats.bucket(S.wave)}`);
+      showStats("over", null, false);
     } else {
       stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
       const { rec, newBest } = saveRec();
@@ -1184,12 +1268,15 @@
     S.won = true; S.paused = true;
     P.gameplayStop(); P.happy();
     clearRun();
-    stats.track(`win/${S.mapKey}/${S.diffKey}`);
-    const { rec, newBest } = saveRec();
+    stats.track(S.challenge ? `${S.daily ? "daily" : "challenge"}-win/${S.mapKey}/${S.challenge}` : `win/${S.mapKey}/${S.diffKey}`);
+    const { rec, newBest } = S.challenge ? { rec: null, newBest: false } : saveRec();
+    const hpFrac = Math.max(0, S.lives) / S.diff.lives, stars = S.challenge ? 0 : 1 + (hpFrac >= 0.5 ? 1 : 0) + (hpFrac >= 0.9 ? 1 : 0);
+    S.result = awardStars(stars, S.challenge && !S.daily ? S.challenge : null); S.result.stars = stars;
+    if (S.daily) S.result.streak = finishDaily();
     sfx("win");
     unlock("first_win");
-    if (!S.stats.leaked) unlock("perfect");
-    if (S.diffKey === "hard") unlock("win_hard");
+    if (!S.stats.leaked && !S.challenge) unlock("perfect");
+    if (S.diffKey === "hard" && !S.challenge) unlock("win_hard");
     if (MAP.final) unlock("win_sol");
     if (MAP_ORDER.filter(k => !MAPS[k].final).every(k => Object.keys(DIFFICULTY).some(d => (getRec(k, d) || {}).won))) unlock("grand_tour");
     showStats("won", rec, newBest);
@@ -1203,8 +1290,13 @@
     const mins = Math.floor(S.realTime / 60), secs = Math.floor(S.realTime % 60);
     const tile = (label, value, color) => `<div class="tile"><b${color ? ` style="color:${color}"` : ""}>${value}</b><span>${label}</span></div>`;
     const lifeName = MAP.lifeName || MAP.name;
+    const ch = S.challenge && CHALLENGES[S.challenge], res = S.result || {};
+    const starLine = mode !== "won" ? "" : ch
+      ? `<p class="stars-won">${S.daily ? `📅 Daily Challenge complete! Streak: <b>${res.streak || 1} day${(res.streak || 1) > 1 ? "s" : ""}</b>` : `★ Challenge complete: <b>${ch.icon} ${ch.name}</b>${res.gained ? " · +1 ★" : " (already earned)"}`}</p>`
+      : `<p class="stars-won"><span class="big-stars">${"★".repeat(res.stars || 1)}<i>${"★".repeat(3 - (res.stars || 1))}</i></span>${(res.stars || 1) < 3 ? `<small>${(res.stars || 1) < 2 ? "Win with half your HP left for ★★" : "Win with 90% of your HP left for ★★★"}</small>` : ""}</p>`;
+    const unlockedLine = mode === "won" && res.newly && res.newly.length ? `<p class="newbest">🔓 New planet unlocked: ${res.newly.map(k => MAPS[k].name).join(", ")}!</p>` : "";
     const head = mode === "won"
-      ? `<h1 style="color:var(--good)">${MAP.final ? "SOLAR SYSTEM SAVED" : `${MAP.name.toUpperCase()} SAVED`}</h1><p>You destroyed the Dreadnought and survived all ${OD.WIN_WAVE} waves!</p>`
+      ? `<h1 style="color:var(--good)">${ch ? "CHALLENGE COMPLETE" : MAP.final ? "SOLAR SYSTEM SAVED" : `${MAP.name.toUpperCase()} SAVED`}</h1><p>${ch ? `${MAP.name} held for ${CH_WAVES} waves under ${ch.name}.` : `You destroyed the Dreadnought and survived all ${OD.WIN_WAVE} waves!`}</p>${starLine}${unlockedLine}`
       : mode === "over" && S.endless
         ? `<h1 style="color:var(--gold)">ENDLESS RUN OVER</h1><p>You reached <b>wave ${S.wave}</b> with <b>${S.score.toLocaleString()}</b> points.</p>`
       : mode === "over"
@@ -1225,7 +1317,7 @@
     }).join("");
     const nextKey = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1];
     const btns = mode === "won"
-      ? `<button class="primary" data-act="freeplay">Freeplay ▶</button>${nextKey ? `<button class="primary" data-act="next">Next: ${MAPS[nextKey].name} →</button>` : ""}<button data-act="menu">Main Menu</button>`
+      ? `${S.challenge ? "" : `<button class="primary" data-act="freeplay">Freeplay ▶</button>`}${nextKey && !S.challenge && mapUnlocked(nextKey) ? `<button class="primary" data-act="next">Next: ${MAPS[nextKey].name} →</button>` : ""}<button data-act="menu">Main Menu</button>`
       : mode === "over"
         ? `${!S.revived && M.offer("revive").available ? `<button class="primary ad" data-act="revive">${M.offer("revive").method === "ad" ? "📺 Watch ad: revive with 5 HP" : "🛡 Revive with 5 HP"}</button>` : ""}<button class="primary" data-act="retry">Try Again</button><button data-act="menu">Main Menu</button>`
         : `<button class="primary" data-act="pause">← Back</button>`;
@@ -1538,6 +1630,7 @@
   function selectType(type) {
     if (!S || S.over) return;
     if (!isUnlocked(type)) { toast(`🔒 Unlocks after wave ${unlockWave(type)}`, 1600); sfx("deny"); return; }
+    if (chRule("lasers") && type !== "laser") { toast("🔦 Laser Focus: only Laser Sats in this challenge", 1800); sfx("deny"); return; }
     const nb = ui.shop.querySelector(`[data-type="${type}"]`); if (nb) nb.classList.remove("new");
     S.selectedTower = null;
     S.selectedType = S.selectedType === type ? null : type;
@@ -1717,7 +1810,7 @@
     const a = ASC[t.asc || 0];
     if (S.money < a.cost) { sfx("deny"); return; }
     S.money -= a.cost; t.spent += a.cost; S.stats.spent += a.cost;
-    t.asc = (t.asc || 0) + 1;
+    t.asc = (t.asc || 0) + 1; unlock("ascend");
     const p = slotPos(t.slot);
     burst(p.x, p.y, "#c18cff", 40, 170, 1, p.z); burst(p.x, p.y, "#ffffff", 16, 120, 0.7, p.z);
     ringFx(p.x, p.y, 48, "#c18cff", 0.6, false, p.z);
@@ -1733,7 +1826,7 @@
     const cost = ocCost(t);
     if (S.money < cost) { sfx("deny"); return; }
     S.money -= cost; t.spent += cost; S.stats.spent += cost;
-    t.oc = (t.oc || 0) + 1;
+    t.oc = (t.oc || 0) + 1; if (t.oc >= 5) unlock("overclock5");
     S.stats.overclocks = (S.stats.overclocks || 0) + 1;
     const p = slotPos(t.slot);
     burst(p.x, p.y, "#ffd166", 26, 130, 0.8, p.z);
@@ -1764,6 +1857,9 @@
     if (S.bodyHp && S.bodyHp[B.rings[B.slots[slotId].ring].body] <= 0 && B.rings[B.slots[slotId].ring].body) { toast("That planet has fallen"); sfx("deny"); return; }
     if (!slotFits(slotId, S.selectedType)) { toast(def.ground ? "Missile Silos go on the ground pads on planets and moons" : "Ground pads are for Missile Silos"); sfx("deny"); return; }
     if (S.money < cost) { toast("Not enough credits"); sfx("deny"); return; }
+    if (chRule("lasers") && S.selectedType !== "laser") { toast("🔦 Laser Focus: only Laser Sats in this challenge"); sfx("deny"); return; }
+    if (chRule("leo") && !EXP && !B.slots[slotId].surface && B.slots[slotId].ring !== 0 && B.rings[B.slots[slotId].ring].body === 0) { toast("🛰 Low Orbit: inner ring only in this challenge"); sfx("deny"); return; }
+    if (chRule("leo")) S.launchBand = 0;
     if (B.rings[B.slots[slotId].ring].launch) { // Own Orbits: launch onto a free LEO lane around that body
       const bi = B.rings[B.slots[slotId].ring].body, lane = freeLane(bi, S.launchBand || 0);
       if (lane == null) { toast(`${BAND[S.launchBand || 0]} around ${B.bodies[bi].name} is full: pick another zone or launch site`, 2800); sfx("deny"); return; }
@@ -1778,6 +1874,8 @@
     sfx("place");
     if (S.money < cost) S.selectedType = null;
     if (S.towers.length >= 20) unlock("armada");
+    if (new Set([...S.towers, ...S.retired].map(x => x.type)).size >= Object.keys(TOWERS).length) unlock("full_arsenal");
+    if (EXP && new Set(S.towers.filter(x => x.orbit != null).map(x => x.orbit)).size >= 3) unlock("zones");
     stats.once("first/build");
     if (!S.waveActive) saveRun();
     updateUI(true);
@@ -1791,7 +1889,7 @@
     const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over, M.isPremium()].join("|");
     if (key === lastUI && !force) return;
     lastUI = key;
-    ui.wave.textContent = S.endless ? `${S.wave} ∞` : S.won || S.freeplay ? `${S.wave}` : `${S.wave}/${OD.WIN_WAVE}`;
+    ui.wave.textContent = S.endless ? `${S.wave} ∞` : S.won || S.freeplay ? `${S.wave}` : `${S.wave}/${S.winWave || OD.WIN_WAVE}`;
     ui.livesLabel.textContent = MAP.lifeName || MAP.name;
     ui.lives.textContent = Math.max(0, S.lives);
     ui.lives.classList.toggle("danger", S.lives / S.diff.lives < 0.3);
@@ -1804,7 +1902,7 @@
     ui.waveBtn.classList.toggle("ready", !S.waveActive && !S.over && !S.auto && !tut && S.towers.length > 0 && S.wave < 5);
     ui.speedBtn.textContent = `${S.speed}×`;
     ui.autoBtn.classList.toggle("on", S.auto);
-    ui.odBtn.disabled = S.overdriveCd > 0 || S.over;
+    ui.odBtn.disabled = S.overdriveCd > 0 || S.over || chRule("nood");
     ui.odBtn.classList.toggle("on", S.overdrive > 0);
     const bonus = M.offer("credits");
     const adOk = bonus.available && !S.waveActive && !S.over && S.wave >= 1 && S.adWave !== S.wave;
@@ -1817,6 +1915,7 @@
       b.classList.toggle("poor", S.money < def.tiers[0].cost);
       const locked = !isUnlocked(b.dataset.type);
       b.classList.toggle("locked", locked);
+      b.classList.toggle("banned", chRule("lasers") && b.dataset.type !== "laser");
       b.title = locked ? `Unlocks after wave ${unlockWave(b.dataset.type)}` : "";
       if (locked) b.classList.remove("new");
     }
@@ -1870,8 +1969,10 @@
   function mapCard(key) {
     const m = MAPS[key];
     const t = mapTier(key), r = getRec(key, t.diff);
-    const medals = `<span class="tier-tag" style="--c:${t.color}" title="${r ? `Best wave ${r.wave}` : t.name}">${r && r.won ? "★ " : ""}${t.name}</span>`;
-    return `<button class="map-card${key === MAP_KEY ? " selected" : ""}${m.final ? " final" : ""}" data-map="${key}">
+    const open = mapUnlocked(key), ms = mapStars(key);
+    const medals = open ? `<span class="tier-tag" style="--c:${t.color}" title="${r ? `Best wave ${r.wave}` : t.name}">${t.name}</span><span class="map-stars" title="Stars on this planet">★ ${ms}/${STARS_PER_MAP}</span>`
+      : `<span class="lock-tag" title="Collect stars to unlock">🔒 ★ ${UNLOCK_STARS[key]}</span>`;
+    return `<button class="map-card${key === MAP_KEY ? " selected" : ""}${m.final ? " final" : ""}${open ? "" : " locked-map"}" data-map="${key}">
       <canvas width="140" height="100" data-map-preview="${key}"></canvas>
       <b>${m.name}</b><small>${m.moons.length ? `${m.moons.length} ${m.final ? "planets" : m.moons.length === 1 ? "moon" : "moons"}` : "No moons"}</small>
       <span class="medals">${medals}</span>${LB.bestMap(key) ? `<span class="eb" title="Best Endless wave">∞ ${LB.bestMap(key)}</span>` : ""}</button>`;
@@ -1919,11 +2020,14 @@
     showOverlay(`
       <div class="rw-eyebrow">SOLAR SYSTEM DEFENSE COMMAND</div><h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
-      ${run ? `<div class="resume"><button class="primary big" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave} saved${run.endless ? " · ∞ Endless" : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
+      ${run ? `<div class="resume"><button class="primary big" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave} saved${run.endless ? " · ∞ Endless" : run.challenge && CHALLENGES[run.challenge] ? ` · ${run.daily ? "📅" : "★"} ${CHALLENGES[run.challenge].name}` : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
       <div class="view-row">
         <button class="chip-btn${OD.is3D ? " selected" : ""}" data-view="3d"${OD.webgl ? "" : ' disabled title="3D needs WebGL, which this device does not support"'}>🌐 3D</button>
         <button class="chip-btn${OD.is3D ? "" : " selected"}" data-view="2d">▦ Classic 2D</button>
       </div>
+      ${(() => { const d = daily(), dd = getDaily(), done = dd.done === d.day, c = CHALLENGES[d.ch], streak = dd.done >= d.day - 1 ? dd.streak || 0 : 0;
+        return `<div class="daily-bar"><span>📅 <b>Daily Challenge</b> · ${c.icon} ${c.name} on <b>${MAPS[d.map].name}</b>${done ? ' · <span class="good">✓ done today</span>' : ""}${streak ? ` · 🔥 ${streak}-day streak` : ""}<small>${c.desc} ${CH_WAVES} waves. A new one every day.</small></span><button class="${done ? "" : "primary "}small" data-act="daily">${done ? "Play again" : "Play ▶"}</button></div>`; })()}
+      <div class="star-total">★ <b>${totalStars()}</b> / ${MAP_ORDER.length * STARS_PER_MAP} stars${(() => { const nxt = MAP_ORDER.find(k => !mapUnlocked(k)); return nxt ? ` · next planet: <b>${MAPS[nxt].name}</b> at ★ ${UNLOCK_STARS[nxt]}` : ""; })()}</div>
       <div class="maps">${MAP_ORDER.map(mapCard).join("")}</div>
       <div class="map-detail">
         ${OD.is3D && OD.planetThumb ? `<canvas class="map-globe" width="220" height="220" data-globe="${m.body.style}" aria-hidden="true"></canvas>` : ""}
@@ -1933,14 +2037,22 @@
       </div>
       <div class="mode-row">
         <button class="mode-btn${MODE === "campaign" ? " selected" : ""}" data-mode="campaign"><b>Campaign</b><small>Survive 30 waves</small></button>
+        <button class="mode-btn${MODE === "challenge" ? " selected" : ""}" data-mode="challenge"><b>★ Challenges</b><small>${Object.keys((getStars()[MAP_KEY] || {}).c || {}).length}/4 done here</small></button>
         <button class="mode-btn${MODE === "endless" ? " selected" : ""}" data-mode="endless"><b>∞ Endless</b><small>How far can you go?</small></button>
       </div>
+      ${MODE === "challenge" ? (() => {
+        const list = mapChallenges(MAP_KEY), done = (getStars()[MAP_KEY] || {}).c || {};
+        if (!list.includes(CH_SEL)) CH_SEL = list.find(c => !done[c]) || list[0];
+        return `<div class="ch-list">${list.map(c => `<button class="ch-btn${c === CH_SEL ? " selected" : ""}${done[c] ? " got" : ""}" data-ch="${c}"><b>${CHALLENGES[c].icon} ${CHALLENGES[c].name}${done[c] ? " ✓" : ""}</b><small>${CHALLENGES[c].desc}</small></button>`).join("")}</div>
+          <p class="muted small">Survive ${CH_WAVES} waves under the rule for <b>+1 ★</b>.</p>`;
+      })() : ""}
       ${MODE === "endless" ? (() => {
         const lbTop = LB.top(MAP_KEY, DIFF_KEY)[0], bestAll = LB.bestAll();
         return `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
           <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
-      })() : `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}${rec.won ? " ★ won" : ""}` : ""}</p>`}
-      <div class="btns"><button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : "Launch Mission ▶"}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
+      })() : MODE === "challenge" ? "" : `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}` : ""} · ${"★".repeat((getStars()[MAP_KEY] || {}).s || 0)}${"☆".repeat(3 - ((getStars()[MAP_KEY] || {}).s || 0))} (★ win · ★★ half HP left · ★★★ 90% HP left)</p>`}
+      <div class="btns">${mapUnlocked(MAP_KEY) ? `<button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : MODE === "challenge" ? "Start Challenge ▶" : "Launch Mission ▶"}</button>`
+        : `<button class="primary big" disabled>🔒 Collect ${UNLOCK_STARS[MAP_KEY] - totalStars()} more ★ to unlock ${m.name}</button>`}<button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
       ${soundButtons()}
       <details><summary>How to play</summary>
         <ul>
@@ -2011,6 +2123,8 @@
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
 
     if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
+    const chb = ev.target.closest("[data-ch]");
+    if (chb) { CH_SEL = chb.dataset.ch; store.set("od_ch", CH_SEL); sfx("click"); return mainMenu(); }
     const mc = ev.target.closest("[data-map]");
     if (mc) { MAP_KEY = mc.dataset.map; store.set("od_map", MAP_KEY); sfx("click"); return mainMenu(); }
 
@@ -2032,12 +2146,13 @@
             <p>Take a quick guided game on Earth to learn the basics. It takes about 2 minutes.</p>
             <div class="btns"><button class="primary big" data-act="tutorial">🎓 Play tutorial</button></div>
             <div class="btns"><button data-act="skiptut">Skip, I know how to play</button></div>`);
-        } else begin(MAP_KEY, DIFF_KEY, false, MODE === "endless");
+        } else if (mapUnlocked(MAP_KEY)) begin(MAP_KEY, DIFF_KEY, false, MODE === "endless", MODE === "challenge" ? CH_SEL : null);
         break;
+      case "daily": { const d = daily(); MAP_KEY = d.map; DIFF_KEY = diffOf(d.map); begin(d.map, DIFF_KEY, false, false, d.ch, true); break; }
       case "tutorial": startTutorial(); break;
-      case "skiptut": store.set(TUT_KEY, "1"); begin(MAP_KEY, DIFF_KEY, false, MODE === "endless"); break;
+      case "skiptut": store.set(TUT_KEY, "1"); if (mapUnlocked(MAP_KEY)) begin(MAP_KEY, DIFF_KEY, false, MODE === "endless", MODE === "challenge" ? CH_SEL : null); break;
       case "leaderboards": lbView = { map: MAP_KEY }; showLeaderboards(); break;
-      case "lb-play": MAP_KEY = lbView.map; DIFF_KEY = diffOf(MAP_KEY); MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
+      case "lb-play": if (!mapUnlocked(lbView.map)) { toast("🔒 Collect more ★ to unlock this planet"); break; } MAP_KEY = lbView.map; DIFF_KEY = diffOf(MAP_KEY); MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
       case "save-nick": {
         const input = document.getElementById("nickInput");
         const name = LB.setNickname(input ? input.value : "");
@@ -2066,7 +2181,7 @@
       case "resume": S.paused = false; hideOverlay(); P.gameplayStart(); updateUI(true); break;
       case "pause": pauseMenu(); break;
       case "stats": showStats("pause"); break;
-      case "retry": begin(S.mapKey, S.diffKey, false, !!S.endless); break;
+      case "retry": begin(S.mapKey, S.diffKey, false, !!S.endless, S.challenge, S.daily); break;
       case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, diffOf(n)); break; }
       case "menu": mainMenu(); break;
       case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
@@ -2081,7 +2196,8 @@
   });
 
   let pendingSeed = null; // the orbit layout of a resumed Own Orbits run
-  function begin(mapKey, diffKey, resuming, endless) {
+  // challenge: a CHALLENGES key (20 waves under that rule); isDaily: today's Daily Challenge
+  function begin(mapKey, diffKey, resuming, endless, challenge, isDaily) {
     audio.init();
     abandonTutorial();
     const seed = pendingSeed != null ? pendingSeed : (Math.random() * 2 ** 31) | 0; pendingSeed = null;
@@ -2094,6 +2210,11 @@
     const tier = mapTier(mapKey);
     if (diffKey === tier.diff) S.diff = Object.assign({}, S.diff, { name: tier.name, color: tier.color }); // saved games from before keep their old difficulty
     S.endless = !!endless;
+    if (challenge && CHALLENGES[challenge] && !endless) {
+      S.challenge = challenge; S.daily = !!isDaily; S.winWave = CH_WAVES;
+      if (challenge === "thrift") S.money = Math.round(S.money * 0.4);
+      if (challenge === "glass") S.lives = 5;
+    }
     P.gameplayStart();
     document.body.classList.remove("in-menu");
     lastUI = ""; lastPreview = -1;
@@ -2101,10 +2222,12 @@
     renderInfo();
     updateUI(true);
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
-    stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : ""}`);
+    stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : S.challenge ? `/${S.daily ? "daily" : "challenge"}-${S.challenge}` : ""}`);
     clearRun(); saveRun();
     if (EXP) tip("launch", "🛰 Pick a satellite, choose its orbit (LEO / MEO / HEO), then 🚀 LAUNCH. Every satellite gets its own orbit.", 3800, 5500);
-    toast(S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, 3500);
+    const ch = S.challenge && CHALLENGES[S.challenge];
+    toast(ch ? `${S.daily ? "📅 Daily Challenge" : "★ Challenge"}: ${ch.icon} ${ch.name}. ${ch.desc} Survive ${CH_WAVES} waves.`
+      : S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, ch ? 4500 : 3500);
     sfx("wave");
   }
 
@@ -2394,6 +2517,7 @@
   function toggleSpeed() { if (!S) return; S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 3 : 1; sfx("click"); updateUI(true); }
   function activateOverdrive() {
     if (!S || S.overdriveCd > 0 || S.over) return;
+    if (chRule("nood")) { toast("⚡ No Overdrive in this challenge"); sfx("deny"); return; }
     S.overdrive = OVERDRIVE.duration; S.overdriveCd = OVERDRIVE.cooldown; S.stats.overdrives++;
     if (EXP) for (const t of S.towers) if (t.fuel != null) t.fuel = Math.max(0, t.fuel - OD_FUEL);
     sfx("overdrive"); toast(EXP ? `⚡ OVERDRIVE: fire rate +30% · −${OD_FUEL} fuel on every satellite` : "⚡ OVERDRIVE: rings spinning, fire rate +30%");
@@ -2455,6 +2579,7 @@
     state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
+    getStars, totalStars, mapUnlocked, daily, CHALLENGES, mapChallenges, ACHIEVEMENTS: () => ACHIEVEMENTS,
     EXP, launchSlot, freeLanes, setOrbit, FUEL_MAX, launchNow, pickLaunchSite, refuel, refuelCost,
   };
 

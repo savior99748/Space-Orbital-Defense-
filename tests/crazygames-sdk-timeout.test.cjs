@@ -9,7 +9,7 @@ const HANG = `window.__cg=[];window.CrazyGames={SDK:{init:()=>new Promise(()=>{}
   for (const port of [8771, 8774]) {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
     await ctx.route('**/*', r => { const u = r.request().url(); if (u.includes('sdk.crazygames.com')) return r.fulfill({ contentType: 'text/javascript', body: HANG }); if (!u.startsWith('http://127.0.0.1')) return r.abort(); r.continue(); });
-    await ctx.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} });
+    await ctx.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} });
     const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
     const t0 = Date.now(); await pg.goto(`http://127.0.0.1:${port}/index.html`);
     const shown = await pg.waitForSelector('[data-act="start"]', { timeout: 20000 }).then(() => true, () => false);

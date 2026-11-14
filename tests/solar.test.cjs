@@ -7,7 +7,7 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   for (const view of ['3d', '2d']) {
     const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
     const errs = []; pg.on('pageerror', e => errs.push(e.message));
-    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); } catch {} });
+    await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); } catch {} });
     await pg.goto(`http://127.0.0.1:8769/index.html?view=${view}`);
     await pg.waitForFunction(() => window.__od && (window.OD.view === '2d' || window.__view3d), null, { timeout: 30000 });
     const r = await pg.evaluate(async () => {
