@@ -79,23 +79,61 @@ window.OD = window.OD || {};
   }
 
   // satellite hull: shaded metal disc, coloured rim, inner panel ring and a specular highlight (lit from top-left)
-  // Pre-rendered once per size and colour (4× resolution) and stamped with drawImage: one cheap draw per satellite.
+  // Satellite hulls: each type has its own silhouette (lit metal, coloured trim, an outline that reads over bright
+  // planets). Pre-rendered once per shape, size and colour at 4× resolution and stamped with drawImage. The hull is
+  // aligned with the orbit (local +x points away from the planet), like the solar panels.
+  //   round · diamond (Laser) · box (Missile Pod) · oct (Flak) · capsule (Railgun) · torus (Tractor) · hex (Silo)
   const hullCache = new Map();
-  function body(ctx, r, color) {
-    const key = color + "|" + Math.round(r * 4);
+  let hullRot = 0; // the satellite's orbit angle (set by drawTower)
+  function hullPath(g, shape, r) {
+    g.beginPath();
+    if (shape === "diamond") { g.moveTo(r * 1.2, 0); g.lineTo(r * 0.1, -r * 0.92); g.lineTo(-r * 1.0, 0); g.lineTo(r * 0.1, r * 0.92); g.closePath(); }
+    else if (shape === "box") { const w = r * 0.92, k = r * 0.3; g.moveTo(-w + k, -w); g.lineTo(w - k, -w); g.lineTo(w, -w + k); g.lineTo(w, w - k); g.lineTo(w - k, w); g.lineTo(-w + k, w); g.lineTo(-w, w - k); g.lineTo(-w, -w + k); g.closePath(); }
+    else if (shape === "oct") { for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * TAU; i ? g.lineTo(Math.cos(a) * r, Math.sin(a) * r) : g.moveTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); }
+    else if (shape === "hex") { for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; i ? g.lineTo(Math.cos(a) * r, Math.sin(a) * r) : g.moveTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); }
+    else if (shape === "capsule") { const hw = r * 0.62, hl = r * 1.3; g.moveTo(-hw, -hl + hw); g.arc(0, -hl + hw, hw, Math.PI, 0); g.lineTo(hw, hl - hw); g.arc(0, hl - hw, hw, 0, Math.PI); g.closePath(); }
+    else g.arc(0, 0, r, 0, TAU);
+  }
+  function hullDetail(g, shape, r, color) {
+    const trim = isHex(color) ? rgba(color, 0.55) : "rgba(255,255,255,0.3)";
+    g.lineWidth = 1;
+    if (shape === "diamond") { // focusing lens at the nose, keel line
+      g.strokeStyle = trim; g.beginPath(); g.moveTo(-r * 0.8, 0); g.lineTo(r * 0.45, 0); g.stroke();
+      circle(g, r * 0.62, 0, r * 0.3, "#0b1a2c", color, 1.4); circle(g, r * 0.66, -r * 0.06, r * 0.12, "rgba(255,255,255,0.75)");
+    } else if (shape === "box") { // 2×2 launch hatches
+      for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.fillStyle = "rgba(4,8,20,0.75)"; g.fillRect(x * r * 0.42 - r * 0.28, y * r * 0.42 - r * 0.28, r * 0.56, r * 0.56); g.strokeStyle = trim; g.strokeRect(x * r * 0.42 - r * 0.28, y * r * 0.42 - r * 0.28, r * 0.56, r * 0.56); }
+    } else if (shape === "oct") { // segmented armour plates
+      g.strokeStyle = "rgba(0,0,10,0.5)"; for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; g.beginPath(); g.moveTo(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55); g.lineTo(Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95); g.stroke(); }
+      circle(g, 0, 0, r * 0.55, null, trim, 1.2);
+    } else if (shape === "hex") { // blast doors + bolts
+      g.strokeStyle = "rgba(0,0,10,0.6)"; g.lineWidth = 1.4; g.beginPath(); g.moveTo(-r * 0.85, 0); g.lineTo(r * 0.85, 0); g.stroke();
+      for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + TAU / 12; circle(g, Math.cos(a) * r * 0.72, Math.sin(a) * r * 0.72, r * 0.07, trim); }
+    } else if (shape === "capsule") { // capacitor coils along the bank
+      for (const y of [-0.75, -0.25, 0.25, 0.75]) { g.fillStyle = trim; g.fillRect(-r * 0.62, y * r - r * 0.07, r * 1.24, r * 0.14); }
+    } else if (shape === "torus") { // hollow emitter ring
+      circle(g, 0, 0, r * 0.5, "#03040c", color, 1.2);
+      for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + TAU / 8; circle(g, Math.cos(a) * r * 0.76, Math.sin(a) * r * 0.76, r * 0.1, trim); }
+    } else circle(g, 0, 0, r * 0.62, null, isHex(color) ? rgba(color, 0.35) : "rgba(255,255,255,0.2)", 1);
+  }
+  function body(ctx, r, color, shape = "round") {
+    const key = shape + color + "|" + Math.round(r * 4);
     let c = hullCache.get(key);
     if (!c) {
-      const k = 4, R = r + 2, N = Math.ceil(R * 2 * k);
+      const k = 4, R = r * (shape === "capsule" ? 1.4 : shape === "diamond" ? 1.25 : 1) + 2.5, N = Math.ceil(R * 2 * k);
       c = document.createElement("canvas"); c.width = N; c.height = N;
       const g = c.getContext("2d"); g.setTransform(k, 0, 0, k, N / 2, N / 2);
-      const q = g.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.1, 0, 0, r); q.addColorStop(0, "#56607e"); q.addColorStop(0.55, "#262d48"); q.addColorStop(1, "#0d1124");
-      circle(g, 0, 0, r + 1.6, "rgba(4,6,16,0.75)"); // dark outline: reads over bright planets
-      circle(g, 0, 0, r, q, color, 2);
-      circle(g, 0, 0, r * 0.62, null, isHex(color) ? rgba(color, 0.35) : "rgba(255,255,255,0.2)", 1);
-      g.strokeStyle = "rgba(255,255,255,0.45)"; g.lineWidth = 1.1; g.beginPath(); g.arc(0, 0, r - 1.6, -2.6, -1.35); g.stroke();
-      hullCache.set(key, c);
+      g.lineJoin = "round";
+      hullPath(g, shape, r); g.strokeStyle = "rgba(4,6,16,0.8)"; g.lineWidth = 3.4; g.stroke(); // outline
+      const q = g.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.1, 0, 0, r * 1.2); q.addColorStop(0, "#5c6788"); q.addColorStop(0.55, "#262d48"); q.addColorStop(1, "#0d1124");
+      hullPath(g, shape, r); g.fillStyle = q; g.fill();
+      g.save(); hullPath(g, shape, r); g.clip(); hullDetail(g, shape, r, color); g.restore();
+      hullPath(g, shape, r); g.strokeStyle = color; g.lineWidth = 2; g.stroke(); // coloured trim
+      g.save(); hullPath(g, shape, r - 1.4); g.clip(); g.strokeStyle = "rgba(255,255,255,0.4)"; g.lineWidth = 1.2; g.beginPath(); g.arc(0, 0, r * 1.05, -2.7, -1.3); g.stroke(); g.restore(); // highlight
+      c.R = R; hullCache.set(key, c);
     }
-    const R = c.width / 8; ctx.drawImage(c, -R, -R, R * 2, R * 2);
+    const R = c.R;
+    if (hullRot && shape !== "round" && shape !== "torus") { ctx.save(); ctx.rotate(hullRot); ctx.drawImage(c, -R, -R, R * 2, R * 2); ctx.restore(); }
+    else ctx.drawImage(c, -R, -R, R * 2, R * 2);
   }
 
   // ---------- satellites ----------
@@ -103,7 +141,7 @@ window.OD = window.OD || {};
     // FLAK ARRAY: a squat drum with a fan of short barrels
     flak(ctx, lvl, path, c, pc, time, t) {
       const col = lvl >= 3 ? pc : c;
-      body(ctx, 8 + lvl * 0.6, col);
+      body(ctx, 8.5 + lvl * 0.6, col, "oct");
       ctx.rotate(t.aim);
       const n = 3 + Math.min(lvl, 2) + (path === "A" ? 2 : 0);
       for (let i = 0; i < n; i++) { const a = (i - (n - 1) / 2) * 0.22; ctx.save(); ctx.rotate(a); metal(ctx, 4, -1.3, path === "B" ? 17 : 13, 2.6, col); ctx.restore(); }
@@ -132,12 +170,12 @@ window.OD = window.OD || {};
     // MISSILE SILO: a round hatch with the warhead peeking out
     silo(ctx, lvl, path, c, pc, time, t) {
       const col = lvl >= 3 ? pc : c;
-      body(ctx, 8 + lvl * 0.5, col); // armoured hatch
+      body(ctx, 8.5 + lvl * 0.5, col, "hex"); // armoured hatch
       const n = path === "A" ? (lvl >= 4 ? 6 : 4) : lvl >= 1 && path !== "B" ? 2 : 1;
       for (let i = 0; i < n; i++) { const a = i * TAU / n, r = n > 1 ? 4 : 0; circle(ctx, Math.cos(a) * r, Math.sin(a) * r, path === "B" ? 4.5 : 2.4, path === "B" ? "#ff5c5c" : "#e8eef6"); }
     },
     laser(ctx, lvl, path, c, pc, time, t) {
-      body(ctx, 9 + lvl * 0.8, lvl >= 3 ? pc : c);
+      body(ctx, 9 + lvl * 0.8, lvl >= 3 ? pc : c, "diamond");
       ctx.rotate(t.aim);
       if (lvl === 0) { metal(ctx, 0, -2, 14, 4, c); return; }
       if (path === "B") { // Solar Lance: one long superheated barrel
@@ -189,7 +227,7 @@ window.OD = window.OD || {};
         return;
       }
       if (path === "B") { // nova warhead launcher
-        body(ctx, 10, pc);
+        body(ctx, 10, pc, "box");
         ctx.rotate(t.aim);
         const big = lvl >= 4;
         rect(ctx, -6, big ? -8 : -6, big ? 26 : 22, big ? 16 : 12, "#3a1d1d");
@@ -203,7 +241,7 @@ window.OD = window.OD || {};
         return;
       }
       if (lvl >= 2) { rect(ctx, -10, -10, 20, 20, "#121633"); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.strokeRect(-10, -10, 20, 20); }
-      else body(ctx, 9 + lvl, c);
+      else body(ctx, 9 + lvl, c, "box");
       ctx.rotate(t.aim);
       const tubes = lvl === 0 ? [0] : lvl === 1 ? [-4, 4] : [-6.5, -2, 2.5, 7];
       for (const y of tubes) {
@@ -242,7 +280,7 @@ window.OD = window.OD || {};
         circle(ctx, 0, 0, 4, "#ffffff");
         return;
       }
-      body(ctx, 9 + lvl, c);
+      body(ctx, 9.5 + lvl, c, "torus");
       const pulse = 0.5 + 0.5 * Math.sin(time * 4);
       for (let i = 0; i < lvl; i++) circle(ctx, 0, 0, 4 + i * 2.5, null, rgba(c, 0.5 + 0.2 * i), 1);
       circle(ctx, 0, 0, 3 + pulse * 1.5, c);
@@ -254,7 +292,7 @@ window.OD = window.OD || {};
     },
 
     rail(ctx, lvl, path, c, pc, time, t) {
-      body(ctx, 9 + lvl * 0.8, lvl >= 3 ? pc : c);
+      body(ctx, 8 + lvl * 0.7, lvl >= 3 ? pc : c, "capsule");
       ctx.rotate(t.aim);
       const kick = Math.max(0, (t.recoil || 0)) * 6;
       ctx.translate(-kick, 0);
@@ -383,6 +421,7 @@ window.OD = window.OD || {};
     const c = def.color, pc = path ? def.paths[path].color : c;
     ctx.save();
     ctx.translate(x, y);
+    hullRot = ringAngle; // hulls line up with the orbit
     if (lvl >= 4) glow(ctx, 0, 0, 34, pc, 0.22 + 0.08 * Math.sin(time * 2)); // fully upgraded: a halo in the path colour
     ctx.save(); ctx.rotate(ringAngle);
     if (t.type !== "carrier" && t.type !== "silo" && t.type !== "mines") panels(ctx, lvl, pc);
