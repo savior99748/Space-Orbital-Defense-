@@ -27,6 +27,13 @@ window.OD = window.OD || {};
   let orbits = params.get("orbits");
   if (!orbits) try { orbits = localStorage.getItem("od_orbits"); } catch { /* storage blocked */ }
   OD.EXP = orbits !== "classic" ? "orbits" : null;
+  // Classic 2D: planets drawn 1.5× bigger (they looked small on large screens); Saturn's belt grows with it.
+  // The Solar System map already has big planets. Orbits keep their sizes (Own Orbits pushes lanes clear of the surface).
+  if (!OD.is3D) for (const m of Object.values(OD.MAPS)) {
+    if (m.final || m.body.r2d) continue;
+    m.body = Object.assign({}, m.body, { r: Math.round(m.body.r * 1.5), r2d: true });
+    if (m.body.belt) m.body.belt = { ...m.body.belt, inner: Math.round(m.body.belt.inner * 1.5), outer: Math.round(m.body.belt.outer * 1.5) };
+  }
   if (OD.is3D) {
     window.OD_NO2D = true;            // the 3D view does the drawing
     OD.apply3DMaps();                 // bigger planets, tilted orbits

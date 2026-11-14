@@ -94,11 +94,30 @@
       const lo = own[0].r * (flat && own.length > 1 ? 0.85 : 1), hi = own[own.length - 1].r * (flat && own.length > 1 ? 1.25 : 1);
       const centers = own.length > 1 ? [lo, (lo + hi) / 2, hi] : [lo * 0.8, lo * 1.15, lo * 1.5];
       const n = Math.max(1, Math.floor((centers[1] - centers[0]) * 0.8 / LANE) + 1);
+      { // keep the lowest lane clear of the surface (a satellite is ~20 units wide)
+        const lowest = centers[0] - (n - 1) / 2 * LANE, need = b.r + (flat ? 26 : 18) * Math.max(0.33, MAP.satScale || 1);
+        if (lowest < need) for (let i = 0; i < 3; i++) centers[i] += need - lowest;
+      }
       const w0 = Math.abs(own[0].speed) || 0.1, dir = Math.sign(own[0].speed) || 1;
+      const kepler = r => dir * w0 * (centers[0] / r) ** 1.5; // mean angular speed: higher orbits turn slower
+      if (bi && !MAP.final) { // a moon: one zone of lanes, no LEO / MEO / HEO choice
+        const m = 2 * n;
+        for (let k = 0; k < m; k++) { const r = centers[0] - (n - 1) / 2 * LANE + k * LANE; rings.push({ body: bi, r, slots: 1, speed: kepler(r), angle: rnd() * TAU, incl: flat ? 0 : rnd() * 0.9, node: rnd() * TAU, lane: true, band: 0 }); }
+        rings.push({ body: bi, r: 0, slots: 1, speed: 0, angle: 0, incl: 0, node: 0, launch: true, oneZone: true });
+        return;
+      }
+      const peri = rnd() * TAU; // 2D: every HEO around a body points the same way, so the ellipses nest and never cross
       centers.forEach((c, band) => {
         for (let k = 0; k < n; k++) {
-          const r = c + (k - (n - 1) / 2) * LANE;
-          rings.push({ body: bi, r, slots: 1, speed: dir * w0 * (centers[0] / r) ** 1.5, angle: rnd() * TAU, incl: flat ? 0 : rnd() * 0.9, node: rnd() * TAU, lane: true, band });
+          const off = k - (n - 1) / 2;
+          if (band === 2) { // HEO = Highly Elliptical Orbit: dives close and fast past LEO, swings far out and slow
+            const rp = Math.max(centers[0] + off * LANE * 0.6, centers[0] - (n - 1) / 2 * LANE), ra = c * 1.4 + off * LANE;
+            const a = (rp + ra) / 2, e = (ra - rp) / (ra + rp);
+            rings.push({ body: bi, r: a, ecc: e, peri: flat ? peri : rnd() * TAU, slots: 1, speed: kepler(a), angle: rnd() * TAU, incl: flat ? 0 : rnd() * 0.9, node: rnd() * TAU, lane: true, band });
+            continue;
+          }
+          const r = c + off * LANE;
+          rings.push({ body: bi, r, slots: 1, speed: kepler(r), angle: rnd() * TAU, incl: flat ? 0 : rnd() * 0.9, node: rnd() * TAU, lane: true, band });
         }
       });
       rings.push({ body: bi, r: 0, slots: 1, speed: 0, angle: 0, incl: 0, node: 0, launch: true });
@@ -106,6 +125,10 @@
   }
   const freeLanes = (bi, band) => B.slots.filter(s => { const r = B.rings[s.ring]; return r.lane && r.body === bi && r.band === band && !towerAt(s.id); });
   const freeLane = (bi, band) => { const f = freeLanes(bi, band); return f.length ? f[Math.floor(Math.random() * f.length)].id : null; };
+  const oneZone = bi => !!bi && !MAP.final; // moons have a single orbit zone
+  const bandFor = bi => (oneZone(bi) ? 0 : S.launchBand || 0);
+  const zoneName = t => (oneZone(B.rings[B.slots[t.slot].ring].body) ? "orbit" : BAND[t.orbit || 0]);
+  const BAND_TIP = ["Low orbit: close to the planet", "Medium orbit", "Highly Elliptical Orbit: swings far out and slow, then dives fast and close past the planet"];
   const launchSlot = bi => { const s = B.slots.find(x => B.rings[x.ring].launch && B.rings[x.ring].body === bi); return s ? s.id : null; };
 
   function positionBodies() {
@@ -119,18 +142,25 @@
   function advanceBoard(dt, ringMul = 1) {
     B.time += dt;
     for (const b of B.bodies) if (!b.root) b.angle += b.speed * dt;
-    for (const r of B.rings) r.angle = (r.angle + r.speed * dt * ringMul) % TAU;
+    for (const r of B.rings) {
+      // elliptical orbits (HEO): equal areas in equal times, so fast near the planet and slow far out
+      const w = r.ecc ? (1 + r.ecc * Math.cos(r.angle - r.peri)) ** 2 / (1 - r.ecc * r.ecc) ** 1.5 : 1;
+      r.angle = (r.angle + r.speed * w * dt * ringMul) % TAU;
+    }
     positionBodies();
   }
 
   // Position of a slot on its ring. Rings can be tilted (incl) around a line through their body at
   // angle `node`, which lifts slots above/below the orbital plane (z). Flat rings give z = 0.
+  // distance from the body at angle a: a circle, or an ellipse with the body at one focus (r = semi-major axis)
+  const ringR = (ring, a) => (ring.ecc ? ring.r * (1 - ring.ecc ** 2) / (1 + ring.ecc * Math.cos(a - ring.peri)) : ring.r);
   function ringPoint(ring, a) {
     const b = B.bodies[ring.body];
     if (ring.launch) return { x: b.x, y: b.y, z: b.r * 1.25 + 10 * (MAP.satScale || 1) }; // launch marker above the body
     if (ring.surface) { const rr = ring.r * Math.cos(ring.lat); return { x: b.x + Math.cos(a) * rr, y: b.y + Math.sin(a) * rr, z: ring.r * Math.sin(ring.lat) }; } // on the near hemisphere
-    if (!ring.incl) return { x: b.x + Math.cos(a) * ring.r, y: b.y + Math.sin(a) * ring.r, z: 0 };
-    const u = a - ring.node, lx = Math.cos(u) * ring.r, ly = Math.sin(u) * ring.r;
+    const R = ring.ecc ? ringR(ring, a) : ring.r;
+    if (!ring.incl) return { x: b.x + Math.cos(a) * R, y: b.y + Math.sin(a) * R, z: 0 };
+    const u = a - ring.node, lx = Math.cos(u) * R, ly = Math.sin(u) * R;
     const ci = Math.cos(ring.incl), cn = Math.cos(ring.node), sn = Math.sin(ring.node);
     return { x: b.x + lx * cn - ly * ci * sn, y: b.y + lx * sn + ly * ci * cn, z: ly * Math.sin(ring.incl) };
   }
@@ -601,7 +631,7 @@
     if (!S.waveActive) saveRun();
     renderInfo(); updateUI(true);
   }
-  const nextOrbit = t => { const bi = B.rings[B.slots[t.slot].ring].body; for (let k = 1; k <= 2; k++) { const b = ((t.orbit || 0) + k) % 3; if (freeLanes(bi, b).length) return b; } return null; };
+  const nextOrbit = t => { const bi = B.rings[B.slots[t.slot].ring].body; if (oneZone(bi)) return null; for (let k = 1; k <= 2; k++) { const b = ((t.orbit || 0) + k) % 3; if (freeLanes(bi, b).length) return b; } return null; };
 
   // Launch panel: shown while a satellite is picked. Zone + launch site + LAUNCH.
   const launchSites = () => B.bodies.map((b, i) => i).filter(i => launchSlot(i) != null && !(S.bodyHp && i && S.bodyHp[i] <= 0));
@@ -624,14 +654,14 @@
     const sites = launchSites();
     if (!sites.includes(S.launchFrom)) S.launchFrom = sites[0];
     if (chRule("leo")) S.launchBand = 0;
-    const band = S.launchBand || 0, from = S.launchFrom, free = from == null ? 0 : freeLanes(from, band).length, cost = def.tiers[0].cost;
+    const from = S.launchFrom, band = bandFor(from), free = from == null ? 0 : freeLanes(from, band).length, cost = def.tiers[0].cost;
     const narrow = stage.clientWidth < 620;
-    const key = [type, band, from, free, S.money >= cost, sites.join(), narrow].join("|");
+    const key = [type, band, S.launchBand, from, free, S.money >= cost, sites.join(), narrow].join("|");
     if (key === padKey) return; padKey = key;
     padEl.style.bottom = narrow ? "6px" : "52px"; padEl.style.width = narrow ? "calc(100% - 12px)" : ""; padEl.style.gap = narrow ? "6px" : "8px"; padEl.style.padding = narrow ? "6px" : "8px 10px";
-    const zb = i => `<button data-band="${i}" ${chRule("leo") && i ? "disabled" : ""} style="${narrow ? "flex:1;" : ""}padding:6px 11px;border-radius:9px;border:1px solid #7fd8ff;font:inherit;cursor:pointer;${band === i ? "background:#7fd8ff;color:#07182a" : "background:transparent;color:#bfefff"}">${BAND[i]}</button>`;
-    padEl.innerHTML = `${narrow ? "" : "<span>🛰 Orbit</span>"}${[0, 1, 2].map(zb).join("")}
-      ${narrow ? "" : `<span style="margin-left:4px">from</span>`}<select style="${narrow ? "flex:1.6;min-width:0;" : ""}font:inherit;padding:5px;border-radius:8px;background:#0c2238;color:#dfefff;border:1px solid #386782">${sites.map(i => `<option value="${i}" ${i === from ? "selected" : ""}>${B.bodies[i].name} ${narrow ? `· ${freeLanes(i, band).length}` : `(${freeLanes(i, band).length} free)`}</option>`).join("")}</select>
+    const zb = i => `<button data-band="${i}" ${chRule("leo") && i ? "disabled" : ""} style="${narrow ? "flex:1;" : ""}padding:6px 11px;border-radius:9px;border:1px solid #7fd8ff;font:inherit;cursor:pointer;${band === i ? "background:#7fd8ff;color:#07182a" : "background:transparent;color:#bfefff"}" title="${BAND_TIP[i]}">${BAND[i]}</button>`;
+    padEl.innerHTML = `${narrow ? "" : "<span>🛰 Orbit</span>"}${oneZone(from) ? `<span style="${narrow ? "flex:1;" : ""}padding:6px 4px;color:#bfefff">Moon orbit</span>` : [0, 1, 2].map(zb).join("")}
+      ${narrow ? "" : `<span style="margin-left:4px">from</span>`}<select style="${narrow ? "flex:1.6;min-width:0;" : ""}font:inherit;padding:5px;border-radius:8px;background:#0c2238;color:#dfefff;border:1px solid #386782">${sites.map(i => `<option value="${i}" ${i === from ? "selected" : ""}>${B.bodies[i].name} ${narrow ? `· ${freeLanes(i, bandFor(i)).length}` : `(${freeLanes(i, bandFor(i)).length} free)`}</option>`).join("")}</select>
       <button data-launch="1" ${free && S.money >= cost ? "" : "disabled"} style="${narrow ? "width:100%;" : ""}padding:8px 16px;border-radius:10px;border:0;font:800 14px system-ui,sans-serif;letter-spacing:.04em;cursor:pointer;background:${free && S.money >= cost ? "#ffb347" : "#555"};color:#1a0d00">🚀 LAUNCH · ${cost} cr</button>`;
     padEl.style.display = "flex";
   }
@@ -1068,14 +1098,14 @@
   function saveRun() {
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
-      v: 1, map: S.mapKey, diff: S.diffKey, seed: S.seed, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
+      v: EXP ? 2 : 1, map: S.mapKey, diff: S.diffKey, seed: S.seed, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
       stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless, challenge: S.challenge || null, daily: !!S.daily,
       towers: S.towers.map(packTower), retired: S.retired.map(packTower),
       board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
     }));
   }
   function loadRun() {
-    try { const r = JSON.parse(store.get(RUN_KEY) || "null"); if (r && r.v === 1 && MAPS[r.map] && DIFFICULTY[r.diff]) return r; } catch { /* corrupt save */ }
+    try { const r = JSON.parse(store.get(RUN_KEY) || "null"); if (r && r.v === (EXP ? 2 : 1) && MAPS[r.map] && DIFFICULTY[r.diff]) return r; } catch { /* corrupt save */ }
     return null;
   }
   const clearRun = () => store.remove(RUN_KEY);
@@ -1448,7 +1478,10 @@
       ctx.lineWidth = odActive ? 2.5 : 1.5;
       ctx.setLineDash([4, 8]);
       ctx.lineDashOffset = -ring.angle * ring.r;
-      ctx.beginPath(); ctx.arc(b.x, b.y, ring.r, 0, TAU); ctx.stroke();
+      ctx.beginPath();
+      if (ring.ecc) ctx.ellipse(b.x - Math.cos(ring.peri) * ring.r * ring.ecc, b.y - Math.sin(ring.peri) * ring.r * ring.ecc, ring.r, ring.r * Math.sqrt(1 - ring.ecc ** 2), ring.peri, 0, TAU);
+      else ctx.arc(b.x, b.y, ring.r, 0, TAU);
+      ctx.stroke();
       ctx.setLineDash([]);
     });
     const drawSlot = s => {
@@ -1753,7 +1786,7 @@
       <div class="info-head">
         <canvas width="64" height="64" data-preview="${t.type}|${t.level}|${t.path || ""}"></canvas>
         <div><h3 style="color:${color}">${st.name}</h3>
-        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.asc ? ` ✦${t.asc}` : ""}${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} ${sat ? BAND[t.orbit || 0] : "orbit"}</div></div>
+        <div class="sub">${def.name} · Tier ${t.level + 1}/5${t.asc ? ` ✦${t.asc}` : ""}${t.oc ? ` ⚡${t.oc}` : ""}${pathDef ? ` · ${pathDef.name}` : ""} · ${body.name} ${sat ? zoneName(t) : "orbit"}</div></div>
         <button class="close" data-act="close" aria-label="Close">✕</button>
       </div>
       ${sat ? `<div class="fuel" style="display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:13px">⛽ Fuel
@@ -1761,7 +1794,7 @@
         <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
-      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
+      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat && !oneZone(B.rings[B.slots[t.slot].ring].body) ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone. ${BAND_TIP[t.orbit || 0]}">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
       if (paint3D(c)) return;
@@ -1870,14 +1903,14 @@
     if (chRule("leo") && !EXP && !B.slots[slotId].surface && B.slots[slotId].ring !== 0 && B.rings[B.slots[slotId].ring].body === 0) { toast("🛰 Low Orbit: inner ring only in this challenge"); sfx("deny"); return; }
     if (chRule("leo")) S.launchBand = 0;
     if (B.rings[B.slots[slotId].ring].launch) { // Own Orbits: launch onto a free LEO lane around that body
-      const bi = B.rings[B.slots[slotId].ring].body, lane = freeLane(bi, S.launchBand || 0);
-      if (lane == null) { toast(`${BAND[S.launchBand || 0]} around ${B.bodies[bi].name} is full: pick another zone or launch site`, 2800); sfx("deny"); return; }
+      const bi = B.rings[B.slots[slotId].ring].body, lane = freeLane(bi, bandFor(bi));
+      if (lane == null) { toast(`${oneZone(bi) ? "Every orbit" : BAND[bandFor(bi)]} around ${B.bodies[bi].name} is full: pick another zone or launch site`, 2800); sfx("deny"); return; }
       slotId = lane;
     }
     S.money -= cost; S.stats.spent += cost;
     const p = slotPos(slotId);
     S.towers.push(Object.assign({ id: nextId++, type: S.selectedType, slot: slotId, level: 0, path: null, spent: cost,
-      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a }, EXP && !def.ground ? { fuel: FUEL_MAX - (S.launchBand || 0), orbit: S.launchBand || 0 } : {}));
+      cd: 0, aim: p.a, kills: 0, dmg: 0, targeting: "first", x: p.x, y: p.y, z: p.z, ringA: p.a }, EXP && !def.ground ? { fuel: FUEL_MAX - bandFor(B.rings[B.slots[slotId].ring].body), orbit: bandFor(B.rings[B.slots[slotId].ring].body) } : {}));
     if (EXP && !def.ground) tip("fuel", `⛽ Each satellite has fuel for ${FUEL_MAX} waves, then burns up. Refuel it (tap it) before it runs dry; changing orbit costs 1 fuel per zone.`, 900, 6000);
     burst(p.x, p.y, def.color, 12, 90, 0.7, p.z);
     sfx("place");
@@ -2241,7 +2274,7 @@
     if (resuming) { stats.track(`game-resume/${mapKey}`); return; }
     stats.track(`game-start/${mapKey}/${diffKey}${S.endless ? "/endless" : S.challenge ? `/${S.daily ? "daily" : "challenge"}-${S.challenge}` : ""}`);
     clearRun(); saveRun();
-    if (EXP) tip("launch", "🛰 Pick a satellite, choose its orbit (LEO / MEO / HEO), then 🚀 LAUNCH. Every satellite gets its own orbit.", 3800, 5500);
+    if (EXP) tip("launch", "🛰 Pick a satellite, choose its orbit (LEO / MEO / HEO, the long elliptical one), then 🚀 LAUNCH. Every satellite gets its own orbit.", 3800, 5500);
     const ch = S.challenge && CHALLENGES[S.challenge];
     toast(ch ? `${S.daily ? "📅 Daily Challenge" : "★ Challenge"}: ${ch.icon} ${ch.name}. ${ch.desc} Survive ${CH_WAVES} waves.`
       : S.endless ? `∞ Endless on ${MAP.name}: how far can you go? First milestone at wave 40.` : `${MAP.name}: ${MAP.feature}`, ch ? 4500 : 3500);
@@ -2613,7 +2646,7 @@
     const t = S && S.hover != null ? towerAt(S.hover) : null;
     if (!t || ev.pointerType !== "mouse") return hideTip();
     const def = TOWERS[t.type], st = t.st || baseStats(t), col = t.path ? def.paths[t.path].color : def.color;
-    showTip(`<b style="color:${col}">${baseStats(t).name}</b> <small>${def.name} · Tier ${t.level + 1}${t.orbit != null ? ` · ${BAND[t.orbit]}` : ""}</small>
+    showTip(`<b style="color:${col}">${baseStats(t).name}</b> <small>${def.name} · Tier ${t.level + 1}${t.orbit != null ? ` · ${zoneName(t)}` : ""}</small>
       ${t.fuel != null ? `<p>⛽ Fuel <b class="${t.fuel / FUEL_MAX <= FUEL_CRIT ? "bad" : t.fuel / FUEL_MAX <= FUEL_LOW ? "gold" : ""}">${t.fuel} / ${FUEL_MAX}</b> waves</p>` : ""}
       <p class="tt-stats">${statLine(st)}</p><p>${fmt(t.dmg || 0)} damage · ${t.kills || 0} kills · click to manage</p>`, ev.clientX, ev.clientY);
   }
