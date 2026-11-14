@@ -62,8 +62,9 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     out.rings = new Set(S.towers.map(t => B.slots[t.slot].ring)).size;
     out.zones = S.towers.map(t => `${B.rings[B.slots[t.slot].ring].band}:${t.orbit}:${t.fuel}`).join(',');
     // tapping the Moon picks it as the launch site
-    od.pickLaunchSite(1); pad.querySelector('[data-band="0"]').click(); pad.querySelector('[data-launch]').click();
-    out.moon = B.rings[B.slots[S.towers[3].slot].ring].body === 1;
+    od.pickLaunchSite(1); out.moonNoZones = !pad.querySelector('[data-band]') && /Moon orbit/.test(pad.textContent); pad.querySelector('[data-launch]').click();
+    out.moon = B.rings[B.slots[S.towers[3].slot].ring].body === 1 && S.towers[3].orbit === 0 && od.nextOrbit(S.towers[3]) == null;
+    out.heo = B.rings.filter(x => x.lane && x.band === 2).every(x => x.ecc > 0.3) && B.rings.filter(x => x.lane && x.body === 1).every(x => x.band === 0);
     S.selectedType = null; od.tapSlot(null);
     // moving a satellite to another zone costs 1 fuel per zone; upgrades aren't tied to orbits
     const t = S.towers[0]; od.setOrbit(t, 2); out.moved = t.orbit === 2 && B.rings[B.slots[t.slot].ring].band === 2 && t.fuel === 18;
@@ -106,7 +107,8 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   ok(r.oldSlotsHidden && r.noMarker, 'the old shared ring slots and the tap markers are off');
   ok(r.padShown, 'picking a satellite opens the launch panel with a LAUNCH button');
   ok(r.rings === 3 && r.zones === '0:0:20,0:0:20,2:2:18', `each LAUNCH → its own orbit in the chosen zone; higher starts with less fuel (${r.zones})`);
-  ok(r.moon, 'tapping the Moon makes it the launch site');
+  ok(r.moon && r.moonNoZones, 'tapping the Moon makes it the launch site; moons have one orbit zone (no LEO / MEO / HEO)');
+  ok(r.heo, 'HEO lanes are highly elliptical; moon lanes are all one zone');
   ok(r.moved && r.tier5, 'changing zone costs 1 fuel per zone; upgrades no longer need an orbit');
   ok(r.refuel, `refuel tops up to 20 and costs a lot (${r.refuelCost} cr for a satellite worth ${r.spent} cr)`);
   ok(r.linesBtn && r.linesOff && r.linesOn, 'top-bar button turns the orbit lines off and back on (remembered)');
