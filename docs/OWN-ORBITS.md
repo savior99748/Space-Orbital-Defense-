@@ -27,4 +27,18 @@ achievements, leaderboards and stats work as normal.
 
 ## Code
 Flag `OD.EXP` in `js/mode.js` (on in 3D unless `orbits=classic`); rules in `js/game.js` (search "Own Orbits"); visuals in `js/view3d.js`; test
-`tests/exp-orbits.test.cjs`. 
+`tests/exp-orbits.test.cjs`.
+
+## Take Command
+
+Tap a shooting satellite (Laser, Missile Pod, Railgun, Flak, Missile Silo), then **🎯 Command** (key **C**). While you
+command it, it fires at the invader nearest your pointer (or where you tap) and gets **+50% damage, +25% fire rate and
++25% range**. One satellite at a time. **C**, **Esc**, the **Release** button or tapping the satellite itself lets go.
+The tutorial teaches it during Wave 1. Support satellites (Tractor, EMP, Mining, Mine Layer, Focus, Carrier) can't be
+commanded.
+
+## 2D only
+
+The game ships as 2D. The menu no longer has a 2D / 3D switch; the 3D view stays in the code for later and opens only
+with `?view=3d` (development and the automated tests).
+

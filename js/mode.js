@@ -1,17 +1,14 @@
-// Chooses the view before the game starts: 3D (default) or Classic 2D (the v2 look and maps).
-// The choice is saved per device; the main menu has a switch. Devices without WebGL get Classic 2D.
+// Chooses the view before the game starts. The game ships as 2D; the 3D view stays in the code, opened only with
+// ?view=3d (it needs WebGL). There is no switch in the menu.
 //   ?view=2d / ?view=3d   force a view (testing)
 //   ?headless=1           run 3D maps without drawing anything (automated balance tests)
 window.OD = window.OD || {};
 (function (OD) {
   "use strict";
   const params = new URLSearchParams(location.search);
-  let saved = null;
-  // "od_view_c": the view choice since Version C (2D default). Choices saved before it (od_view, when 3D was the
-  // default) are ignored once, so everyone starts in 2D; picking 3D again is remembered from then on.
-  const VIEW_KEY = "od_view_c";
-  try { saved = localStorage.getItem(VIEW_KEY); } catch { /* storage blocked */ }
-  let view = params.get("view") || saved || "2d"; // everyone starts in 2D (Version C); 3D is one tap away in the menu
+  // 2D is the game (the menu has no 2D / 3D switch any more). The 3D view is kept in the code for later, and only
+  // opens with ?view=3d (development and the automated tests); an old saved "3d" choice is ignored.
+  let view = params.get("view") === "3d" ? "3d" : "2d";
   const webgl = (() => {
     try { const c = document.createElement("canvas"); return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl"))); }
     catch { return false; }
@@ -39,10 +36,10 @@ window.OD = window.OD || {};
     OD.apply3DMaps();                 // bigger planets, tilted orbits
     document.documentElement.classList.add("mode-3d");
   }
-  // Switch view (saved), then reload so the right maps and renderer start fresh.
+  // Reload in another view (development: ?view=3d), so the right maps and renderer start fresh. 2D drops the parameter.
   OD.setView = function (v) {
-    try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
-    const url = new URL(location.href); url.searchParams.delete("view");
+    const url = new URL(location.href);
+    if (v === "3d") url.searchParams.set("view", "3d"); else url.searchParams.delete("view");
     location.replace(url.toString());
   };
 })(window.OD);

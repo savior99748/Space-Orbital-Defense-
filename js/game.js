@@ -11,6 +11,8 @@
   const sfx = name => audio.play(name);
 
   const OVERDRIVE = { duration: 6, cooldown: 30, ringMul: 5, rateMul: 1.3 };
+  // Take Command: the player aims one satellite (it shoots the invader nearest the pointer) and it gets a boost meanwhile
+  const CMD = { dmg: 1.5, rate: 1.25, range: 1.25 };
   // Own Orbits (the 3D game; see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
   // lanes never cross (each has its own radius), so satellites can't collide. Satellites carry fuel for FUEL_MAX waves
   // and burn up when it runs out; Overdrive burns OD_FUEL extra. Picking a satellite opens a launch panel: choose the
@@ -303,6 +305,53 @@
     return best;
   }
 
+  // Take Command: a picked invader (3D tap) if still in reach, else the invader in range nearest the aim point
+  function cmdTarget(t, range, only) {
+    const r2 = range * range, pk = S.cmdPick;
+    if (pk && !pk.dead && !pk.cloaked && d3(t, pk) <= r2 && (!only || only(pk))) return pk;
+    const a = S.cmdAim;
+    if (!a) return pickTarget(t, range, t.targeting, null, only);
+    let best = null, bd = Infinity;
+    for (const e of S.enemies) {
+      if (e.dead || e.cloaked || (only && !only(e)) || d3(t, e) > r2) continue;
+      const d = (e.x - a.x) ** 2 + (e.y - a.y) ** 2;
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+  const COMMANDABLE = new Set(["laser", "missile", "rail", "flak", "silo"]); // the satellites that shoot
+  const canCommand = t => !!(t && S && !S.over && COMMANDABLE.has(t.type) && S.towers.includes(t));
+  function toggleCommand(t) {
+    if (!S) return;
+    if (S.command) { const was = S.command; endCommand(); if (!t || was === t) return; }
+    if (!canCommand(t)) return;
+    S.command = t; S.cmdAim = null; S.cmdPick = null; S.cmdTgt = null;
+    S.selectedTower = null; S.selectedType = null; S.hover = null;
+    sfx("upgrade"); renderInfo(); updateUI(true); updateCmdBar();
+    lifetime("commands", 1);
+    tip("commandHow", `🎯 ${matchMedia("(pointer: coarse)").matches ? "Tap" : "Point at"} the invader you want it to shoot. ${keyName(KEYS.command)} or Esc lets go.`, 300, 4000);
+  }
+  function endCommand(silent) {
+    if (!S || !S.command) return;
+    S.command = null; S.cmdAim = null; S.cmdPick = null; S.cmdTgt = null;
+    if (!silent) sfx("click");
+    updateCmdBar();
+  }
+  let cmdEl = null, cmdKey = "";
+  function updateCmdBar() {
+    if (!cmdEl) {
+      cmdEl = document.createElement("div"); cmdEl.id = "cmdBar";
+      stage.appendChild(cmdEl);
+      cmdEl.addEventListener("click", ev => { if (ev.target.closest("[data-release]")) endCommand(); });
+    }
+    const t = S && !S.over && !S.paused && S.command;
+    const key = t ? `${t.id}|${baseStats(t).name}|${KEYS.command}` : "";
+    if (key === cmdKey) return; cmdKey = key;
+    cmdEl.classList.toggle("show", !!t);
+    if (t) cmdEl.innerHTML = `<span class="cb-icon">🎯</span><span><b>Commanding ${baseStats(t).name}</b><small>+50% damage · faster · longer range</small></span><button type="button" data-release="1">Release${hk("command")}</button>`;
+  }
+  setInterval(updateCmdBar, 250);
+
   // ---------- waves ----------
   function previewText(n) {
     const counts = {};
@@ -332,6 +381,7 @@
     if (S.wave === 1) stats.once("first/wave-start");
     if (S.wave === 2 && MAP.moons.length && !MAP.final) tip("moons", `${MAP.moons[0].name}'s gravity pulls invaders in, so satellites on its ring see lots of action.`);
     if (S.wave === 3) tip("overdrive", "⚡ Overdrive spins the rings fast for a few seconds. Save it for a big wave.");
+    if (S.wave === 6) tip("command", "🎯 Tap a satellite, then 🎯 Command to aim it yourself: +50% damage while you control it.", 1600, 6000);
     if (S.wave === 4) tip("camera", OD.is3D ? "Drag to rotate the view; pinch or + / − to zoom." : "Pinch or + / − to zoom in; drag to look around.");
     updateUI(true);
   }
@@ -407,6 +457,7 @@
   // ---------- update ----------
   function update(dt) {
     S.time += dt;
+    if (S.command && !S.towers.includes(S.command)) endCommand(true); // sold, burned up or gone
     const odActive = S.overdrive > 0;
     advanceBoard(dt, odActive ? OVERDRIVE.ringMul : 1);
     if (S.overdrive > 0) S.overdrive = Math.max(0, S.overdrive - dt);
@@ -459,6 +510,11 @@
       });
       if (t.oc) applyOc(t.st, t.oc);
       if (t.focusMul > 1) for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= t.focusMul;
+      if (t === S.command) { // Take Command boost
+        for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= CMD.dmg;
+        if (t.st.rate) t.st.rate *= CMD.rate;
+        if (t.st.range) t.st.range *= CMD.range;
+      }
     }
 
     // fields (tractor) apply slow / vulnerability / pulses
@@ -879,8 +935,10 @@
     let target;
     if (kind === "silo") { // ground launcher: only invaders inside its planet's / moon's low orbit
       const body = B.bodies[B.rings[B.slots[t.slot].ring].body], leo2 = body.leo * body.leo;
-      target = pickTarget(t, 1e5, t.targeting, null, e => (e.x - body.x) ** 2 + (e.y - body.y) ** 2 + (e.z || 0) ** 2 <= leo2);
-    } else target = pickTarget(t, st.range, t.targeting);
+      const only = e => (e.x - body.x) ** 2 + (e.y - body.y) ** 2 + (e.z || 0) ** 2 <= leo2;
+      target = S.command === t ? cmdTarget(t, 1e5, only) : pickTarget(t, 1e5, t.targeting, null, only);
+    } else target = S.command === t ? cmdTarget(t, st.range) : pickTarget(t, st.range, t.targeting);
+    if (S.command === t) S.cmdTgt = target;
     if (target) {
       t.aim = Math.atan2(target.y - t.y, target.x - t.x);
       t.aimP = Math.atan2((target.z || 0) - (t.z || 0), Math.hypot(target.x - t.x, target.y - t.y)); // 3D: barrel pitch
@@ -920,7 +978,8 @@
       } else sfx("laser");
     } else if (kind === "flak") { // a burst that hits the nearest `hits` invaders in range at once
       const r2 = st.range * st.range;
-      const hits = S.enemies.filter(e => !e.dead && !e.cloaked && d3(t, e) <= r2).sort((a, b) => d3(t, a) - d3(t, b)).slice(0, st.hits);
+      const ctr = S.command === t ? target : t; // commanded: the burst centres on the aimed invader
+      const hits = S.enemies.filter(e => !e.dead && !e.cloaked && d3(t, e) <= r2).sort((a, b) => d3(ctr, a) - d3(ctr, b)).slice(0, st.hits);
       const col = t.path ? TOWERS.flak.paths[t.path].color : TOWERS.flak.color;
       for (const e of hits) {
         damage(e, st.dmg, t, { flash: false, pierceArmor: !!st.pierceArmor });
@@ -1593,6 +1652,7 @@
     ctx.globalCompositeOperation = "source-over";
     FX.drawKills(ctx, time);
     ctx.globalAlpha = 1;
+    if (S.command) drawCommand(S.command, time);
     ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "center";
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(5,6,15,0.85)"; ctx.lineJoin = "round";
     for (const f of S.floaters) { // outlined so they read over planets and explosions
@@ -1601,6 +1661,29 @@
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  // Take Command (2D): gold ring on the satellite, a line to its target, lock-on brackets on the target
+  function drawCommand(t, time) {
+    const k = 1 / zoom, gold = "#ffd166", pulse = 0.5 + 0.5 * Math.sin(time * 6);
+    ctx.strokeStyle = gold; ctx.lineWidth = 2 * k;
+    ctx.beginPath(); ctx.arc(t.x, t.y, 22 + pulse * 3, 0, TAU); ctx.stroke();
+    if (t.st && t.st.range && t.type !== "silo") { ctx.strokeStyle = "rgba(255,209,102,0.22)"; ctx.lineWidth = 1 * k; ctx.setLineDash([6 * k, 6 * k]); ctx.beginPath(); ctx.arc(t.x, t.y, t.st.range, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+    const e = S.cmdTgt && !S.cmdTgt.dead ? S.cmdTgt : null;
+    if (e) {
+      ctx.strokeStyle = "rgba(255,209,102,0.45)"; ctx.lineWidth = 1.2 * k; ctx.setLineDash([4 * k, 5 * k]);
+      ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(e.x, e.y); ctx.stroke(); ctx.setLineDash([]);
+      const r = e.def.size + 8 + pulse * 2, c = r * 0.45, rot = time * 1.5;
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(rot); ctx.strokeStyle = "#ff5c7a"; ctx.lineWidth = 2.2 * k;
+      for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.moveTo(r - c, -r); ctx.lineTo(r, -r); ctx.lineTo(r, -r + c); ctx.stroke(); }
+      ctx.restore();
+    }
+    const a = S.cmdAim;
+    if (a) { // the pointer's crosshair
+      const r = 9 * k; ctx.strokeStyle = e ? "rgba(255,209,102,0.7)" : "rgba(255,209,102,0.95)"; ctx.lineWidth = 1.5 * k;
+      ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, TAU); ctx.moveTo(a.x - r * 1.7, a.y); ctx.lineTo(a.x - r * 0.5, a.y); ctx.moveTo(a.x + r * 0.5, a.y); ctx.lineTo(a.x + r * 1.7, a.y);
+      ctx.moveTo(a.x, a.y - r * 1.7); ctx.lineTo(a.x, a.y - r * 0.5); ctx.moveTo(a.x, a.y + r * 0.5); ctx.lineTo(a.x, a.y + r * 1.7); ctx.stroke();
+    }
   }
 
   // Satellites on tiny rings (small moons / planets) are drawn smaller so they don't crowd.
@@ -1794,7 +1877,7 @@
         <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
-      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat && !oneZone(B.rings[B.slots[t.slot].ring].body) ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone. ${BAND_TIP[t.orbit || 0]}">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
+      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat && !oneZone(B.rings[B.slots[t.slot].ring].body) ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone. ${BAND_TIP[t.orbit || 0]}">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${COMMANDABLE.has(t.type) ? `<button class="small cmd" data-act="command" title="Aim it yourself: +50% damage, +25% fire rate and range while you command it">🎯 Command${hk("command")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
       if (paint3D(c)) return;
@@ -1820,6 +1903,7 @@
       else if (a === "refuel") refuel(t);
       else if (a === "orbit") { const nb = nextOrbit(t); if (nb == null) { toast("Every other zone is full"); sfx("deny"); } else setOrbit(t, nb); }
       else if (a === "target") { t.targeting = TARGET_MODES[(TARGET_MODES.indexOf(t.targeting) + 1) % TARGET_MODES.length]; sfx("click"); renderInfo(); }
+      else if (a === "command") toggleCommand(t);
     }
   });
 
@@ -2065,10 +2149,6 @@
       <div class="rw-eyebrow">SOLAR SYSTEM DEFENSE COMMAND</div><h1>RINGWARDEN</h1><div class="subtitle">ORBITAL DEFENSE</div>
       <p class="muted">Invaders are coming for our Solar System. Choose a world to defend.</p>
       ${run ? `<div class="resume"><button class="primary big" data-act="continue">▶ Continue: ${MAPS[run.map].name} · <span style="color:${DIFFICULTY[run.diff].color}">${DIFFICULTY[run.diff].name}</span> · wave ${run.wave} saved${run.endless ? " · ∞ Endless" : run.challenge && CHALLENGES[run.challenge] ? ` · ${run.daily ? "📅" : "★"} ${CHALLENGES[run.challenge].name}` : run.freeplay ? " (freeplay)" : ""}</button><button class="small" data-act="discard" title="Discard saved game">✕</button></div>` : ""}
-      <div class="view-row">
-        <button class="chip-btn${OD.is3D ? " selected" : ""}" data-view="3d"${OD.webgl ? "" : ' disabled title="3D needs WebGL, which this device does not support"'}>🌐 3D</button>
-        <button class="chip-btn${OD.is3D ? "" : " selected"}" data-view="2d">▦ Classic 2D</button>
-      </div>
       ${(() => { const d = daily(), dd = getDaily(), done = dd.done === d.day, c = CHALLENGES[d.ch], streak = dd.done >= d.day - 1 ? dd.streak || 0 : 0;
         return `<div class="daily-bar"><span>📅 <b>Daily Challenge</b> · ${c.icon} ${c.name} on <b>${MAPS[d.map].name}</b>${done ? ' · <span class="good">✓ done today</span>' : ""}${streak ? ` · 🔥 ${streak}-day streak` : ""}<small>${c.desc} ${CH_WAVES} waves. A new one every day.</small></span><button class="${done ? "" : "primary "}small" data-act="daily">${done ? "Play again" : "Play ▶"}</button></div>`; })()}
       <div class="star-total">★ <b>${totalStars()}</b> / ${MAP_ORDER.length * STARS_PER_MAP} stars${(() => { const nxt = MAP_ORDER.find(k => !mapUnlocked(k)); return nxt ? ` · next planet: <b>${MAPS[nxt].name}</b> at ★ ${UNLOCK_STARS[nxt]}` : ""; })()}</div>
@@ -2302,7 +2382,7 @@
   const slotTarget = () => { const id = tutSlot(); if (id == null) return null; const p = slotPos(id); return { x: p.x, y: p.y, z: p.z, r: 10 }; };
   const laserBtn = () => ui.shop.querySelector('[data-type="laser"]');
 
-  // Five short steps: pick a satellite, place it, Wave 1 launches by itself, clear it, first upgrade. Everything
+  // Six short steps: pick a satellite, place it, Wave 1 launches by itself, take command of it, clear the wave, first upgrade. Everything
   // else (moons, specializations, Overdrive, camera) comes later as one-time tips during play (see `tip`).
   const TUT_COUNTDOWN = 2500; // ms between placing the first satellite and Wave 1 launching on its own
   const tutTower = () => S.towers[0] && { x: S.towers[0].x, y: S.towers[0].y, z: S.towers[0].z, r: 14 };
@@ -2313,7 +2393,11 @@
       : { text: "Tap a <b>glowing slot</b> to launch it into orbit.", world: slotTarget, done: () => S.towers.length > 0 },
     { text: "", countdown: true, enter: () => { tut.launchAt = performance.now() + TUT_COUNTDOWN; },
       done: () => S.waveActive || S.wave > 0 },
-    { text: "Your satellite fires on its own. <b>Clear the wave!</b>", done: () => S.wave >= 1 && !S.waveActive },
+    { text: "Your satellite fires on its own, but you can fly it yourself. Tap your satellite, then <b>🎯 Command</b>.",
+      el: () => ui.info.querySelector('[data-act="command"]'), world: () => (ui.info.querySelector('[data-act="command"]') ? null : tutTower()),
+      done: () => !!S.command || (S.wave >= 1 && !S.waveActive) },
+    { text: `<b>You're in command!</b> ${matchMedia("(pointer: coarse)").matches ? "Tap" : "Point at"} an invader to shoot it: commanded satellites hit 50% harder. <b>Clear the wave!</b>`,
+      done: () => S.wave >= 1 && !S.waveActive },
     { text: "<b>First victory!</b> +500 bonus credits. Tap your satellite, then its <b>upgrade card</b>.",
       enter: () => { S.money += 100 * OD.ECON; updateUI(true); sfx("coin"); },
       el: () => ui.info.querySelector("[data-up]"), world: () => (ui.info.querySelector("[data-up]") ? null : tutTower()),
@@ -2459,6 +2543,11 @@
   function handleTap(sx, sy, touch) {
     if (!S || S.over || S.paused) return;
     const w = toWorld(sx, sy);
+    if (S.command) { // commanding: a tap / click aims; tapping the commanded satellite itself lets go and opens its panel
+      const sl = nearestSlot(w.x, w.y, hitRadius(touch));
+      if (sl != null && towerAt(sl) === S.command) { endCommand(); tapSlot(sl, touch); return; }
+      S.cmdAim = w; S.cmdPick = null; return;
+    }
     const slot = nearestSlot(w.x, w.y, hitRadius(touch));
     if (slot == null && EXP && S.selectedType) { // Own Orbits: tapping a planet or moon picks where to launch from
       const bi = B.bodies.findIndex(b => dist2(w.x, w.y, b.x, b.y) <= Math.max(b.r + 8, hitRadius(touch)) ** 2);
@@ -2502,6 +2591,7 @@
     if (!ptr) { // plain mouse hover
       if (S && ev.pointerType === "mouse") {
         const w = toWorld(p.x, p.y);
+        if (S.command) { S.cmdAim = w; S.cmdPick = null; S.hover = null; hideTip(); canvas.style.cursor = "crosshair"; return; }
         S.hover = nearestSlot(w.x, w.y, hitRadius(false));
         mapTip(ev);
         canvas.style.cursor = S.hover != null ? "pointer" : zoom > 1 ? "grab" : "default";
@@ -2550,7 +2640,8 @@
     const k = ev.key.toLowerCase();
     if (!S || (S.won && !S.freeplay) || S.over) return;
     if (k === "escape") {
-      if (S.selectedType || S.selectedTower) { S.selectedType = null; S.selectedTower = null; renderInfo(); updateUI(true); }
+      if (S.command) endCommand();
+      else if (S.selectedType || S.selectedTower) { S.selectedType = null; S.selectedTower = null; renderInfo(); updateUI(true); }
       else if (S.paused) { S.paused = false; hideOverlay(); P.gameplayStart(); updateUI(true); }
       else pauseMenu();
       return;
@@ -2566,6 +2657,7 @@
     else if (action === "zoomOut") zoomStep(-1);
     else if (action === "zoomReset") resetCamera();
     else if (action === "lines") { if (EXP) toggleOrbitLines(); }
+    else if (action === "command") toggleCommand(S.command ? null : S.selectedTower);
     else if (action && selAction(action)) { /* done */ }
     else for (const [type, def] of Object.entries(TOWERS)) if (def.key === k) selectType(type);
   });
@@ -2575,7 +2667,7 @@
     ["wave", "Launch wave", " "], ["speed", "Game speed", "f"], ["pause", "Pause", "p"], ["overdrive", "Overdrive", "q"],
     ["upgrade", "Upgrade selected satellite", "u"], ["pathA", "Specialization A", "z"], ["pathB", "Specialization B", "x"],
     ["sell", "Sell selected satellite", "delete"], ["target", "Change targeting", "t"], ["refuel", "Refuel", "v"], ["orbit", "Change orbit", "o"],
-    ["lines", "Orbit lines on / off", "l"], ["zoomIn", "Zoom in", "="], ["zoomOut", "Zoom out", "-"], ["zoomReset", "Reset zoom", "0"],
+    ["command", "Take command of a satellite", "c"], ["lines", "Orbit lines on / off", "l"], ["zoomIn", "Zoom in", "="], ["zoomOut", "Zoom out", "-"], ["zoomReset", "Reset zoom", "0"],
   ];
   const DEFAULT_KEYS = Object.fromEntries(KEY_ACTIONS.map(([a, , k]) => [a, k]));
   let KEYS = (() => { try { return Object.assign({}, DEFAULT_KEYS, JSON.parse(store.get("od_keys") || "{}")); } catch { return { ...DEFAULT_KEYS }; } })();
@@ -2713,7 +2805,7 @@
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    state: () => S, board: () => B, begin, toggleCommand, endCommand, cmdTarget, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
     getStars, totalStars, mapUnlocked, daily, CHALLENGES, mapChallenges, ACHIEVEMENTS: () => ACHIEVEMENTS,

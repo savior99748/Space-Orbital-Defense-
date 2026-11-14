@@ -44,6 +44,7 @@ const SCENES = [
   { name: "solar-system", map: "sol", wave: 32, endless: true, fill: 1, tier: 4, run: 9000, zoom: 1 },
   { name: "closeup-mars", map: "mars", wave: 12, fill: 0.5, tier: 2, run: 7000, zoom: 2.6 },
   { name: "closeup-boss", map: "uranus", wave: 55, endless: true, fill: 1, tier: 4, boss: "titan", cap: 26, run: 9500, zoom: 2.2, pan: [-150, 60] },
+  { name: "command", map: "earth", wave: 12, fill: 0.4, tier: 2, run: 5000, ui: true, command: true, zoom: 1.5 },
   { name: "ui-desktop", map: "earth", wave: 8, fill: 0.4, tier: 2, run: 6000, ui: true, select: true },
   { name: "ui-phone", map: "earth", wave: 8, fill: 0.4, tier: 2, run: 6000, ui: true, phone: true, pick: "laser" },
 ];
@@ -92,6 +93,8 @@ try {
     // run the scene on the virtual clock (60 fps)
     await page.evaluate(ms => { for (let t = 0; t < ms; t += 1000 / 60) { window.__step(1000 / 60); window.__keepAlive(); } }, sc.run);
     if (sc.zoom) await page.evaluate(([z, p]) => { const od = window.__od, C = od.center(); od.setCamera(z, C.x + p[0], C.y + p[1]); }, [sc.zoom, sc.pan || [0, 0]]);
+    if (sc.command) await page.evaluate(() => { const od = window.__od, S = od.state(), t = S.towers.find(x => x.type === "laser") || S.towers[0]; od.toggleCommand(t);
+      const e = S.enemies.filter(e => !e.dead).sort((a, b) => ((a.x - t.x) ** 2 + (a.y - t.y) ** 2) - ((b.x - t.x) ** 2 + (b.y - t.y) ** 2))[0]; if (e) { e.x = t.x + 60; e.y = t.y - 40; S.cmdAim = { x: e.x + 6, y: e.y - 4 }; } for (let i = 0; i < 20; i++) { window.__step(1000 / 60); window.__keepAlive(); } });
     if (sc.select) await page.evaluate(() => { const od = window.__od, S = od.state(); od.tapSlot(S.towers[0].slot); });
     if (sc.pick) await page.click(`#shop [data-type="${sc.pick}"]`);
     await page.evaluate(() => { for (let i = 0; i < 3; i++) window.__step(1000 / 60); });

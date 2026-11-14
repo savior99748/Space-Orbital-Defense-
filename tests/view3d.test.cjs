@@ -13,24 +13,23 @@ const BASE = 'http://127.0.0.1:8769/';
     const pg = await ctx.newPage(); const errs = [];
     pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error' && !ign(m.text())) errs.push(m.text()); });
     await pg.addInitScript(() => { try { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); } catch {} }); // skip the brand-new-player tutorial
+    await pg.addInitScript(() => { try { localStorage.setItem('od_view_c', '3d'); } catch {} }); // an old saved 3D choice
     await pg.goto(BASE + 'index.html');
-    await pg.waitForSelector('[data-view="2d"]');
-    ok(await pg.evaluate(() => OD.view === '2d' && !document.getElementById('game3d')), 'everyone starts in 2D (Version C); 3D is in the menu');
-    await Promise.all([pg.waitForNavigation(), pg.click('[data-view="3d"]')]);
+    await pg.waitForFunction(() => window.__od && document.querySelector('[data-map]'), null, { timeout: 15000 });
+    ok(await pg.evaluate(() => OD.view === '2d' && !document.getElementById('game3d') && !document.querySelector('[data-view]')), 'the game is 2D: no 2D / 3D switch in the menu, an old 3D choice is ignored');
+    await pg.goto(BASE + 'index.html?view=3d');
     await pg.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); localStorage.setItem('od_orbits', 'classic'); localStorage.setItem('od_stats_off', '1'); });
-    await pg.reload(); await pg.waitForSelector('[data-view="3d"]');
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
-    ok(await pg.evaluate(() => OD.is3D && !!document.getElementById('game3d')), 'switching to 3D: the 3D canvas loads (and is remembered)');
+    ok(await pg.evaluate(() => OD.is3D && !!document.getElementById('game3d')), 'the 3D view is kept: ?view=3d loads it');
     ok(await pg.evaluate(() => OD.MAPS.earth.rings[2].name === 'HEO' && OD.MAPS.earth.threeD), '3D map layouts applied');
     await pg.screenshot({ path: 'v3-menu.png' });
-    // record a 3D leaderboard entry, then switch to 2D
+    // record a 3D leaderboard entry, then open 2D
     await pg.evaluate(() => { window.__od.LB.submit('earth', 'medium', { wave: 33, score: 999 }); });
-    await Promise.all([pg.waitForNavigation(), pg.click('[data-view="2d"]')]);
-    await pg.waitForSelector('[data-view="2d"].selected');
+    await pg.goto(BASE + 'index.html'); await pg.waitForFunction(() => window.__od && document.querySelector('[data-map]'), null, { timeout: 15000 });
     ok(await pg.evaluate(() => !OD.is3D && !document.getElementById('game3d') && OD.MAPS.earth.rings.length === 2), 'Classic 2D: v2 maps, no 3D canvas');
     ok(await pg.evaluate(() => window.__od.LB.top('earth', 'medium').length === 0), 'Classic 2D has its own leaderboard');
     await pg.screenshot({ path: 'v3-menu-2d.png' });
-    await Promise.all([pg.waitForNavigation(), pg.click('[data-view="3d"]')]);
+    await pg.goto(BASE + 'index.html?view=3d');
     await pg.waitForFunction(() => window.__view3d, null, { timeout: 15000 });
     ok(await pg.evaluate(() => OD.is3D && window.__od.LB.top('earth', 'medium')[0].wave === 33), 'back in 3D, the 3D leaderboard is intact');
     // ---------- tour all maps in 3D ----------
@@ -74,7 +73,7 @@ const BASE = 'http://127.0.0.1:8769/';
     await pg.waitForFunction(() => window.__od.state().waveActive, null, { timeout: 15000 });
     ok(true, 'tutorial: Wave 1 launched by itself');
     await pg.evaluate(() => { window.__od.state().speed = 8; });
-    await pg.waitForFunction(() => window.__od.tut() && window.__od.tut().i === 4, null, { timeout: 120000 });
+    await pg.waitForFunction(() => window.__od.tut() && window.__od.tut().i === 5, null, { timeout: 120000 });
     await pg.evaluate(() => { window.__od.state().speed = 1; });
     const t0 = await pg.evaluate(() => { const t = window.__od.state().towers[0]; return { x: t.x, y: t.y, z: t.z }; });
     await tapWorld(t0);

@@ -354,6 +354,17 @@ kbd.hk{display:none;margin-left:6px;padding:0 4px;border-radius:4px;border:1px s
 .key-row button{min-width:84px;padding:4px 10px;font-weight:700}
 .key-row button.waiting{border-color:#ffd166;color:#ffd166;animation:fuelFlash .6s ease-in-out infinite alternate}
 @media(max-width:720px){.keys{grid-template-columns:1fr}}
+/* Take Command bar */
+#cmdBar{position:absolute;left:50%;transform:translateX(-50%);bottom:52px;z-index:7;display:none;align-items:center;gap:10px;padding:6px 8px 6px 11px;border-radius:12px;
+  background:linear-gradient(145deg,rgba(58,42,6,.95),rgba(26,18,2,.95));border:1px solid #ffd166;color:#ffeec2;box-shadow:0 6px 20px #0009,0 0 18px #ffd16644;font:600 13px system-ui,sans-serif;white-space:nowrap}
+#cmdBar.show{display:flex}
+#cmdBar .cb-icon{font-size:20px;line-height:1}
+#cmdBar b{display:block;font-size:14px;color:#ffd166}
+#cmdBar small{display:block;font-size:11px;color:#e9d7a6;font-weight:500}
+#cmdBar button{font:700 13px system-ui,sans-serif;padding:6px 11px;border-radius:9px;border:1px solid #ffd166;background:transparent;color:#ffd166;cursor:pointer}
+#cmdBar button:hover{background:#ffd16622}
+#info .actions button.cmd{border-color:#ffd166;color:#ffd166}
+@media(max-width:720px){#cmdBar{top:auto;bottom:10px;gap:7px;padding:5px 6px 5px 9px}#cmdBar small{display:none}#cmdBar b{font-size:13px}}
 /* low-fuel alert (Own Orbits) */
 #fuelAlert{position:absolute;left:10px;top:10px;z-index:7;display:none;align-items:center;gap:8px;padding:7px 12px 7px 9px;border-radius:12px;
   background:linear-gradient(145deg,rgba(60,38,8,.96),rgba(30,18,4,.96));border:1px solid #ffb347;color:#ffe2b0;text-align:left;box-shadow:0 6px 20px #0009,0 0 16px #ffb34733;font:inherit}
