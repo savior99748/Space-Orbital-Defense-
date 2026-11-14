@@ -704,14 +704,21 @@
       vz = -uz * inward * v;
       const belt = B.bodies[0].belt, hr = Math.hypot(dx, dy);
       if (belt && hr > belt.inner && hr < belt.outer && Math.abs(dz) < 25) { vx *= belt.slow; vy *= belt.slow; vz *= belt.slow; }
+      // moons pull invaders in, but can't hold them: the pull fades after ~3 s inside a well (gravity fatigue),
+      // and a moon doesn't pull an invader that's already pressed against it
+      let inWell = false;
       for (const b of B.bodies) {
         if (b.root || !b.gravity) continue;
         const bx = b.x - e.x, by = b.y - e.y, bz = -dz, d = Math.hypot(bx, by, bz) || 1;
         if (d < b.gravR) {
-          const k = Math.min(0.9, b.gravity * 1.4 * (1 - d / b.gravR)) * v;
+          inWell = true;
+          if (d < b.r + e.def.size * 0.6 + 4) continue;
+          const fatigue = Math.max(0, 1 - Math.max(0, (e.wellT || 0) - 3) / 3);
+          const k = Math.min(0.9, b.gravity * 1.4 * (1 - d / b.gravR)) * v * fatigue;
           vx += (bx / d) * k; vy += (by / d) * k; vz += (bz / d) * k;
         }
       }
+      e.wellT = inWell ? (e.wellT || 0) + dt : Math.max(0, (e.wellT || 0) - dt * 2);
     }
     e.x += vx * dt; e.y += vy * dt; e.z = dz + vz * dt;
     // invaders can't fly through moons: slide around them
@@ -720,7 +727,9 @@
       const bx = e.x - b.x, by = e.y - b.y, bz = e.z, d = Math.hypot(bx, by, bz) || 1, min = b.r + e.def.size * 0.6;
       if (d < min) {
         const nx = bx / d, ny = by / d, nz = bz / d;
-        e.x = b.x + nx * min - ny * e.dir * v * dt; e.y = b.y + ny * min + nx * e.dir * v * dt; e.z = nz * min;
+        // slide around the side that leads toward the planet (not a fixed side: a moving moon could carry it along)
+        const side = ((-ny) * (CX - e.x) + nx * (CY - e.y)) >= 0 ? 1 : -1;
+        e.x = b.x + nx * min - ny * side * v * dt; e.y = b.y + ny * min + nx * side * v * dt; e.z = nz * min;
       }
     }
     e.vx = vx; e.vy = vy; e.vz = vz;
