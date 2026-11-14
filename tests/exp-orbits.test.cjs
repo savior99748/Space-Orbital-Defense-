@@ -20,6 +20,12 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
     ok(!r.exp && r.lanes === 0 && r.orbitSlots > 0, `?orbits=classic: the old shared ring slots (${r.orbitSlots} orbit slots)`);
     await pg.context().close(); }
 
+  // a player who chose 3D before Version C (old od_view) now starts in 2D
+  { const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } }); const pg = await ctx.newPage();
+    await pg.addInitScript(() => { try { localStorage.setItem('od_view', '3d'); localStorage.setItem('od_tut_done', '1'); } catch {} });
+    await pg.goto('http://127.0.0.1:8769/index.html'); await pg.waitForFunction(() => window.OD && window.OD.view);
+    ok(await pg.evaluate(() => OD.view === '2d'), 'a 3D choice saved before Version C is reset: everyone starts in 2D');
+    await ctx.close(); }
   // a brand-new player (2D, the default, and 3D): the tutorial teaches the LAUNCH button
   for (const q of ['', '?view=3d']) { const { pg, errs } = await open(q, true);
     await pg.waitForFunction(() => window.__od.tut(), null, { timeout: 30000 });

@@ -226,23 +226,23 @@ window.OD = window.OD || {};
     mines: {
       name: "Mine Layer", key: "6", color: "#ff6b8a", desc: "Drops space mines on its orbit", kind: "mines",
       tiers: [
-        { name: "Mine Layer", cost: 150, dmg: 90, splash: 45, every: 2.5, max: 4, range: 30 },
-        { name: "Mine Racks", cost: 110, dmg: 120, splash: 50, every: 2.6, max: 5, range: 30, desc: "Faster, stronger mines." },
-        { name: "Smart Mines", cost: 170, dmg: 160, splash: 55, every: 2.2, max: 6, range: 34, desc: "Up to 6 mines at once." },
+        { name: "Mine Layer", cost: 150, dmg: 90, splash: 54, every: 2.5, max: 4, range: 48 },
+        { name: "Mine Racks", cost: 110, dmg: 120, splash: 60, every: 2.6, max: 5, range: 48, desc: "Faster, stronger mines." },
+        { name: "Smart Mines", cost: 170, dmg: 160, splash: 66, every: 2.2, max: 6, range: 54, desc: "Up to 6 mines at once." },
       ],
       paths: {
         A: {
           name: "Minefield", color: "#ffd166", desc: "Lays mines fast to carpet the orbit.",
           tiers: [
-            { name: "Minefield", cost: 340, dmg: 180, splash: 55, every: 1.4, max: 10, range: 34, desc: "Up to 10 mines." },
-            { name: "Kill Zone", cost: 760, dmg: 280, splash: 60, every: 0.9, max: 16, range: 36, desc: "Up to 16 mines." },
+            { name: "Minefield", cost: 340, dmg: 180, splash: 66, every: 1.4, max: 10, range: 54, desc: "Up to 10 mines." },
+            { name: "Kill Zone", cost: 760, dmg: 280, splash: 72, every: 0.9, max: 16, range: 58, desc: "Up to 16 mines." },
           ],
         },
         B: {
           name: "Nuke Mines", color: "#ff4a4a", desc: "Few mines, enormous blasts.",
           tiers: [
-            { name: "Nuke Mine", cost: 380, dmg: 600, splash: 90, every: 3.5, max: 4, range: 36, desc: "Huge blasts." },
-            { name: "Star Breaker", cost: 820, dmg: 1600, splash: 120, every: 3.5, max: 5, range: 40, desc: "Enormous blasts." },
+            { name: "Nuke Mine", cost: 380, dmg: 600, splash: 108, every: 3.5, max: 4, range: 58, desc: "Huge blasts." },
+            { name: "Star Breaker", cost: 820, dmg: 1600, splash: 144, every: 3.5, max: 5, range: 64, desc: "Enormous blasts." },
           ],
         },
       },
