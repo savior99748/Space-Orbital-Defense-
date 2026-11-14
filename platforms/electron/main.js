@@ -100,7 +100,15 @@ function createWindow() {
   win.on("enter-full-screen", tell); win.on("leave-full-screen", tell);
   win.on("close", () => { try { rememberWindow(win); } catch { /* ignore */ } flushSaves(); });
 }
-ipcMain.on("display-get", e => { e.returnValue = { fullscreen: !!(mainWin && mainWin.isFullScreen()) }; });
+ipcMain.on("display-get", e => { e.returnValue = { fullscreen: !!(mainWin && mainWin.isFullScreen()), size: mainWin ? mainWin.getContentSize() : null }; });
+// window size presets from the game's settings (leaves fullscreen first)
+ipcMain.on("display-size", (_e, w, h) => {
+  if (!mainWin) return;
+  w = Math.max(960, Math.min(3840, Number(w) || 1280)); h = Math.max(540, Math.min(2160, Number(h) || 720));
+  if (mainWin.isFullScreen()) mainWin.setFullScreen(false);
+  if (mainWin.isMaximized()) mainWin.unmaximize();
+  mainWin.setContentSize(w, h); mainWin.center();
+});
 ipcMain.on("display-fullscreen", (_e, on) => { if (mainWin) mainWin.setFullScreen(!!on); });
 
 // Achievement IDs in Steamworks must match the game's ids, upper-cased (e.g. FIRST_WIN).

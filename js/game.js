@@ -652,7 +652,7 @@
     linesBtn = document.createElement("button"); linesBtn.id = "linesBtn"; linesBtn.title = "Show / hide orbit lines (L)";
     linesBtn.textContent = OD.orbitLines ? "Orbits: On" : "Orbits: Off"; linesBtn.classList.toggle("on", OD.orbitLines);
     linesBtn.onclick = toggleOrbitLines; ui.autoBtn.parentNode.insertBefore(linesBtn, ui.autoBtn);
-    window.addEventListener("keydown", ev => { if ((ev.key === "l" || ev.key === "L") && S && !(ev.target.closest && ev.target.closest("input,select"))) toggleOrbitLines(); });
+    // (the L key is handled with the other rebindable keys)
   }
   // Low-fuel alert: a ⛽ badge on the screen edge when any satellite is at 25% fuel or less; it turns red and flashes
   // at 10% or less. Tapping it selects the emptiest satellite (Refuel is right there) and, in 2D, moves the camera to
@@ -1707,7 +1707,7 @@
     const col = pathDef ? pathDef.color : "#ffd166";
     return `<button class="up-card" data-up="${path || ""}" ${can ? "" : "disabled"} style="--c:${col}">
       <canvas width="56" height="56" data-preview="${t.type}|${level}|${path || ""}"></canvas>
-      <span><b>${tier.name}</b><small>${tier.desc || ""}</small><span class="cost">${tier.cost} cr</span></span></button>`;
+      <span><b>${tier.name}</b><small>${tier.desc || ""}</small><span class="cost">${tier.cost} cr</span></span>${hk(path && t.level === 2 ? (path === "A" ? "pathA" : "pathB") : "upgrade")}</button>`;
   }
 
   function renderInfo() {
@@ -1739,7 +1739,7 @@
     else upHtml = `<div class="maxed" style="color:${color}">★ Fully upgraded</div>`;
 
     const body = B.bodies[B.rings[B.slots[t.slot].ring].body];
-    const targetBtn = def.targets ? `<button class="small" data-act="target">Target: <b>${TARGET_LABEL[t.targeting]}</b></button>` : "";
+    const targetBtn = def.targets ? `<button class="small" data-act="target">Target: <b>${TARGET_LABEL[t.targeting]}</b>${hk("target")}</button>` : "";
     ui.info.innerHTML = `
       <div class="info-head">
         <canvas width="64" height="64" data-preview="${t.type}|${t.level}|${t.path || ""}"></canvas>
@@ -1752,7 +1752,7 @@
         <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
-      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b></button>` : ""}${sat ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone">Orbit: <b>${BAND[t.orbit || 0]}</b></button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}</button></div>`;
+      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
       if (paint3D(c)) return;
@@ -1960,10 +1960,12 @@
   OD.gfx = GFX_STEPS.includes(store.get("od_gfx")) ? store.get("od_gfx") : "high";
   const gfxLabel = () => `🎨 Graphics: ${OD.gfx === "auto" ? "Auto" : OD.gfx === "high" ? "High" : "Low"}`;
   // desktop (Steam) only: fullscreen / windowed
+  const SIZES = [[1280, 720], [1600, 900], [1920, 1080]];
+  const sizeBtn = () => (P.display && P.display.setSize ? `<button data-act="winsize" title="Window size (windowed mode)">🗔 ${(P.display.get().size || SIZES[0]).join("×")}</button>` : "");
   const displayBtn = () => (P.display ? `<button data-act="display" title="F11 or Alt+Enter">${P.display.get().fullscreen ? "🖥 Fullscreen" : "🗗 Windowed"}</button>` : "");
   function soundButtons() {
     const statBtn = stats.configured ? `<button data-act="stats-toggle" title="Anonymous gameplay stats, no personal data">${stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"}</button>` : "";
-    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button><button data-act="gfx" title="${OD.is3D ? "Auto lowers detail on slow devices" : "Low: fewer, simpler effects for slow devices"}">${gfxLabel()}</button>${displayBtn()}${statBtn}</div>`;
+    return `<div class="btns sound"><button data-act="music">${audio.music ? "♫ Music: On" : "♫ Music: Off"}</button><button data-act="sfx">${audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"}</button><button data-act="shake" title="Camera shake on big explosions">${shakeLabel()}</button><button data-act="gfx" title="${OD.is3D ? "Auto lowers detail on slow devices" : "Low: fewer, simpler effects for slow devices"}">${gfxLabel()}</button>${displayBtn()}${sizeBtn()}<button data-act="controls">⌨ Controls</button>${statBtn}</div>`;
   }
 
   function mapCard(key) {
@@ -2123,6 +2125,8 @@
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
 
     if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
+    const rb = ev.target.closest("[data-rebind]");
+    if (rb) { rebinding = rb.dataset.rebind; rb.textContent = "Press a key…"; rb.classList.add("waiting"); return; }
     const chb = ev.target.closest("[data-ch]");
     if (chb) { CH_SEL = chb.dataset.ch; store.set("od_ch", CH_SEL); sfx("click"); return mainMenu(); }
     const mc = ev.target.closest("[data-map]");
@@ -2189,6 +2193,10 @@
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
       case "gfx": OD.gfx = GFX_STEPS[(GFX_STEPS.indexOf(OD.gfx) + 1) % GFX_STEPS.length]; store.set("od_gfx", OD.gfx); a.textContent = gfxLabel(); if (OD.applyGfx) OD.applyGfx(OD.gfx); break;
       case "display": P.display.setFullscreen(!P.display.get().fullscreen); break;
+      case "winsize": { const cur = (P.display.get().size || [0, 0]).join("x"), i = SIZES.findIndex(z => z.join("x") === cur), nx = SIZES[(i + 1) % SIZES.length]; P.display.setSize(nx[0], nx[1]); a.textContent = `🗔 ${nx.join("×")}`; break; }
+      case "controls": showControls(); break;
+      case "keys-reset": KEYS = { ...DEFAULT_KEYS }; store.set("od_keys", JSON.stringify(KEYS)); keyTitles(); showControls(); break;
+      case "controls-back": if (S) pauseMenu(); else mainMenu(); break;
       case "quit": if (P.quit) { saveRun(); P.quit(); } break;
       case "shake": OD.shake = SHAKE_STEPS[(SHAKE_STEPS.indexOf(OD.shake) + 1) % SHAKE_STEPS.length]; store.set("od_shake", String(OD.shake)); a.textContent = shakeLabel(); break;
       case "stats-toggle": stats.setEnabled(!stats.enabled); a.textContent = stats.enabled ? "📊 Stats: On" : "📊 Stats: Off"; break;
@@ -2453,6 +2461,7 @@
       if (S && ev.pointerType === "mouse") {
         const w = toWorld(p.x, p.y);
         S.hover = nearestSlot(w.x, w.y, hitRadius(false));
+        mapTip(ev);
         canvas.style.cursor = S.hover != null ? "pointer" : zoom > 1 ? "grab" : "default";
       }
       return;
@@ -2495,6 +2504,7 @@
       if (ev.key === "Enter" && ev.target.id === "nickInput") { const b = ui.overlay.querySelector('[data-act="save-nick"]'); if (b) b.click(); }
       return;
     }
+    if (rebinding) return handleRebind(ev);
     const k = ev.key.toLowerCase();
     if (!S || (S.won && !S.freeplay) || S.over) return;
     if (k === "escape") {
@@ -2504,15 +2514,100 @@
       return;
     }
     if (S.paused) return;
-    if (k === " ") { ev.preventDefault(); startWave(); }
-    else if (k === "f") toggleSpeed();
-    else if (k === "p") pauseMenu();
-    else if (k === "q") activateOverdrive();
-    else if (k === "+" || k === "=") zoomStep(1);
-    else if (k === "-" || k === "_") zoomStep(-1);
-    else if (k === "0") { resetCamera(); }
+    const action = Object.keys(KEYS).find(a => KEYS[a] === k) || (k === "backspace" ? "sell" : k === "+" ? "zoomIn" : k === "_" ? "zoomOut" : null);
+    if (action) ev.preventDefault();
+    if (action === "wave") startWave();
+    else if (action === "speed") toggleSpeed();
+    else if (action === "pause") pauseMenu();
+    else if (action === "overdrive") activateOverdrive();
+    else if (action === "zoomIn") zoomStep(1);
+    else if (action === "zoomOut") zoomStep(-1);
+    else if (action === "zoomReset") resetCamera();
+    else if (action === "lines") { if (EXP) toggleOrbitLines(); }
+    else if (action && selAction(action)) { /* done */ }
     else for (const [type, def] of Object.entries(TOWERS)) if (def.key === k) selectType(type);
   });
+
+  // ---------- controls: rebindable keys (Settings → ⌨ Controls), saved per player ----------
+  const KEY_ACTIONS = [
+    ["wave", "Launch wave", " "], ["speed", "Game speed", "f"], ["pause", "Pause", "p"], ["overdrive", "Overdrive", "q"],
+    ["upgrade", "Upgrade selected satellite", "u"], ["pathA", "Specialization A", "z"], ["pathB", "Specialization B", "x"],
+    ["sell", "Sell selected satellite", "delete"], ["target", "Change targeting", "t"], ["refuel", "Refuel", "v"], ["orbit", "Change orbit", "o"],
+    ["lines", "Orbit lines on / off", "l"], ["zoomIn", "Zoom in", "="], ["zoomOut", "Zoom out", "-"], ["zoomReset", "Reset zoom", "0"],
+  ];
+  const DEFAULT_KEYS = Object.fromEntries(KEY_ACTIONS.map(([a, , k]) => [a, k]));
+  let KEYS = (() => { try { return Object.assign({}, DEFAULT_KEYS, JSON.parse(store.get("od_keys") || "{}")); } catch { return { ...DEFAULT_KEYS }; } })();
+  const keyName = k => ({ " ": "Space", delete: "Del", backspace: "Bksp", escape: "Esc", arrowup: "↑", arrowdown: "↓", arrowleft: "←", arrowright: "→", "=": "+" })[k] || (k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
+  const hk = action => `<kbd class="hk">${keyName(KEYS[action] || "")}</kbd>`; // a key hint (shown to mouse + keyboard players only)
+  const satKeys = new Set(Object.values(TOWERS).map(d => d.key));
+  let rebinding = null;
+  const keyTitles = () => { // the top-bar buttons name their keys on hover
+    ui.waveBtn.title = `Launch the next wave (${keyName(KEYS.wave)})`; ui.speedBtn.title = `Game speed (${keyName(KEYS.speed)})`;
+    ui.odBtn.title = `Overdrive (${keyName(KEYS.overdrive)})`; ui.menuBtn.title = `Pause (${keyName(KEYS.pause)} or Esc)`;
+    if (typeof linesBtn !== "undefined" && linesBtn) linesBtn.title = `Show / hide orbit lines (${keyName(KEYS.lines)})`;
+  };
+  setTimeout(keyTitles, 0);
+  function showControls() {
+    rebinding = null;
+    showOverlay(`<h1>CONTROLS</h1><p class="muted">Click an action, then press the key you want. Satellites: ${Object.values(TOWERS).map(d => `<kbd>${d.key.toUpperCase()}</kbd>`).join(" ")} · Esc: deselect / pause</p>
+      <div class="keys">${KEY_ACTIONS.map(([a, label]) => `<div class="key-row"><span>${label}</span><button data-rebind="${a}">${rebinding === a ? "Press a key…" : keyName(KEYS[a])}</button></div>`).join("")}</div>
+      <div class="btns"><button data-act="keys-reset">Reset to defaults</button><button class="primary" data-act="controls-back">Done</button></div>`, true);
+  }
+  function handleRebind(ev) {
+    ev.preventDefault();
+    const k = ev.key.toLowerCase(), a = rebinding;
+    rebinding = null;
+    if (k !== "escape") {
+      if (satKeys.has(k)) { toast(`${keyName(k)} picks a satellite`); }
+      else {
+        const other = Object.keys(KEYS).find(x => x !== a && KEYS[x] === k);
+        if (other) KEYS[other] = KEYS[a]; // swap with the action that had it
+        KEYS[a] = k; store.set("od_keys", JSON.stringify(KEYS)); keyTitles();
+      }
+    }
+    showControls();
+  }
+  // keyboard actions on the selected satellite
+  function selAction(a) {
+    const t = S.selectedTower;
+    if (!t) return false;
+    if (a === "upgrade") {
+      if (t.level === 2) { toast(`Pick a specialization: ${keyName(KEYS.pathA)} or ${keyName(KEYS.pathB)}`); return true; }
+      if (t.level < 4) upgradeTower(t); else if (canAscend(t)) ascendTower(t); else if (canOverclock(t)) overclockTower(t);
+    } else if (a === "pathA" || a === "pathB") { if (t.level === 2) upgradeTower(t, a === "pathA" ? "A" : "B"); }
+    else if (a === "sell") sellTower(t);
+    else if (a === "target") { if (TOWERS[t.type].targets) { t.targeting = TARGET_MODES[(TARGET_MODES.indexOf(t.targeting) + 1) % TARGET_MODES.length]; sfx("click"); renderInfo(); } }
+    else if (a === "refuel") refuel(t);
+    else if (a === "orbit") { const nb = EXP && t.fuel != null ? nextOrbit(t) : null; if (nb != null) setOrbit(t, nb); }
+    else return false;
+    return true;
+  }
+
+  // ---------- hover tooltips (mouse only): shop buttons and satellites on the 2D map ----------
+  const tipEl = document.createElement("div"); tipEl.id = "hoverTip"; document.body.appendChild(tipEl);
+  const showTip = (html, x, y) => {
+    tipEl.innerHTML = html; tipEl.classList.add("show");
+    const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    tipEl.style.left = Math.min(window.innerWidth - w - 8, x + 14) + "px"; tipEl.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, y - h - 12)) + "px";
+  };
+  const hideTip = () => tipEl.classList.remove("show");
+  const statLine = st => [st.dmg ? `Damage <b>${fmt(st.dmg)}</b>` : st.dps ? `Damage <b>${fmt(st.dps)}/s</b>` : "", st.rate ? `Fire rate <b>${st.rate}/s</b>` : "", st.range ? `Range <b>${Math.round(st.range)}</b>` : "", st.income ? `Income <b>${fmt(st.income)}</b>` : ""].filter(Boolean).join(" · ");
+  ui.shop.addEventListener("pointermove", ev => {
+    if (ev.pointerType !== "mouse") return;
+    const b = ev.target.closest("[data-type]"); if (!b) return hideTip();
+    const type = b.dataset.type, def = TOWERS[type], t0 = def.tiers[0];
+    const why = !isUnlocked(type) ? `<p class="tt-warn">🔒 Unlocks after wave ${unlockWave(type)}</p>` : chRule("lasers") && type !== "laser" ? `<p class="tt-warn">Not allowed in Laser Focus</p>` : "";
+    showTip(`<b style="color:${def.color}">${def.name}</b> <kbd>${def.key.toUpperCase()}</kbd><p>${def.desc}</p><p class="tt-stats">${statLine(t0)}</p><p>Cost <b class="gold">${fmt(t0.cost)}</b> · upgrades into <span style="color:${def.paths.A.color}">${def.paths.A.name}</span> or <span style="color:${def.paths.B.color}">${def.paths.B.name}</span></p>${why}`, ev.clientX, ev.clientY);
+  });
+  ui.shop.addEventListener("pointerleave", hideTip);
+  function mapTip(ev) { // a satellite under the mouse (2D)
+    const t = S && S.hover != null ? towerAt(S.hover) : null;
+    if (!t || ev.pointerType !== "mouse") return hideTip();
+    const def = TOWERS[t.type], st = t.st || baseStats(t), col = t.path ? def.paths[t.path].color : def.color;
+    showTip(`<b style="color:${col}">${baseStats(t).name}</b> <small>${def.name} · Tier ${t.level + 1}${t.orbit != null ? ` · ${BAND[t.orbit]}` : ""}</small>
+      ${t.fuel != null ? `<p>⛽ Fuel <b class="${t.fuel / FUEL_MAX <= FUEL_CRIT ? "bad" : t.fuel / FUEL_MAX <= FUEL_LOW ? "gold" : ""}">${t.fuel} / ${FUEL_MAX}</b> waves</p>` : ""}
+      <p class="tt-stats">${statLine(st)}</p><p>${fmt(t.dmg || 0)} damage · ${t.kills || 0} kills · click to manage</p>`, ev.clientX, ev.clientY);
+  }
 
   function toggleSpeed() { if (!S) return; S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 3 : 1; sfx("click"); updateUI(true); }
   function activateOverdrive() {
