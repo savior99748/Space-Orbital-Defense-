@@ -29,6 +29,10 @@ const readJson = f => { try { return JSON.parse(fs.readFileSync(path.join(userDa
   ok(/Fullscreen/.test(await win.textContent('[data-act="display"]')), 'button label follows the window state');
   await win.click('[data-act="display"]'); await win.waitForTimeout(1500);
   ok(!(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())), 'and back to windowed');
+  // window size presets (the test's virtual screen is 1280 wide, so use a size that fits)
+  await win.evaluate(() => window.OD.platform.display.setSize(1200, 700)); await win.waitForTimeout(800);
+  const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getContentSize());
+  ok(size[0] === 1200 && size[1] === 700, `window size preset applies (${size.join('×')})`);
   // play: free bonus, then save
   await win.evaluate(() => { localStorage.setItem('od_tut_done', '1'); localStorage.setItem('od_all_maps', '1'); });
   const r = await win.evaluate(async () => {

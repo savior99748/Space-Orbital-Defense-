@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("odNative", {
   display: {
     get: () => ipcRenderer.sendSync("display-get"),
     setFullscreen: on => ipcRenderer.send("display-fullscreen", on),
+    setSize: (w, h) => ipcRenderer.send("display-size", w, h),
     onChange: fn => ipcRenderer.on("display-changed", (_e, d) => fn(d)),
   },
 });

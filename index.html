@@ -342,6 +342,18 @@ button:not(:disabled):active{transform:scale(.975)}
 .stars-won{margin:4px 0}.big-stars{font-size:34px;letter-spacing:4px;color:#ffd166;text-shadow:0 0 14px #ffb34788}.big-stars i{font-style:normal;color:#3a4260;text-shadow:none}
 .stars-won small{display:block;color:var(--muted);font-size:12px}
 .tower-btn.banned{opacity:.35;filter:grayscale(.8)}
+/* desktop: hover tooltips, key hints, controls screen */
+#hoverTip{position:fixed;z-index:60;display:none;max-width:280px;padding:8px 11px;border-radius:10px;pointer-events:none;
+  background:linear-gradient(150deg,rgba(17,38,65,.98),rgba(6,15,31,.98));border:1px solid #3c7293;box-shadow:0 10px 30px #000a;color:#d6e4f5;font-size:12px;line-height:1.4}
+#hoverTip.show{display:block}#hoverTip p{margin:3px 0 0}#hoverTip .tt-stats{color:#9fb2cf}#hoverTip .gold{color:#ffd166}#hoverTip .bad{color:#ff6b78}#hoverTip .tt-warn{color:#ffb070}
+#hoverTip kbd,.keys kbd,.muted kbd{display:inline-block;min-width:16px;padding:0 4px;border-radius:4px;border:1px solid #4a6a8a;background:#0b1a2e;color:#cfe0ff;font:600 11px/16px system-ui,sans-serif;text-align:center}
+kbd.hk{display:none;margin-left:6px;padding:0 4px;border-radius:4px;border:1px solid #4a6a8a;background:#0b1a2ecc;color:#bcd2ea;font:600 10px/15px system-ui,sans-serif;vertical-align:1px}
+@media(hover:hover) and (pointer:fine){kbd.hk{display:inline-block}.up-card kbd.hk{margin-left:auto;align-self:flex-start}}
+.keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;margin:10px 0;text-align:left}
+.key-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.key-row button{min-width:84px;padding:4px 10px;font-weight:700}
+.key-row button.waiting{border-color:#ffd166;color:#ffd166;animation:fuelFlash .6s ease-in-out infinite alternate}
+@media(max-width:720px){.keys{grid-template-columns:1fr}}
 /* low-fuel alert (Own Orbits) */
 #fuelAlert{position:absolute;left:10px;top:10px;z-index:7;display:none;align-items:center;gap:8px;padding:7px 12px 7px 9px;border-radius:12px;
   background:linear-gradient(145deg,rgba(60,38,8,.96),rgba(30,18,4,.96));border:1px solid #ffb347;color:#ffe2b0;text-align:left;box-shadow:0 6px 20px #0009,0 0 16px #ffb34733;font:inherit}
