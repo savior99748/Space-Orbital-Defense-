@@ -31,9 +31,10 @@ Flag `OD.EXP` in `js/mode.js` (on in 3D unless `orbits=classic`); rules in `js/g
 
 ## Take Command
 
-Tap a shooting satellite (Laser, Missile Pod, Railgun, Flak, Missile Silo), then **🎯 Command** (key **C**). While you
-command it, it fires at the invader nearest your pointer (or where you tap) and gets **+50% damage, +25% fire rate and
-range**. One satellite at a time. **C**, **Esc**, the **Release** button or tapping the satellite itself lets go.
+Tap a shooting satellite (Laser, Missile Pod, Railgun, Flak, Missile Silo), then **🎯 Command** (key **C**). Click or
+tap an invader to **lock on** (hovering previews the target; one out of reach shows "OUT OF RANGE" and is fired on once
+it comes close). Without a lock it shoots the invader nearest your pointer. While commanded it gets **+50% damage, +25%
+fire rate and 1.6× range**, with gold shots and gold damage numbers. One satellite at a time. **C**, **Esc**, the **Release** button or tapping the satellite itself lets go.
 The tutorial teaches it during Wave 1. Support satellites (Tractor, EMP, Mining, Mine Layer, Focus, Carrier) can't be
 commanded.
 
