@@ -442,9 +442,9 @@
     e.dead = true;
     if (src) { src.kills = (src.kills || 0) + 1; if (src.type === "mines" && src.kills >= 25) unlock("minefield"); }
     if (e.type === "dread") unlock("boss_dread"); else if (e.type === "titan") unlock("boss_titan");
-    const reward = Math.max(1, Math.round(e.def.reward * S.diff.reward));
+    const base = Math.max(1, Math.round(e.def.reward * S.diff.reward)), reward = Math.round(base * (1 + resVal("bounty")));
     S.money += reward;
-    S.score += reward * 10;
+    S.score += base * 10; // score stays research-free
     S.stats.killed++; S.stats.earnedKills += reward;
     const big = e.def.boss;
     burst(e.x, e.y, e.def.color, big ? 60 : 12, big ? 240 : 130, big ? 1.4 : 0.7, e.z);
@@ -499,6 +499,7 @@
       const fs = baseStats(f);
       for (const t of S.towers) if (t !== f && t.type !== "miner" && t.type !== "focus" && d3(f, t) <= fs.focusRange ** 2) t.focusMul = Math.max(t.focusMul, fs.focusDmg);
     }
+    const resDmg = 1 + resVal("weapons");
     for (const t of S.towers) {
       const b = baseStats(t);
       const rateMul = t.buffRate * (odActive ? OVERDRIVE.rateMul : 1);
@@ -510,8 +511,9 @@
       });
       if (t.oc) applyOc(t.st, t.oc);
       if (t.focusMul > 1) for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= t.focusMul;
+      if (resDmg > 1) for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= resDmg; // Research: Weapons
       if (t === S.command) { // Take Command boost
-        for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= CMD.dmg;
+        for (const k of ["dmg", "dps", "clusterDmg", "burn"]) if (t.st[k]) t.st[k] *= CMD.dmg + resVal("command");
         if (t.st.rate) t.st.rate *= CMD.rate;
         if (t.st.range) t.st.range *= CMD.range;
       }
@@ -675,7 +677,7 @@
   }
   // Refuel back to a full tank. Costs a lot: a full tank = half of everything spent on the satellite (at least its
   // price), charged for the fuel missing, so keeping a big late-game satellite flying is a real upkeep cost.
-  const refuelCost = t => t.fuel == null || t.fuel >= FUEL_MAX ? 0 : Math.ceil(Math.max(TOWERS[t.type].tiers[0].cost, t.spent * 0.5) * (FUEL_MAX - t.fuel) / FUEL_MAX / 10) * 10;
+  const refuelCost = t => t.fuel == null || t.fuel >= FUEL_MAX ? 0 : Math.ceil(Math.max(TOWERS[t.type].tiers[0].cost, t.spent * 0.5) * (FUEL_MAX - t.fuel) / FUEL_MAX * (1 - resVal("fuel")) / 10) * 10;
   function refuel(t) {
     const cost = refuelCost(t);
     if (!EXP || !cost) return;
@@ -1245,6 +1247,68 @@
   }
   const lifetime = (k, add = 0) => { const v = (+store.get("od_n_" + k) || 0) + add; if (add) store.set("od_n_" + k, String(v)); return v; };
 
+  // ---------- Research Lab: permanent upgrades bought with Salvage, earned at the end of every run (win or lose) ----------
+  // Small steps (a few % per level) so skill still decides runs; costs rise ×1.55 per level, so maxing out takes many runs.
+  const RESEARCH = [
+    { id: "weapons", icon: "🎯", name: "Weapons Research", per: 0.03, max: 10, cost: 50, fmt: v => `+${Math.round(v * 100)}% satellite damage` },
+    { id: "funding", icon: "💰", name: "Seed Funding", per: 0.06, max: 10, cost: 40, fmt: v => `+${Math.round(v * 100)}% starting credits` },
+    { id: "shields", icon: "🛡", name: "Planetary Shields", per: 0.05, max: 10, cost: 50, fmt: v => `+${Math.round(v * 100)}% planet HP` },
+    { id: "bounty", icon: "💎", name: "Bounty Protocol", per: 0.04, max: 10, cost: 45, fmt: v => `+${Math.round(v * 100)}% credits per kill` },
+    { id: "fuel", icon: "⛽", name: "Fuel Efficiency", per: 0.06, max: 5, cost: 60, fmt: v => `−${Math.round(v * 100)}% refuel cost` },
+    { id: "overdrive", icon: "⚡", name: "Overdrive Capacitors", per: 0.5, max: 6, cost: 70, fmt: v => `+${v} s Overdrive` },
+    { id: "command", icon: "🛰", name: "Command Uplink", per: 0.05, max: 6, cost: 70, fmt: v => `+${Math.round(v * 100)}% extra damage while commanded` },
+    { id: "salvage", icon: "⚙", name: "Salvage Scanners", per: 0.05, max: 10, cost: 60, fmt: v => `+${Math.round(v * 100)}% Salvage` },
+  ];
+  const RES_BY_ID = Object.fromEntries(RESEARCH.map(r => [r.id, r]));
+  const getResearch = () => { try { return JSON.parse(store.get("od_research") || "{}") || {}; } catch { return {}; } };
+  const resLevel = id => Math.min(RES_BY_ID[id].max, Math.max(0, +getResearch()[id] || 0));
+  const resVal = id => resLevel(id) * RES_BY_ID[id].per; // the bonus it gives now
+  const resCost = (id, lvl = resLevel(id)) => Math.round(RES_BY_ID[id].cost * 1.55 ** lvl / 5) * 5;
+  const getSalvage = () => Math.max(0, Math.floor(+store.get("od_salvage") || 0));
+  const addSalvage = n => { const v = getSalvage() + n; store.set("od_salvage", String(v)); return v; };
+  function buyResearch(id) {
+    const r = RES_BY_ID[id]; if (!r) return false;
+    const lvl = resLevel(id), cost = resCost(id);
+    if (lvl >= r.max || getSalvage() < cost) { sfx("deny"); return false; }
+    addSalvage(-cost);
+    const all = getResearch(); all[id] = lvl + 1; store.set("od_research", JSON.stringify(all));
+    lifetime("research", 1); sfx("upgrade"); stats.track(`research/${id}/${lvl + 1}`);
+    return true;
+  }
+  const SALVAGE_TIER = { beginner: 1, intermediate: 1.25, hard: 1.5, expert: 1.8 };
+  // Paid when a run ends (game over or victory). Only the waves and bosses not paid yet count, so a revived run,
+  // or freeplay after a win, adds just the new part. 3 per wave cleared, 12 per boss, 40 for a win; harder planets pay more.
+  function awardSalvage(won) {
+    const paid = S.salvaged || (S.salvaged = { w: 0, b: 0, win: false, total: 0 });
+    const cleared = won || S.freeplay ? S.wave : Math.max(0, S.wave - 1), bosses = S.stats.bosses || 0;
+    const base = Math.max(0, cleared - paid.w) * 3 + Math.max(0, bosses - paid.b) * 12 + (won && !paid.win ? 40 : 0);
+    paid.w = Math.max(paid.w, cleared); paid.b = Math.max(paid.b, bosses); if (won) paid.win = true;
+    const n = Math.round(base * (SALVAGE_TIER[MAP.tier] || 1) * (1 + resVal("salvage")));
+    if (n > 0) addSalvage(n);
+    paid.total += n; S.salvageNow = n;
+    return n;
+  }
+  function showResearch(from) {
+    researchFrom = from || researchFrom || "menu";
+    const sv = getSalvage();
+    const card = r => {
+      const lvl = resLevel(r.id), maxed = lvl >= r.max, cost = maxed ? 0 : resCost(r.id), can = !maxed && sv >= cost;
+      return `<div class="res-card${maxed ? " maxed" : ""}">
+        <div class="res-head"><span class="res-icon">${r.icon}</span><b>${r.name}</b><span class="res-lvl">${lvl}/${r.max}</span></div>
+        <div class="res-pips">${Array.from({ length: r.max }, (_, i) => `<i class="${i < lvl ? "on" : ""}"></i>`).join("")}</div>
+        <div class="res-eff">${lvl ? r.fmt(+(lvl * r.per).toFixed(2)) : "Not researched yet"}${maxed ? "" : `<small>Next: ${r.fmt(+((lvl + 1) * r.per).toFixed(2))}</small>`}</div>
+        <button class="${can ? "primary " : ""}small" data-research="${r.id}" ${can ? "" : "disabled"}>${maxed ? "✓ Maxed" : `Research · ⚙ ${cost}`}</button>
+      </div>`;
+    };
+    const over = researchFrom === "result" && S && (S.over || S.won);
+    showOverlay(`<h1>🔬 RESEARCH LAB</h1>
+      <p class="muted">Every run earns <b>⚙ Salvage</b>, win or lose: more for waves cleared, bosses destroyed, wins and harder planets. Research is permanent and works on every planet and mode.</p>
+      <p class="salvage-total">⚙ <b>${sv.toLocaleString()}</b> Salvage</p>
+      <div class="res-grid">${RESEARCH.map(card).join("")}</div>
+      <div class="btns">${over ? `<button class="primary" data-act="retry">↻ Try Again</button>` : ""}<button class="${over ? "" : "primary"}" data-act="research-back">${over ? "Main Menu" : "← Back"}</button></div>`, true);
+  }
+  let researchFrom = "menu";
+
   // ---------- achievements ----------
   const ACHIEVEMENTS = [
     { id: "first_wave", name: "First Contact", desc: "Clear your first wave." },
@@ -1335,6 +1399,7 @@
   // ---------- end states + stats screen ----------
   function gameOver() {
     S.over = true; S.lives = 0;
+    awardSalvage(false);
     audio.setIntensity(0);
     P.gameplayStop();
     clearRun();
@@ -1364,6 +1429,7 @@
 
   function victory() {
     S.won = true; S.paused = true;
+    awardSalvage(true);
     P.gameplayStop(); P.happy();
     clearRun();
     stats.track(S.challenge ? `${S.daily ? "daily" : "challenge"}-win/${S.mapKey}/${S.challenge}` : `win/${S.mapKey}/${S.diffKey}`);
@@ -1423,6 +1489,7 @@
       ${head}
       <p class="muted">${MAP.name} · <span style="color:${S.diff.color}">${S.diff.name}</span>${rec ? ` · Best: wave ${rec.wave}, ${rec.score.toLocaleString()} pts` : ""}</p>
       ${newBest ? `<p class="newbest">★ New high score! ★</p>` : ""}
+      ${mode !== "pause" && S.salvageNow != null ? `<p class="salvage-line">⚙ <b>+${S.salvageNow}</b> Salvage · ${getSalvage().toLocaleString()} to spend in the <a href="#" data-act="research-result">🔬 Research Lab</a>${RESEARCH.some(r => resLevel(r.id) < r.max && getSalvage() >= resCost(r.id)) ? ' <span class="res-ready">· research ready!</span>' : ""}</p>` : ""}
       ${lb ? `
         <p class="${lb.rank === 1 ? "newbest" : "muted"}">${lb.rank === 1 ? "★ New personal best! ★" : lb.rank ? `#${lb.rank} on your ${MAP.name} · ${S.diff.name} leaderboard` : "Not in your top 10 this time. One more run?"}</p>
         ${lb.rank && !LB.nickname() ? `<div class="nick"><input id="nickInput" maxlength="16" placeholder="Name for the leaderboard" autocomplete="off"><button class="primary" data-act="save-nick">Save</button></div>` : ""}
@@ -2176,7 +2243,7 @@
           <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
       })() : MODE === "challenge" ? "" : `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}` : ""} · ${"★".repeat((getStars()[MAP_KEY] || {}).s || 0)}${"☆".repeat(3 - ((getStars()[MAP_KEY] || {}).s || 0))} (★ win · ★★ half HP left · ★★★ 90% HP left)</p>`}
       <div class="btns">${mapUnlocked(MAP_KEY) ? `<button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : MODE === "challenge" ? "Start Challenge ▶" : "Launch Mission ▶"}</button>`
-        : `<button class="primary big" disabled>🔒 Collect ${UNLOCK_STARS[MAP_KEY] - totalStars()} more ★ to unlock ${m.name}</button>`}<button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
+        : `<button class="primary big" disabled>🔒 Collect ${UNLOCK_STARS[MAP_KEY] - totalStars()} more ★ to unlock ${m.name}</button>`}<button data-act="research" class="${RESEARCH.some(r => resLevel(r.id) < r.max && getSalvage() >= resCost(r.id)) ? "res-ready-btn" : ""}">🔬 Research Lab · ⚙ ${getSalvage().toLocaleString()}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
       ${soundButtons()}
       <details><summary>How to play</summary>
         <ul>
@@ -2247,6 +2314,8 @@
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
 
     if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
+    const rs = ev.target.closest("[data-research]");
+    if (rs) { if (buyResearch(rs.dataset.research)) showResearch(); return; }
     const rb = ev.target.closest("[data-rebind]");
     if (rb) { rebinding = rb.dataset.rebind; rb.textContent = "Press a key…"; rb.classList.add("waiting"); return; }
     const chb = ev.target.closest("[data-ch]");
@@ -2317,6 +2386,9 @@
       case "display": P.display.setFullscreen(!P.display.get().fullscreen); break;
       case "winsize": { const cur = (P.display.get().size || [0, 0]).join("x"), i = SIZES.findIndex(z => z.join("x") === cur), nx = SIZES[(i + 1) % SIZES.length]; P.display.setSize(nx[0], nx[1]); a.textContent = `🗔 ${nx.join("×")}`; break; }
       case "controls": showControls(); break;
+      case "research": showResearch("menu"); break;
+      case "research-result": ev.preventDefault(); showResearch("result"); break;
+      case "research-back": researchFrom = "menu"; mainMenu(); break;
       case "keys-reset": KEYS = { ...DEFAULT_KEYS }; store.set("od_keys", JSON.stringify(KEYS)); keyTitles(); showControls(); break;
       case "controls-back": if (S) pauseMenu(); else mainMenu(); break;
       case "quit": if (P.quit) { saveRun(); P.quit(); } break;
@@ -2340,6 +2412,11 @@
     const tier = mapTier(mapKey);
     if (diffKey === tier.diff) S.diff = Object.assign({}, S.diff, { name: tier.name, color: tier.color }); // saved games from before keep their old difficulty
     S.endless = !!endless;
+    { // Research Lab: more starting credits and planet HP (planet HP becomes the run's maximum, so ★ thresholds scale too)
+      const lives = Math.round(S.diff.lives * (1 + resVal("shields")));
+      S.diff = Object.assign({}, S.diff, { lives }); S.lives = lives;
+      S.money = Math.round(S.money * (1 + resVal("funding")));
+    }
     if (challenge && CHALLENGES[challenge] && !endless) {
       S.challenge = challenge; S.daily = !!isDaily; S.winWave = CH_WAVES;
       if (challenge === "thrift") S.money = Math.round(S.money * 0.4);
@@ -2747,7 +2824,7 @@
   function activateOverdrive() {
     if (!S || S.overdriveCd > 0 || S.over) return;
     if (chRule("nood")) { toast("⚡ No Overdrive in this challenge"); sfx("deny"); return; }
-    S.overdrive = OVERDRIVE.duration; S.overdriveCd = OVERDRIVE.cooldown; S.stats.overdrives++;
+    S.overdrive = OVERDRIVE.duration + resVal("overdrive"); S.overdriveCd = OVERDRIVE.cooldown; S.stats.overdrives++;
     if (EXP) for (const t of S.towers) if (t.fuel != null) t.fuel = Math.max(0, t.fuel - OD_FUEL);
     sfx("overdrive"); toast(EXP ? `⚡ OVERDRIVE: fire rate +30% · −${OD_FUEL} fuel on every satellite` : "⚡ OVERDRIVE: rings spinning, fire rate +30%");
     if (EXP && S.selectedTower) renderInfo();
@@ -2805,7 +2882,7 @@
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, toggleCommand, endCommand, cmdTarget, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    state: () => S, board: () => B, begin, toggleCommand, research: { list: RESEARCH, level: resLevel, cost: resCost, buy: buyResearch, salvage: getSalvage, award: awardSalvage, show: showResearch }, endCommand, cmdTarget, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
     getStars, totalStars, mapUnlocked, daily, CHALLENGES, mapChallenges, ACHIEVEMENTS: () => ACHIEVEMENTS,

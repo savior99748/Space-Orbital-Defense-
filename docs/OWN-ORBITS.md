@@ -42,3 +42,23 @@ commanded.
 The game ships as 2D. The menu no longer has a 2D / 3D switch; the 3D view stays in the code for later and opens only
 with `?view=3d` (development and the automated tests).
 
+## Research Lab (permanent upgrades)
+
+Every run earns **⚙ Salvage** when it ends, win or lose: 3 per wave cleared, 12 per boss, 40 for a win, ×1 / 1.25 / 1.5 /
+1.8 on Beginner / Intermediate / Hard / Expert planets. A revived run or freeplay after a win only pays for the new waves.
+Spend it in **🔬 Research Lab** (main menu, or the link on the game-over / victory screen). Research is permanent and
+applies to every planet and mode. Costs rise ×1.55 per level.
+
+| Research | Per level | Max |
+| --- | --- | --- |
+| Weapons Research | +3% satellite damage | 10 |
+| Seed Funding | +6% starting credits | 10 |
+| Planetary Shields | +5% planet HP (★ thresholds scale with it) | 10 |
+| Bounty Protocol | +4% credits per kill (score unchanged) | 10 |
+| Fuel Efficiency | −6% refuel cost | 5 |
+| Overdrive Capacitors | +0.5 s Overdrive | 6 |
+| Command Uplink | +5% damage while commanded | 6 |
+| Salvage Scanners | +5% Salvage | 10 |
+
+Saved in `od_research` and `od_salvage` (Steam Cloud on desktop through the save layer).
+
