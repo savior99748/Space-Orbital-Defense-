@@ -30,6 +30,15 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
       const live = S.enemies.filter(e => !e.dead && (e.x - t.x) ** 2 + (e.y - t.y) ** 2 + ((e.z || 0) - (t.z || 0)) ** 2 < t.st.range ** 2);
       const want = live[live.length - 1]; S.cmdAim = { x: want.x + 1, y: want.y + 1 }; S.cmdPick = null;
       o.aimed = od.cmdTarget(t, t.st.range) === want;
+      // a real click on an invader locks on to it (2D canvas), and the bar says so
+      if (!window.OD.is3D) {
+        const other = live[0]; other.hp = other.maxHp = 1e7; const cv = document.getElementById('game'), rc = cv.getBoundingClientRect(), sp = od.toScreen(other.x, other.y);
+        const ev = type => cv.dispatchEvent(new PointerEvent(type, { clientX: rc.left + sp.x, clientY: rc.top + sp.y, pointerId: 7, pointerType: 'mouse', bubbles: true }));
+        ev('pointerdown'); ev('pointerup'); let gold = false; for (let i = 0; i < 30 && !gold; i++) { await wait(30); gold = S.beams.some(b => b.color === '#ffd166'); }
+        o.lockDbg = [S.cmdPick === other, od.cmdTarget(t, t.st.range) === other, document.getElementById('cmdBar').textContent, !!S.command, live.length];
+        o.locked = S.cmdPick === other && od.cmdTarget(t, t.st.range) === other && /Locked on/.test(document.getElementById('cmdBar').textContent);
+        o.goldBeams = gold;
+      } else { o.locked = true; o.goldBeams = true; }
       // Esc lets go; the boost goes away
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
       await wait(200); o.off = S.command == null && Math.abs(t.st.dmg - dmg0) < 1e-6;
@@ -49,7 +58,8 @@ const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
   for (const [v, r] of Object.entries(out)) {
     ok(r.btnLaser && r.noBtnTractor, `${v}: Command button on shooting satellites only`);
     ok(r.on, `${v}: Command takes control (bar shown, panel closed)`);
-    ok(r.boost === '1.5/1.25/1.25', `${v}: boost while commanded: damage/rate/range ×${r.boost}`);
+    ok(r.locked && r.goldBeams, `${v}: clicking an invader locks on (bar says so); commanded shots are gold ${JSON.stringify([r.lockDbg, r.goldBeams])}`);
+    ok(r.boost === '1.5/1.25/1.6', `${v}: boost while commanded: damage/rate/range ×${r.boost}`);
     ok(r.aimed, `${v}: it shoots the invader nearest the aim point`);
     ok(r.off && r.keyOn && r.keyOff && r.tractorRefused, `${v}: Esc and C let go / take command; the tractor is refused`);
     ok(r.soldEnds, `${v}: selling it ends the command`);

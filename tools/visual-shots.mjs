@@ -94,7 +94,7 @@ try {
     await page.evaluate(ms => { for (let t = 0; t < ms; t += 1000 / 60) { window.__step(1000 / 60); window.__keepAlive(); } }, sc.run);
     if (sc.zoom) await page.evaluate(([z, p]) => { const od = window.__od, C = od.center(); od.setCamera(z, C.x + p[0], C.y + p[1]); }, [sc.zoom, sc.pan || [0, 0]]);
     if (sc.command) await page.evaluate(() => { const od = window.__od, S = od.state(), t = S.towers.find(x => x.type === "laser") || S.towers[0]; od.toggleCommand(t);
-      const e = S.enemies.filter(e => !e.dead).sort((a, b) => ((a.x - t.x) ** 2 + (a.y - t.y) ** 2) - ((b.x - t.x) ** 2 + (b.y - t.y) ** 2))[0]; if (e) { e.x = t.x + 60; e.y = t.y - 40; S.cmdAim = { x: e.x + 6, y: e.y - 4 }; } for (let i = 0; i < 20; i++) { window.__step(1000 / 60); window.__keepAlive(); } });
+      const e = S.enemies.filter(e => !e.dead).sort((a, b) => ((a.x - t.x) ** 2 + (a.y - t.y) ** 2) - ((b.x - t.x) ** 2 + (b.y - t.y) ** 2))[0]; if (e) { const C = od.center(), dx = t.x - C.x, dy = t.y - C.y, dl = Math.hypot(dx, dy) || 1; e.x = t.x + dx / dl * 110; e.y = t.y + dy / dl * 110; e.hp = e.maxHp = 1e6; e.frozen = 99; S.cmdPick = e; S.cmdAim = { x: e.x, y: e.y }; } for (let i = 0; i < 20; i++) { window.__step(1000 / 60); window.__keepAlive(); } });
     if (sc.select) await page.evaluate(() => { const od = window.__od, S = od.state(); od.tapSlot(S.towers[0].slot); });
     if (sc.pick) await page.click(`#shop [data-type="${sc.pick}"]`);
     await page.evaluate(() => { for (let i = 0; i < 3; i++) window.__step(1000 / 60); });
