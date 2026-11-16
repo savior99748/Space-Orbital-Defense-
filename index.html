@@ -354,6 +354,18 @@ kbd.hk{display:none;margin-left:6px;padding:0 4px;border-radius:4px;border:1px s
 .key-row button{min-width:84px;padding:4px 10px;font-weight:700}
 .key-row button.waiting{border-color:#ffd166;color:#ffd166;animation:fuelFlash .6s ease-in-out infinite alternate}
 @media(max-width:720px){.keys{grid-template-columns:1fr}}
+/* Research Lab */
+.salvage-total{font-size:20px;margin:6px 0 12px}.salvage-total b{color:#ffd166}
+.salvage-line{margin:6px 0;color:#ffe2a6}.salvage-line b{color:#ffd166}.salvage-line a{color:#7fd8ff}
+.res-ready{color:#7dff9a;font-weight:700}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;text-align:left;margin:4px 0 12px}
+.res-card{background:rgba(12,32,54,.85);border:1px solid #2f5a78;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.res-card.maxed{border-color:#7dff9a88}
+.res-head{display:flex;align-items:center;gap:8px}.res-head b{flex:1}.res-icon{font-size:20px}.res-lvl{color:#9fc3dd;font-size:12px}
+.res-pips{display:flex;gap:3px}.res-pips i{flex:1;height:5px;border-radius:3px;background:#1d3a52}.res-pips i.on{background:#ffd166}
+.res-eff{font-size:13px;color:#dfefff}.res-eff small{display:block;color:#8fb3cc;font-size:12px;margin-top:2px}
+.res-card button{align-self:stretch}
+button.res-ready-btn{border-color:#ffd166;color:#ffd166;box-shadow:0 0 12px #ffd16655}
 /* Take Command bar */
 #cmdBar{position:absolute;left:50%;transform:translateX(-50%);bottom:52px;z-index:7;display:none;align-items:center;gap:10px;padding:6px 8px 6px 11px;border-radius:12px;
   background:linear-gradient(145deg,rgba(58,42,6,.95),rgba(26,18,2,.95));border:1px solid #ffd166;color:#ffeec2;box-shadow:0 6px 20px #0009,0 0 18px #ffd16644;font:600 13px system-ui,sans-serif;white-space:nowrap}
