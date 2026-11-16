@@ -62,3 +62,27 @@ applies to every planet and mode. Costs rise ×1.55 per level.
 
 Saved in `od_research` and `od_salvage` (Steam Cloud on desktop through the save layer).
 
+## One mode (no Campaign / Challenges / Endless split)
+
+Every game is the same mission: **beat wave 30** (the Dreadnought) to save the planet, earn ★ (win · half HP · 90% HP)
+and unlock the next planet; then **Keep going ∞** for milestones at waves 40, 50, 75, 100 and the planet's
+leaderboard. Every run counts for the planet's record and leaderboard.
+
+**Bonus challenges** pop up during the game at waves 6, 12, 18 and 24, four per planet (the same ids as the old
+challenge mode, so stars earned there still count). Completing one: +1 ★ the first time, credits and 15 Salvage.
+
+| Challenge | Goal |
+| --- | --- |
+| 💎 Flawless | Clear the wave without losing HP |
+| 🪙 Hold Steady | Clear the wave without spending credits |
+| ⚡ Steady Hands | Clear 3 waves in a row without Overdrive |
+| 🔦 Laser Light | Destroy 20 invaders with Laser Sats in the wave |
+| 🎯 Commander | Destroy 12 invaders with a commanded satellite in the wave |
+| 🛰 Low Orbit | Clear the wave with at least 4 satellites in LEO |
+
+The Daily Challenge stays as it was (a rule for a whole 20-wave game).
+
+**End-of-run report:** what finished the planet off, which invader did the most damage, a counter tip, and the
+challenges completed in the run. **Boss bar:** a name banner and a layered health bar (Mothership ×2,
+Dreadnought ×4, Void Titan ×6) while a boss is alive.
+

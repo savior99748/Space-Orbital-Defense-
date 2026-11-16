@@ -354,6 +354,22 @@ kbd.hk{display:none;margin-left:6px;padding:0 4px;border-radius:4px;border:1px s
 .key-row button{min-width:84px;padding:4px 10px;font-weight:700}
 .key-row button.waiting{border-color:#ffd166;color:#ffd166;animation:fuelFlash .6s ease-in-out infinite alternate}
 @media(max-width:720px){.keys{grid-template-columns:1fr}}
+/* boss bar + run report + in-run challenges */
+#bossBar{position:absolute;left:50%;transform:translateX(-50%);top:128px;z-index:6;width:min(560px,72%);display:none;flex-direction:column;gap:4px;pointer-events:none;text-align:center}
+#bossBar.show{display:flex}
+#bossBar .bb-name{font:800 15px system-ui,sans-serif;letter-spacing:.14em;color:#ffd0d8;text-shadow:0 0 10px #ff3d6e99,0 2px 4px #000}
+#bossBar .bb-x{margin-left:8px;color:#ffd166}
+#bossBar .bb-track{height:12px;border-radius:7px;border:1px solid #ff8aa0aa;overflow:hidden;box-shadow:0 0 14px #ff3d6e55,inset 0 0 6px #000a}
+#bossBar .bb-fill{display:block;height:100%;transition:width .12s linear}
+#bossBar.intro .bb-name{animation:bossIn 1.5s ease-out}
+@keyframes bossIn{0%{transform:scale(1.8);opacity:0}25%{transform:scale(1);opacity:1}55%{color:#fff;text-shadow:0 0 22px #ff3d6e}100%{}}
+@media(max-width:720px){#bossBar{top:104px;width:86%}#bossBar .bb-name{font-size:12px}#bossBar .bb-track{height:9px}}
+@media(prefers-reduced-motion:reduce){#bossBar.intro .bb-name{animation:none}}
+.killed{color:#ffb3bf;margin:6px 0}.killed b{color:#ff8aa0}
+.run-tip{color:#bfefff;background:rgba(20,60,90,.5);border:1px solid #2f6a8c;border-radius:10px;padding:6px 10px;margin:6px auto;max-width:560px}
+.feats-won{color:#ffe2a6;margin:6px 0}
+.chip.feat{border-color:#ffd166;color:#ffe2a6}.chip.feat.fail{border-color:#ff5c7a;color:#ff9aa8;opacity:.8}.chip.feat.next{opacity:.85}
+.ch-list div.ch-btn{cursor:default}
 /* Research Lab */
 .salvage-total{font-size:20px;margin:6px 0 12px}.salvage-total b{color:#ffd166}
 .salvage-line{margin:6px 0;color:#ffe2a6}.salvage-line b{color:#ffd166}.salvage-line a{color:#7fd8ff}

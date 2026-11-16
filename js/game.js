@@ -42,8 +42,6 @@
   let W = 1000, H = 700, CX = 500, CY = 350, SPAWN_R = 640, scale = 1;
   let MAP_KEY = MAP_ORDER.includes(store.get("od_map")) ? store.get("od_map") : "earth";
   let DIFF_KEY = "medium"; // follows the selected map (see diffOf)
-  let MODE = ["endless", "challenge"].includes(store.get("od_mode")) ? store.get("od_mode") : "campaign";
-  let CH_SEL = store.get("od_ch") || ""; // the challenge picked in the menu
   const LB = OD.leaderboard;
   let lbView = null; // { map, diff } while the leaderboard screen is open
   const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -278,6 +276,13 @@
     const g = GOALS.find(w => w > S.wave);
     return g ? `Reach wave ${g}${g === 10 ? " (Mothership)" : g === 30 ? " (Dreadnought)" : ""}` : "";
   }
+  function featChip() {
+    if (!S || S.challenge) return "";
+    const f = S.feat, nx = !f && !S.won && mapFeats(S.mapKey).find(x => x.wave === S.wave + 1);
+    if (f) { const st = featStatus(), d = FEATS[f.id]; return `<span class="chip feat ${st === "fail" ? "fail" : ""}" title="${d.desc(f.wave)}">${d.icon} ${d.name}: ${st === "fail" ? "✗ missed" : st === "ok" ? "in progress" : st}</span>`; }
+    if (nx && !S.waveActive) { const d = FEATS[nx.id]; return `<span class="chip feat next" title="${d.desc(nx.wave)}">${d.icon} Next wave: ${d.name}${featDone(S.mapKey, nx.id) ? " ✓" : " · +1 ★"}</span>`; }
+    return "";
+  }
   function flashMoney() { ui.money.classList.remove("flash"); void ui.money.offsetWidth; ui.money.classList.add("flash"); }
 
   function burst(x, y, color, n = 12, spd = 120, life = 0.7, z = 0) {
@@ -290,6 +295,59 @@
   }
   const floater = (x, y, text, color) => S.floaters.push({ x, y, text, color, life: 1.2 });
   const ringFx = (x, y, r, color, life = 0.35, inward = false, z = 0) => S.rings.push({ x, y, z, r, color, life, max: life, inward });
+
+  // end-of-run report: what hurt the planet most, and the last thing that hit it
+  function noteHit(type, dmg) { S.lastHit = type; S.hitBy = S.hitBy || {}; S.hitBy[type] = (S.hitBy[type] || 0) + dmg; }
+  const COUNTER_TIPS = {
+    drone: "Drones come in numbers: Missile Pods and Flak Arrays cover groups.",
+    swarm: "Swarmers are tiny and fast: Flak Arrays and EMP Sats stop swarms.",
+    comet: "Comets are the fastest invaders: a Tractor Beam slows them so your lasers can finish them.",
+    asteroid: "Asteroids are tough: Railguns and upgraded Missile Pods break them.",
+    rock: "Asteroid fragments slip through: keep a Flak Array or Laser near the planet.",
+    cruiser: "Shield Cruisers regenerate their shields: Railguns break shields fastest.",
+    mother: "Motherships launch drones: take command of a Railgun or Laser and focus it.",
+    dread: "The Dreadnought is heavily shielded: Railguns, Focus Arrays and Overdrive make the difference.",
+    brute: "Juggernauts are armored: Railguns ignore most of it; slow them with Tractor Beams.",
+    phantom: "Phase Wraiths are quick: Tractor Beams and Flak Arrays catch them.",
+    brood: "Brood Hives spawn swarms: kill them early with Railguns or a commanded satellite.",
+    aegis: "Aegis Bastions have huge regenerating shields: stack Railguns and Focus Arrays.",
+    titan: "The Void Titan needs everything: Ascended Railguns, Focus Arrays and Overdrive together.",
+  };
+  function runReport(mode) {
+    const parts = [];
+    if (mode === "over" && S.lastHit) {
+      const top = Object.entries(S.hitBy || {}).sort((a, b) => b[1] - a[1])[0];
+      parts.push(`<p class="killed">💀 Finished off by a <b>${ENEMIES[S.lastHit].name}</b>${top && top[0] !== S.lastHit ? ` · most damage came from <b>${ENEMIES[top[0]].name}s</b> (${top[1]} HP)` : ""}</p>`);
+      const tipKey = top ? top[0] : S.lastHit;
+      if (COUNTER_TIPS[tipKey]) parts.push(`<p class="run-tip">💡 ${COUNTER_TIPS[tipKey]}</p>`);
+    }
+    if (S.featsWon && S.featsWon.length) parts.push(`<p class="feats-won">⭐ Challenges this run: ${S.featsWon.map(id => `${FEATS[id].icon} ${FEATS[id].name} ✓`).join(" · ")}</p>`);
+    return parts.join("");
+  }
+
+  // Boss health bar: name banner and a big layered bar across the top while a boss is alive
+  const BOSS_LAYERS = { mother: 2, dread: 4, titan: 6 }, LAYER_COLS = ["#ff3d6e", "#ff8a3d", "#ffd166", "#b06cff", "#3dd9ff", "#7dff9a"];
+  let bossEl = null, bossKey = "";
+  function updateBossBar() {
+    const e = S && !S.over && S.enemies.find(x => x.def.boss && !x.dead);
+    if (!bossEl) {
+      bossEl = document.createElement("div"); bossEl.id = "bossBar";
+      bossEl.innerHTML = `<div class="bb-name"><b></b><span class="bb-x"></span></div><div class="bb-track"><i class="bb-fill"></i></div>`;
+      stage.appendChild(bossEl);
+    }
+    if (!e) { if (bossKey) { bossEl.classList.remove("show"); bossKey = ""; } return; }
+    const L = BOSS_LAYERS[e.type] || 1, total = e.maxHp + (e.maxShield || 0), cur = Math.max(0, e.hp + (e.shield || 0)), per = total / L;
+    const layer = Math.max(1, Math.ceil(cur / per - 1e-9)), frac = Math.max(0, Math.min(1, (cur - (layer - 1) * per) / per));
+    if (bossKey !== String(e.id)) {
+      bossKey = String(e.id); bossEl.classList.add("show", "intro"); setTimeout(() => bossEl && bossEl.classList.remove("intro"), 1600);
+      bossEl.querySelector("b").textContent = e.def.name.toUpperCase();
+    }
+    bossEl.querySelector(".bb-x").textContent = L > 1 ? `×${layer}` : "";
+    const fill = bossEl.querySelector(".bb-fill");
+    fill.style.width = `${(frac * 100).toFixed(1)}%`; fill.style.background = LAYER_COLS[(layer - 1) % LAYER_COLS.length];
+    bossEl.querySelector(".bb-track").style.background = layer > 1 ? LAYER_COLS[(layer - 2) % LAYER_COLS.length] + "66" : "#0b1a2a";
+  }
+  setInterval(updateBossBar, 100);
 
   // p: the shooter ({x, y, z}); distances are 3D
   function pickTarget(p, range, mode, exclude, only) {
@@ -381,6 +439,7 @@
     if (S.wave === 1) stats.once("first/wave-start");
     if (S.wave === 2 && MAP.moons.length && !MAP.final) tip("moons", `${MAP.moons[0].name}'s gravity pulls invaders in, so satellites on its ring see lots of action.`);
     if (S.wave === 3) tip("overdrive", "⚡ Overdrive spins the rings fast for a few seconds. Save it for a big wave.");
+    startFeat();
     if (S.wave === 6) tip("command", "🎯 Tap a satellite, then 🎯 Command to aim it yourself: +50% damage while you control it.", 1600, 6000);
     if (S.wave === 4) tip("camera", OD.is3D ? "Drag to rotate the view; pinch or + / − to zoom." : "Pinch or + / − to zoom in; drag to look around.");
     updateUI(true);
@@ -393,6 +452,7 @@
     const theta = Math.random() * TAU;
     // 3D maps: invaders come from any height (elevation up to ±55°)
     const phi = MAP.threeD && !at ? (Math.random() * 2 - 1) * 0.96 : 0;
+    if (def.boss && !at) { S.shake = Math.max(S.shake, 10); }
     const e = {
       id: nextId++, type, def, hp, maxHp: hp, hpScale,
       shield: def.shield ? Math.round(def.shield * scaleHp) : 0,
@@ -401,7 +461,7 @@
       z: at ? (at.z || 0) + (MAP.threeD ? (Math.random() - 0.5) * 16 : 0) : Math.sin(phi) * SPAWN_R,
       dir: at ? at.dir : Math.random() < 0.5 ? 1 : -1,
       slow: 1, vuln: 1, stun: 0, frozen: 0, hit: 0, spin: Math.random() * TAU, seed: Math.random() * 10,
-      shieldHitAt: -10, spawnTimer: def.spawn ? def.spawn.every : 0, burn: null,
+      maxShield: def.shield ? Math.round(def.shield * scaleHp) : 0, shieldHitAt: -10, spawnTimer: def.spawn ? def.spawn.every : 0, burn: null,
     };
     e.maxShield = e.shield;
     // Solar System: about half the invaders go for a random planet that's still standing, the rest for the Sun
@@ -446,6 +506,7 @@
     S.money += reward;
     S.score += base * 10; // score stays research-free
     S.stats.killed++; S.stats.earnedKills += reward;
+    if (S.feat && src) { if (src.type === "laser") S.feat.laser++; if (src === S.command) S.feat.cmd++; }
     const big = e.def.boss;
     burst(e.x, e.y, e.def.color, big ? 60 : 12, big ? 240 : 130, big ? 1.4 : 0.7, e.z);
     if (!OD.is3D && OD.fx2d) OD.fx2d.kill(e.x, e.y, e.def.color, e.def.size, big, B.time); // 2D flash + shards (visual only)
@@ -574,7 +635,7 @@
       if (e.tb && e.r <= B.bodies[e.tb].r + def.size * 0.4) { // hit its planet
         e.dead = true;
         S.bodyHp[e.tb] = Math.max(0, S.bodyHp[e.tb] - def.dmg);
-        S.stats.leaked++;
+        S.stats.leaked++; noteHit(e.type, def.dmg);
         burst(e.x, e.y, "#ff5c7a", 14, 140, 0.6, e.z); floater(e.x, e.y, `-${def.dmg}`, "#ff9a8a");
         S.shake = Math.max(S.shake, def.boss ? 12 : 5); sfx("leak");
         if (S.bodyHp[e.tb] <= 0) knockOut(e.tb);
@@ -583,7 +644,7 @@
         e.dead = true;
         const lost = Math.min(def.dmg, Math.max(0, S.lives));
         S.lives -= def.dmg;
-        S.stats.leaked++; S.stats.hpLost += lost;
+        S.stats.leaked++; S.stats.hpLost += lost; noteHit(e.type, lost);
         burst(e.x, e.y, "#ff5c7a", 18, 160, 0.7, e.z);
         floater(e.x, e.y, `-${lost}`, "#ff5c7a");
         S.shake = Math.max(S.shake, def.boss ? 16 : 8);
@@ -619,6 +680,7 @@
       sfx("clear");
       unlock("first_wave");
       if ([1, 3, 5, 10, 15, 20, 25, 30].includes(S.wave) || (S.wave > 30 && S.wave % 10 === 0)) stats.track(`wave/${S.mapKey}/${S.wave}`);
+      finishFeat();
       if (S.wave === (S.winWave || OD.WIN_WAVE) && !S.won && !S.endless) return victory();
       announceUnlocks();
       if (S.wave === 1) stats.once("first/wave-clear");
@@ -1160,7 +1222,7 @@
     if (!S || S.over || S.waveActive || (S.won && !S.freeplay)) return;
     store.set(RUN_KEY, JSON.stringify({
       v: EXP ? 2 : 1, map: S.mapKey, diff: S.diffKey, seed: S.seed, wave: S.wave, lives: S.lives, money: S.money, score: S.score,
-      stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless, challenge: S.challenge || null, daily: !!S.daily,
+      stats: S.stats, realTime: S.realTime, bodyHp: S.bodyHp, won: S.won, freeplay: S.freeplay, revived: !!S.revived, adWave: S.adWave, endless: !!S.endless, challenge: S.challenge || null, daily: !!S.daily, feat: S.feat || null, featsWon: S.featsWon || [], salvaged: S.salvaged || null,
       towers: S.towers.map(packTower), retired: S.retired.map(packTower),
       board: { time: B.time, rings: B.rings.map(r => r.angle), bodies: B.bodies.map(b => b.angle || 0) }, savedAt: Date.now(),
     }));
@@ -1173,6 +1235,7 @@
   function resumeRun(r) {
     MAP_KEY = r.map; DIFF_KEY = r.diff; pendingSeed = r.seed;
     begin(r.map, r.diff, true, !!r.endless, r.challenge, r.daily);
+    Object.assign(S, { feat: r.feat || null, featsWon: r.featsWon || [], salvaged: r.salvaged || undefined });
     Object.assign(S, { wave: r.wave, lives: r.lives, money: r.money, score: r.score, realTime: r.realTime || 0,
       won: !!r.won, freeplay: !!r.freeplay, revived: !!r.revived, adWave: r.adWave });
     Object.assign(S.stats, r.stats || {});
@@ -1216,7 +1279,59 @@
   const dayNumber = () => Math.floor(Date.now() / 86400000);
   const daily = (d = dayNumber()) => ({ day: d, map: MAP_ORDER[(d * 5 + 3) % MAP_ORDER.length], ch: CH_KEYS[(d * 7 + 1) % CH_KEYS.length] });
   const getDaily = () => { try { return JSON.parse(store.get("od_daily") || "{}") || {}; } catch { return {}; } };
-  const chRule = id => !!(S && S.challenge === id); // is this challenge's rule active in the current game?
+  const chRule = id => !!(S && S.challenge === id); // is this challenge's rule active in the current game? (Daily Challenge)
+  // In-run challenges: each planet has 4, which pop up during a normal game at waves 6, 12, 18 and 24 (the same ids as
+  // the old challenge mode, so stars earned there still count). Complete one for +1 ★ (first time), credits and Salvage.
+  const FEAT_WAVES = [6, 12, 18, 24], FEAT_LASER_KILLS = 20, FEAT_CMD_KILLS = 12, FEAT_LEO = 4;
+  const FEATS = {
+    lasers: { name: "Laser Light", icon: "🔦", desc: w => `Destroy ${FEAT_LASER_KILLS} invaders with Laser Sats in wave ${w}.` },
+    thrift: { name: "Hold Steady", icon: "🪙", desc: w => `Clear wave ${w} without spending any credits.` },
+    glass: { name: "Flawless", icon: "💎", desc: w => `Clear wave ${w} without losing any HP.` },
+    nood: { name: "Steady Hands", icon: "⚡", span: 3, desc: w => `Clear waves ${w}–${w + 2} without using Overdrive.` },
+    swift: { name: "Commander", icon: "🎯", desc: w => `Destroy ${FEAT_CMD_KILLS} invaders with a commanded satellite in wave ${w}.` },
+    leo: { name: "Low Orbit", icon: "🛰", desc: w => `Clear wave ${w} with at least ${FEAT_LEO} satellites in ${EXP ? "LEO" : "the inner ring"}.` },
+  };
+  const mapFeats = key => mapChallenges(key).map((id, i) => ({ id, wave: FEAT_WAVES[i] }));
+  const featDone = (key, id) => !!(((getStars()[key] || {}).c || {})[id]);
+  function startFeat() { // called when a wave starts
+    if (S.feat && S.wave > S.feat.end) S.feat = null;
+    if (S.feat || S.challenge || tut || S.won) return;
+    const f = mapFeats(S.mapKey).find(x => x.wave === S.wave);
+    if (!f) return;
+    const def = FEATS[f.id];
+    S.feat = { id: f.id, wave: f.wave, end: f.wave + (def.span || 1) - 1, hp: S.stats.hpLost, spent: S.stats.spent, od: S.stats.overdrives, laser: 0, cmd: 0, failed: false };
+    const done = featDone(S.mapKey, f.id);
+    toast(`${def.icon} Bonus challenge: ${def.name}. ${def.desc(f.wave)} ${done ? "(credits + Salvage)" : "+1 ★"}`, 5200);
+    sfx("alarm");
+  }
+  function featStatus() { // live state for the wave bar: "ok", "fail" or a progress string
+    const f = S.feat; if (!f) return null;
+    if (f.id === "glass" && S.stats.hpLost > f.hp) f.failed = true;
+    if (f.id === "thrift" && S.stats.spent > f.spent) f.failed = true;
+    if (f.id === "nood" && S.stats.overdrives > f.od) f.failed = true;
+    if (f.failed) return "fail";
+    if (f.id === "lasers") return `${Math.min(f.laser, FEAT_LASER_KILLS)}/${FEAT_LASER_KILLS}`;
+    if (f.id === "swift") return `${Math.min(f.cmd, FEAT_CMD_KILLS)}/${FEAT_CMD_KILLS}`;
+    if (f.id === "leo") return `${leoCount()}/${FEAT_LEO}`;
+    return "ok";
+  }
+  const leoCount = () => S.towers.filter(t => !TOWERS[t.type].ground && (EXP ? (t.orbit || 0) === 0 : B.slots[t.slot].ring === 0)).length;
+  function finishFeat() { // called when a wave is cleared
+    const f = S.feat; if (!f || S.wave < f.end) return;
+    S.feat = null;
+    featStatus(); // updates f.failed
+    const def = FEATS[f.id];
+    const ok = !f.failed && (f.id === "lasers" ? f.laser >= FEAT_LASER_KILLS : f.id === "swift" ? f.cmd >= FEAT_CMD_KILLS : f.id === "leo" ? leoCount() >= FEAT_LEO : true);
+    if (!ok) { toast(`${def.icon} Challenge missed: ${def.name}. It comes back next run.`, 3200); return; }
+    const credits = Math.round((150 + f.wave * 15) * S.diff.reward * OD.ECON), salvage = 15;
+    S.money += credits; S.stats.earnedBonus += credits; addSalvage(salvage);
+    S.featsWon = (S.featsWon || []).concat(f.id);
+    const res = featDone(S.mapKey, f.id) ? { gained: 0, newly: [] } : awardStars(0, f.id);
+    toast(`${def.icon} Challenge complete: ${def.name}! ${res.gained ? "+1 ★ · " : ""}+${credits} credits · +${salvage} ⚙`, 4200);
+    if (res.newly && res.newly.length) setTimeout(() => toast(`🔓 New planet unlocked: ${res.newly.map(k => MAPS[k].name).join(", ")}!`, 3600), 4300);
+    sfx("win"); flashMoney();
+    const root = B.bodies[0]; ringFx(root.x, root.y, root.r * 2.6, "#ffd166", 0.9);
+  }
   function awardStars(campaignStars, challenge) { // saves the best result; returns how many new stars were earned
     const st = getStars(), before = totalStars(st), r = (st[S.mapKey] = st[S.mapKey] || { s: 0, c: {} });
     if (campaignStars) r.s = Math.max(r.s || 0, campaignStars);
@@ -1404,23 +1519,20 @@
     P.gameplayStop();
     clearRun();
     sfx("lose");
-    if (S.endless) {
-      stats.track(`endless-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
-      S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
-      showStats("over", null, false, S.lastLb);
-    } else if (S.challenge) {
+    if (S.challenge) { // Daily Challenge
       stats.track(`challenge-over/${S.mapKey}/${S.challenge}/w${stats.bucket(S.wave)}`);
       showStats("over", null, false);
-    } else {
-      stats.track(`game-over/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
+    } else { // one mode: every run counts for the planet's record and its leaderboard (going past wave 30 climbs it)
+      stats.track(`${S.endless ? "endless-over" : "game-over"}/${S.mapKey}/${S.diffKey}/w${stats.bucket(S.wave)}`);
       const { rec, newBest } = saveRec();
-      showStats("over", rec, newBest);
+      S.lastLb = LB.submit(S.mapKey, S.diffKey, { wave: S.wave, score: S.score }, S.lastLb && S.lastLb.entry.id);
+      showStats("over", rec, newBest, S.endless ? S.lastLb : null);
     }
     updateUI(true);
   }
 
   function lbTable(entries, highlightId) {
-    if (!entries.length) return `<p class="muted">No Endless runs yet. Choose <b>∞ Endless</b> on the menu and see how far you get!</p>`;
+    if (!entries.length) return `<p class="muted">No runs here yet. Beat wave 30, then keep going to climb the leaderboard!</p>`;
     const medal = i => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1);
     return `<table class="lb"><thead><tr><th>#</th><th>Name</th><th>Wave</th><th>Score</th><th>Date</th></tr></thead><tbody>
       ${entries.map((e, i) => `<tr class="${e.id === highlightId ? "me" : ""}"><td>${medal(i)}</td><td>${esc(e.name || "You")}</td><td><b>${e.wave}</b></td><td>${e.score.toLocaleString()}</td><td>${esc(e.date)}</td></tr>`).join("")}
@@ -1460,7 +1572,7 @@
       : `<p class="stars-won"><span class="big-stars">${"★".repeat(res.stars || 1)}<i>${"★".repeat(3 - (res.stars || 1))}</i></span>${(res.stars || 1) < 3 ? `<small>${(res.stars || 1) < 2 ? "Win with half your HP left for ★★" : "Win with 90% of your HP left for ★★★"}</small>` : ""}</p>`;
     const unlockedLine = mode === "won" && res.newly && res.newly.length ? `<p class="newbest">🔓 New planet unlocked: ${res.newly.map(k => MAPS[k].name).join(", ")}!</p>` : "";
     const head = mode === "won"
-      ? `<h1 style="color:var(--good)">${ch ? "CHALLENGE COMPLETE" : MAP.final ? "SOLAR SYSTEM SAVED" : `${MAP.name.toUpperCase()} SAVED`}</h1><p>${ch ? `${MAP.name} held for ${CH_WAVES} waves under ${ch.name}.` : `You destroyed the Dreadnought and survived all ${OD.WIN_WAVE} waves!`}</p>${starLine}${unlockedLine}`
+      ? `<h1 style="color:var(--good)">${ch ? "CHALLENGE COMPLETE" : MAP.final ? "SOLAR SYSTEM SAVED" : `${MAP.name.toUpperCase()} SAVED`}</h1><p>${ch ? `${MAP.name} held for ${CH_WAVES} waves under ${ch.name}.` : `You destroyed the Dreadnought and survived all ${OD.WIN_WAVE} waves!`}</p>${starLine}${unlockedLine}${ch ? "" : `<p class="muted small">∞ <b>Keep going</b> to climb the ${MAP.name} leaderboard: bonus credits at waves 40, 50, 75 and 100.</p>`}`
       : mode === "over" && S.endless
         ? `<h1 style="color:var(--gold)">ENDLESS RUN OVER</h1><p>You reached <b>wave ${S.wave}</b> with <b>${S.score.toLocaleString()}</b> points.</p>`
       : mode === "over"
@@ -1481,7 +1593,7 @@
     }).join("");
     const nextKey = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1];
     const btns = mode === "won"
-      ? `${S.challenge ? "" : `<button class="primary" data-act="freeplay">Freeplay ▶</button>`}${nextKey && !S.challenge && mapUnlocked(nextKey) ? `<button class="primary" data-act="next">Next: ${MAPS[nextKey].name} →</button>` : ""}<button data-act="menu">Main Menu</button>`
+      ? `${S.challenge ? "" : `<button class="primary" data-act="freeplay">Keep going ∞</button>`}${nextKey && !S.challenge && mapUnlocked(nextKey) ? `<button class="primary" data-act="next">Next: ${MAPS[nextKey].name} →</button>` : ""}<button data-act="menu">Main Menu</button>`
       : mode === "over"
         ? `${!S.revived && M.offer("revive").available ? `<button class="primary ad" data-act="revive">${M.offer("revive").method === "ad" ? "📺 Watch ad: revive with 5 HP" : "🛡 Revive with 5 HP"}</button>` : ""}<button class="primary" data-act="retry">Try Again</button><button data-act="menu">Main Menu</button>`
         : `<button class="primary" data-act="pause">← Back</button>`;
@@ -1489,6 +1601,7 @@
       ${head}
       <p class="muted">${MAP.name} · <span style="color:${S.diff.color}">${S.diff.name}</span>${rec ? ` · Best: wave ${rec.wave}, ${rec.score.toLocaleString()} pts` : ""}</p>
       ${newBest ? `<p class="newbest">★ New high score! ★</p>` : ""}
+      ${mode !== "pause" ? runReport(mode) : ""}
       ${mode !== "pause" && S.salvageNow != null ? `<p class="salvage-line">⚙ <b>+${S.salvageNow}</b> Salvage · ${getSalvage().toLocaleString()} to spend in the <a href="#" data-act="research-result">🔬 Research Lab</a>${RESEARCH.some(r => resLevel(r.id) < r.max && getSalvage() >= resCost(r.id)) ? ' <span class="res-ready">· research ready!</span>' : ""}</p>` : ""}
       ${lb ? `
         <p class="${lb.rank === 1 ? "newbest" : "muted"}">${lb.rank === 1 ? "★ New personal best! ★" : lb.rank ? `#${lb.rank} on your ${MAP.name} · ${S.diff.name} leaderboard` : "Not in your top 10 this time. One more run?"}</p>
@@ -2079,7 +2192,7 @@
     if (EXP) renderLaunchPad();
     if (!S) return;
     const odState = S.overdrive > 0 ? "on" : S.overdriveCd > 0 ? Math.ceil(S.overdriveCd) : "ready";
-    const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over, M.isPremium()].join("|");
+    const key = [S.wave, S.lives, S.money, S.score, S.waveActive, S.selectedType, S.speed, S.paused, S.auto, odState, S.over, M.isPremium(), S.feat ? featStatus() : ""].join("|");
     if (key === lastUI && !force) return;
     lastUI = key;
     ui.wave.textContent = S.endless ? `${S.wave} ∞` : S.won || S.freeplay ? `${S.wave}` : `${S.wave}/${S.winWave || OD.WIN_WAVE}`;
@@ -2114,11 +2227,11 @@
     }
     const pv = S.waveActive ? S.wave : S.wave + 1;
     const obj = objective();
-    const pvKey = `${pv}|${S.waveActive}|${obj}`;
+    const pvKey = `${pv}|${S.waveActive}|${obj}|${S.feat ? featStatus() : ""}`;
     if (pvKey !== lastPreview) {
       lastPreview = pvKey;
       const nm = S.endless ? nextMilestone(S.wave) : 0;
-      ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${obj ? `<span class="chip goal">🎯 ${obj}</span>` : ""}${previewText(pv)}${S.endless ? `<span class="chip milestone">🏁 Wave ${nm}: +${Math.round(milestoneReward(nm) * S.diff.reward)}</span>` : ""}`;
+      ui.preview.innerHTML = `<span class="pv-label">${S.waveActive ? "This wave" : "Next wave"}:</span>${obj ? `<span class="chip goal">🎯 ${obj}</span>` : ""}${featChip()}${previewText(pv)}${S.endless ? `<span class="chip milestone">🏁 Wave ${nm}: +${Math.round(milestoneReward(nm) * S.diff.reward)}</span>` : ""}`;
     }
     if (S.selectedTower) {
       ui.info.querySelectorAll("[data-up]").forEach(b => {
@@ -2226,23 +2339,12 @@
         <p>${m.desc}</p>
         <p class="feature">✦ ${m.feature}</p>
       </div>
-      <div class="mode-row">
-        <button class="mode-btn${MODE === "campaign" ? " selected" : ""}" data-mode="campaign"><b>Campaign</b><small>Survive 30 waves</small></button>
-        <button class="mode-btn${MODE === "challenge" ? " selected" : ""}" data-mode="challenge"><b>★ Challenges</b><small>${Object.keys((getStars()[MAP_KEY] || {}).c || {}).length}/4 done here</small></button>
-        <button class="mode-btn${MODE === "endless" ? " selected" : ""}" data-mode="endless"><b>∞ Endless</b><small>How far can you go?</small></button>
-      </div>
-      ${MODE === "challenge" ? (() => {
-        const list = mapChallenges(MAP_KEY), done = (getStars()[MAP_KEY] || {}).c || {};
-        if (!list.includes(CH_SEL)) CH_SEL = list.find(c => !done[c]) || list[0];
-        return `<div class="ch-list">${list.map(c => `<button class="ch-btn${c === CH_SEL ? " selected" : ""}${done[c] ? " got" : ""}" data-ch="${c}"><b>${CHALLENGES[c].icon} ${CHALLENGES[c].name}${done[c] ? " ✓" : ""}</b><small>${CHALLENGES[c].desc}</small></button>`).join("")}</div>
-          <p class="muted small">Survive ${CH_WAVES} waves under the rule for <b>+1 ★</b>.</p>`;
-      })() : ""}
-      ${MODE === "endless" ? (() => {
-        const lbTop = LB.top(MAP_KEY, DIFF_KEY)[0], bestAll = LB.bestAll();
-        return `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc} Waves never stop. ${lbTop ? `Your best here: <b>wave ${lbTop.wave}</b>.` : "No run here yet."}</p>
-          <div class="milestones">🏁 Milestones: ${[40, 50, 75, 100].map(w => `<span class="ms${bestAll >= w ? " got" : ""}">${w}</span>`).join("")}</div>`;
-      })() : MODE === "challenge" ? "" : `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}` : ""} · ${"★".repeat((getStars()[MAP_KEY] || {}).s || 0)}${"☆".repeat(3 - ((getStars()[MAP_KEY] || {}).s || 0))} (★ win · ★★ half HP left · ★★★ 90% HP left)</p>`}
-      <div class="btns">${mapUnlocked(MAP_KEY) ? `<button class="primary big" data-act="start">${MODE === "endless" ? "Start Endless ∞" : MODE === "challenge" ? "Start Challenge ▶" : "Launch Mission ▶"}</button>`
+      ${(() => { const done = (getStars()[MAP_KEY] || {}).c || {}, lbTop = LB.top(MAP_KEY, DIFF_KEY)[0];
+        return `<p class="muted small"><b style="color:${tier.color}">${tier.name}:</b> ${DIFFICULTY[DIFF_KEY].desc}${rec ? ` · Best here: wave ${rec.wave}` : ""}${lbTop ? ` · Leaderboard best: <b>wave ${lbTop.wave}</b>` : ""}</p>
+          <p class="muted small">${"★".repeat((getStars()[MAP_KEY] || {}).s || 0)}${"☆".repeat(3 - ((getStars()[MAP_KEY] || {}).s || 0))} Beat wave 30 (★ win · ★★ half HP left · ★★★ 90% HP left), then keep going for the leaderboard.</p>
+          <div class="ch-list">${mapFeats(MAP_KEY).map(f => `<div class="ch-btn${done[f.id] ? " got" : ""}"><b>${FEATS[f.id].icon} ${FEATS[f.id].name}${done[f.id] ? " ✓" : " · +1 ★"}</b><small>${FEATS[f.id].desc(f.wave)}</small></div>`).join("")}</div>
+          <p class="muted small">Bonus challenges pop up during the game at waves ${FEAT_WAVES.join(", ")}.</p>`; })()}
+      <div class="btns">${mapUnlocked(MAP_KEY) ? `<button class="primary big" data-act="start">Launch Mission ▶</button>`
         : `<button class="primary big" disabled>🔒 Collect ${UNLOCK_STARS[MAP_KEY] - totalStars()} more ★ to unlock ${m.name}</button>`}<button data-act="research" class="${RESEARCH.some(r => resLevel(r.id) < r.max && getSalvage() >= resCost(r.id)) ? "res-ready-btn" : ""}">🔬 Research Lab · ⚙ ${getSalvage().toLocaleString()}</button><button data-act="leaderboards">🏆 Leaderboards</button><button data-act="tutorial">🎓 Tutorial</button>${P.quit ? `<button data-act="quit">⏻ Quit</button>` : ""}</div>
       ${soundButtons()}
       <details><summary>How to play</summary>
@@ -2254,7 +2356,8 @@
           <li>Mining Sats earn credits during waves. Shields regenerate; railguns break them fastest.</li>
           <li>Keys: <b>1–7</b> satellites · <b>Space</b> wave · <b>Q</b> overdrive · <b>F</b> speed · <b>P</b> pause · <b>Esc</b> cancel</li>
           <li>Your game saves automatically between waves; use <b>Continue</b> to pick up where you left off.</li>
-          <li><b>∞ Endless</b>: waves never stop. Reach milestones at waves 40, 50, 75 and 100 for bonus credits, and climb your leaderboard.</li>
+          <li>Beat <b>wave 30</b> to save the planet and unlock the next one, then <b>keep going ∞</b>: milestones at waves 40, 50, 75 and 100, and every run counts for the planet's leaderboard.</li>
+          <li><b>Bonus challenges</b> pop up during the game (waves 6, 12, 18, 24). Complete them for ★ stars, credits and Salvage.</li>
         </ul>
       </details>
       <details><summary>🏆 Achievements (${ACHIEVEMENTS.filter(a => got[a.id]).length}/${ACHIEVEMENTS.length})</summary>
@@ -2285,12 +2388,12 @@
     const map = lbView.map, diff = diffOf(map), tier = mapTier(map);
     showOverlay(`
       <h1>🏆 LEADERBOARDS</h1>
-      <p class="muted">Endless mode · your best runs on this device</p>
+      <p class="muted">Your best runs on this device: beat wave 30, then keep going to climb</p>
       <div class="lb-maps">${MAP_ORDER.map(k => `<button class="chip-btn${k === map ? " selected" : ""}" data-lbmap="${k}">${MAPS[k].name}${LB.bestMap(k) ? ` <small>∞${LB.bestMap(k)}</small>` : ""}</button>`).join("")}</div>
       <p class="muted small">${MAPS[map].name} · <span class="tier-tag" style="--c:${tier.color}">${tier.name}</span></p>
       ${lbTable(LB.top(map, diff))}
       <p class="muted small">🌍 Worldwide leaderboards are coming soon.</p>
-      <div class="btns"><button class="primary" data-act="lb-play">Play Endless here ∞</button><button data-act="menu">← Back</button></div>`, true);
+      <div class="btns"><button class="primary" data-act="lb-play">Play here ▶</button><button data-act="menu">← Back</button></div>`, true);
   }
 
   function pauseMenu() {
@@ -2310,16 +2413,13 @@
     audio.init();
     const vw = ev.target.closest("[data-view]");
     if (vw) { if ((vw.dataset.view === "3d") !== !!OD.is3D) { sfx("click"); OD.setView(vw.dataset.view); } return; }
-    const lm = ev.target.closest("[data-lbmap]"), md = ev.target.closest("[data-mode]");
+    const lm = ev.target.closest("[data-lbmap]");
     if (lm) { lbView.map = lm.dataset.lbmap; sfx("click"); return showLeaderboards(); }
 
-    if (md) { MODE = md.dataset.mode; store.set("od_mode", MODE); sfx("click"); return mainMenu(); }
     const rs = ev.target.closest("[data-research]");
     if (rs) { if (buyResearch(rs.dataset.research)) showResearch(); return; }
     const rb = ev.target.closest("[data-rebind]");
     if (rb) { rebinding = rb.dataset.rebind; rb.textContent = "Press a key…"; rb.classList.add("waiting"); return; }
-    const chb = ev.target.closest("[data-ch]");
-    if (chb) { CH_SEL = chb.dataset.ch; store.set("od_ch", CH_SEL); sfx("click"); return mainMenu(); }
     const mc = ev.target.closest("[data-map]");
     if (mc) { MAP_KEY = mc.dataset.map; store.set("od_map", MAP_KEY); sfx("click"); return mainMenu(); }
 
@@ -2341,13 +2441,13 @@
             <p>Take a quick guided game on Earth to learn the basics. It takes about 2 minutes.</p>
             <div class="btns"><button class="primary big" data-act="tutorial">🎓 Play tutorial</button></div>
             <div class="btns"><button data-act="skiptut">Skip, I know how to play</button></div>`);
-        } else if (mapUnlocked(MAP_KEY)) begin(MAP_KEY, DIFF_KEY, false, MODE === "endless", MODE === "challenge" ? CH_SEL : null);
+        } else if (mapUnlocked(MAP_KEY)) begin(MAP_KEY, DIFF_KEY);
         break;
       case "daily": { const d = daily(); MAP_KEY = d.map; DIFF_KEY = diffOf(d.map); begin(d.map, DIFF_KEY, false, false, d.ch, true); break; }
       case "tutorial": startTutorial(); break;
-      case "skiptut": store.set(TUT_KEY, "1"); if (mapUnlocked(MAP_KEY)) begin(MAP_KEY, DIFF_KEY, false, MODE === "endless", MODE === "challenge" ? CH_SEL : null); break;
+      case "skiptut": store.set(TUT_KEY, "1"); if (mapUnlocked(MAP_KEY)) begin(MAP_KEY, DIFF_KEY); break;
       case "leaderboards": lbView = { map: MAP_KEY }; showLeaderboards(); break;
-      case "lb-play": if (!mapUnlocked(lbView.map)) { toast("🔒 Collect more ★ to unlock this planet"); break; } MAP_KEY = lbView.map; DIFF_KEY = diffOf(MAP_KEY); MODE = "endless"; store.set("od_map", MAP_KEY); store.set("od_mode", MODE); begin(MAP_KEY, DIFF_KEY, false, true); break;
+      case "lb-play": if (!mapUnlocked(lbView.map)) { toast("🔒 Collect more ★ to unlock this planet"); break; } MAP_KEY = lbView.map; DIFF_KEY = diffOf(MAP_KEY); store.set("od_map", MAP_KEY); begin(MAP_KEY, DIFF_KEY); break;
       case "save-nick": {
         const input = document.getElementById("nickInput");
         const name = LB.setNickname(input ? input.value : "");
@@ -2379,7 +2479,7 @@
       case "retry": begin(S.mapKey, S.diffKey, false, !!S.endless, S.challenge, S.daily); break;
       case "next": { const n = MAP_ORDER[MAP_ORDER.indexOf(S.mapKey) + 1]; MAP_KEY = n; store.set("od_map", n); begin(n, diffOf(n)); break; }
       case "menu": mainMenu(); break;
-      case "freeplay": S.freeplay = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
+      case "freeplay": S.freeplay = true; S.endless = true; S.paused = false; hideOverlay(); P.gameplayStart(); saveRun(); updateUI(true); break;
       case "music": audio.toggleMusic(); a.textContent = audio.music ? "♫ Music: On" : "♫ Music: Off"; break;
       case "sfx": audio.toggleSfx(); a.textContent = audio.sfx ? "🔊 Sound: On" : "🔇 Sound: Off"; break;
       case "gfx": OD.gfx = GFX_STEPS[(GFX_STEPS.indexOf(OD.gfx) + 1) % GFX_STEPS.length]; store.set("od_gfx", OD.gfx); a.textContent = gfxLabel(); if (OD.applyGfx) OD.applyGfx(OD.gfx); break;
@@ -2882,7 +2982,7 @@
 
   // Test hook (used by automated playtests).
   window.__od = {
-    state: () => S, board: () => B, begin, toggleCommand, research: { list: RESEARCH, level: resLevel, cost: resCost, buy: buyResearch, salvage: getSalvage, award: awardSalvage, show: showResearch }, endCommand, cmdTarget, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
+    state: () => S, board: () => B, begin, toggleCommand, spawnEnemy, mapFeats, FEATS, research: { list: RESEARCH, level: resLevel, cost: resCost, buy: buyResearch, salvage: getSalvage, award: awardSalvage, show: showResearch }, endCommand, cmdTarget, startWave, LB, isMilestone, tapSlot, center: () => ({ x: CX, y: CY }), map: () => MAP, ringPoint, startTutorial, tut: () => tut, zoom: () => ({ zoom, camX, camY }), setZoom, toScreen,
     bodyHp: () => S && S.bodyHp, knockOut, setCamera: (z, x, y) => { zoom = Math.max(1, Math.min(ZOOM_MAX, z)); camX = x; camY = y; clampCam(); updateZoomUI(); }, slotPos, towerAt, TOWERS, upgradeTower, overclockTower, ascendTower, repaintIcons, mainMenu, saveRun, loadRun, getAch,
     placeTower: (slot, type) => { S.selectedType = type; placeTower(slot); S.selectedType = null; }, slotFits, slotUsable,
     getStars, totalStars, mapUnlocked, daily, CHALLENGES, mapChallenges, ACHIEVEMENTS: () => ACHIEVEMENTS,
