@@ -12,7 +12,7 @@
 
   const OVERDRIVE = { duration: 6, cooldown: 30, ringMul: 5, rateMul: 1.3 };
   // Take Command: the player aims one satellite (it shoots the invader nearest the pointer) and it gets a boost meanwhile
-  const CMD = { dmg: 1.5, rate: 1.25, range: 1.25 };
+  const CMD = { dmg: 1.5, rate: 1.25, range: 1.6 };
   // Own Orbits (the 3D game; see js/mode.js): every satellite launches onto its own orbit (a lane) in LEO;
   // lanes never cross (each has its own radius), so satellites can't collide. Satellites carry fuel for FUEL_MAX waves
   // and burn up when it runs out; Overdrive burns OD_FUEL extra. Picking a satellite opens a launch panel: choose the
@@ -378,6 +378,11 @@
     return best;
   }
   const COMMANDABLE = new Set(["laser", "missile", "rail", "flak", "silo"]); // the satellites that shoot
+  function nearestEnemy(x, y, r) { // the invader drawn nearest a point (within r), for clicking / tapping to lock on
+    let best = null, bd = r * r;
+    for (const e of S.enemies) { if (e.dead || e.cloaked) continue; const d = (e.x - x) ** 2 + (e.y - y) ** 2 - (e.def.size || 0) ** 2; if (d < bd) { bd = d; best = e; } }
+    return best;
+  }
   const canCommand = t => !!(t && S && !S.over && COMMANDABLE.has(t.type) && S.towers.includes(t));
   function toggleCommand(t) {
     if (!S) return;
@@ -387,11 +392,11 @@
     S.selectedTower = null; S.selectedType = null; S.hover = null;
     sfx("upgrade"); renderInfo(); updateUI(true); updateCmdBar();
     lifetime("commands", 1);
-    tip("commandHow", `🎯 ${matchMedia("(pointer: coarse)").matches ? "Tap" : "Point at"} the invader you want it to shoot. ${keyName(KEYS.command)} or Esc lets go.`, 300, 4000);
+    tip("commandHow", `🎯 ${matchMedia("(pointer: coarse)").matches ? "Tap" : "Click"} an invader to lock on: your satellite hits it 50% harder from 1.6× its range. ${keyName(KEYS.command)} or Esc lets go.`, 300, 4500);
   }
   function endCommand(silent) {
     if (!S || !S.command) return;
-    S.command = null; S.cmdAim = null; S.cmdPick = null; S.cmdTgt = null;
+    S.command = null; S.cmdAim = null; S.cmdPick = null; S.cmdTgt = null; S.cmdHover = null;
     if (!silent) sfx("click");
     updateCmdBar();
   }
@@ -403,10 +408,11 @@
       cmdEl.addEventListener("click", ev => { if (ev.target.closest("[data-release]")) endCommand(); });
     }
     const t = S && !S.over && !S.paused && S.command;
-    const key = t ? `${t.id}|${baseStats(t).name}|${KEYS.command}` : "";
+    const lock = t && S.cmdPick && !S.cmdPick.dead ? S.cmdPick : null, far = lock && d3(t, lock) > (t.st ? t.st.range : 0) ** 2;
+    const key = t ? `${t.id}|${baseStats(t).name}|${KEYS.command}|${lock ? lock.id : ""}|${far}` : "";
     if (key === cmdKey) return; cmdKey = key;
     cmdEl.classList.toggle("show", !!t);
-    if (t) cmdEl.innerHTML = `<span class="cb-icon">🎯</span><span><b>Commanding ${baseStats(t).name}</b><small>+50% damage · faster · longer range</small></span><button type="button" data-release="1">Release${hk("command")}</button>`;
+    if (t) cmdEl.innerHTML = `<span class="cb-icon">🎯</span><span><b>Commanding ${baseStats(t).name}</b><small>${lock ? (far ? `🔴 ${lock.def.name} out of range: it fires when it gets close` : `🔒 Locked on: ${lock.def.name}`) : `${matchMedia("(pointer: coarse)").matches ? "Tap" : "Click"} an invader to lock on`} · +50% damage</small></span><button type="button" data-release="1">Release${hk("command")}</button>`;
   }
   setInterval(updateCmdBar, 250);
 
@@ -495,6 +501,10 @@
       if (opts.flash !== false) e.hit = 0.06;
     }
     if (src) src.dmg = (src.dmg || 0) + dealt;
+    if (src && src === S.command && dealt > 0) { // commanded: gold damage numbers (a few per second, not every laser tick)
+      e.cmdDmg = (e.cmdDmg || 0) + dealt;
+      if (S.time - (e.cmdPop || -9) > 0.35 || e.hp <= 0) { floater(e.x + (Math.random() - 0.5) * 10, e.y - e.def.size - 6, `-${fmt(Math.round(e.cmdDmg))}`, "#ffd166"); e.cmdDmg = 0; e.cmdPop = S.time; }
+    }
     if (e.hp <= 0) kill(e, src);
   }
 
@@ -652,7 +662,12 @@
       }
     }
 
-    for (const t of S.towers) towerAct(t, dt);
+    for (const t of S.towers) {
+      if (t !== S.command) { towerAct(t, dt); continue; }
+      const nb = S.beams.length; // commanded satellite: its shots turn gold and thicker
+      towerAct(t, dt);
+      for (let i = nb; i < S.beams.length; i++) { const b = S.beams[i]; b.color = "#ffd166"; b.w = (b.w || 2) * 1.7; }
+    }
     updateShots(dt);
     updateCrafts(dt);
 
@@ -1858,7 +1873,26 @@
       for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.moveTo(r - c, -r); ctx.lineTo(r, -r); ctx.lineTo(r, -r + c); ctx.stroke(); }
       ctx.restore();
     }
-    const a = S.cmdAim;
+    const range2 = t.type === "silo" ? Infinity : (t.st && t.st.range ? t.st.range ** 2 : 0);
+    const lock = S.cmdPick && !S.cmdPick.dead ? S.cmdPick : null;
+    if (lock && lock !== e) { // locked on but out of reach: red brackets, it fires once the invader comes close
+      const r = lock.def.size + 9;
+      ctx.strokeStyle = "#ff5c7a"; ctx.lineWidth = 2 * k; ctx.setLineDash([3 * k, 4 * k]);
+      ctx.beginPath(); ctx.arc(lock.x, lock.y, r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const hv = S.cmdHover && !S.cmdHover.dead && S.cmdHover !== lock ? S.cmdHover : null;
+    if (hv) { // what a click would lock on to
+      const out = d3(t, hv) > range2;
+      ctx.strokeStyle = out ? "rgba(255,92,122,0.8)" : "rgba(255,209,102,0.85)"; ctx.lineWidth = 1.5 * k;
+      ctx.beginPath(); ctx.arc(hv.x, hv.y, hv.def.size + 6, 0, TAU); ctx.stroke();
+    }
+    const warn = (lock && d3(t, lock) > range2 && lock) || (hv && d3(t, hv) > range2 && hv);
+    if (warn) {
+      ctx.font = `bold ${Math.round(11 * k * 10) / 10}px system-ui, sans-serif`; ctx.textAlign = "center";
+      ctx.lineWidth = 3 * k; ctx.strokeStyle = "rgba(5,6,15,0.85)"; ctx.strokeText("OUT OF RANGE", warn.x, warn.y - warn.def.size - 12 * k);
+      ctx.fillStyle = "#ff8a9c"; ctx.fillText("OUT OF RANGE", warn.x, warn.y - warn.def.size - 12 * k);
+    }
+    const a = lock ? null : S.cmdAim;
     if (a) { // the pointer's crosshair
       const r = 9 * k; ctx.strokeStyle = e ? "rgba(255,209,102,0.7)" : "rgba(255,209,102,0.95)"; ctx.lineWidth = 1.5 * k;
       ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, TAU); ctx.moveTo(a.x - r * 1.7, a.y); ctx.lineTo(a.x - r * 0.5, a.y); ctx.moveTo(a.x + r * 0.5, a.y); ctx.lineTo(a.x + r * 1.7, a.y);
@@ -2057,7 +2091,7 @@
         <b>${t.fuel} / ${FUEL_MAX} waves</b></div>` : ""}
       <div class="stats">${statRows(t, st, next)}</div>
       <div class="ups">${upHtml}</div>
-      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat && !oneZone(B.rings[B.slots[t.slot].ring].body) ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone. ${BAND_TIP[t.orbit || 0]}">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${COMMANDABLE.has(t.type) ? `<button class="small cmd" data-act="command" title="Aim it yourself: +50% damage, +25% fire rate and range while you command it">🎯 Command${hk("command")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
+      <div class="actions">${sat && refuelCost(t) ? `<button class="small" data-act="refuel" ${S.money >= refuelCost(t) ? "" : "disabled"} title="Top up to ${FUEL_MAX} waves of fuel">⛽ Refuel <b>${fmt(refuelCost(t))}</b>${hk("refuel")}</button>` : ""}${sat && !oneZone(B.rings[B.slots[t.slot].ring].body) ? `<button class="small" data-act="orbit" title="Move to another zone: 1 fuel per zone. ${BAND_TIP[t.orbit || 0]}">Orbit: <b>${BAND[t.orbit || 0]}</b>${hk("orbit")}</button>` : ""}${COMMANDABLE.has(t.type) ? `<button class="small cmd" data-act="command" title="Aim it yourself: +50% damage, +25% fire rate and 1.6× range while you command it">🎯 Command${hk("command")}</button>` : ""}${targetBtn}<button class="small danger" data-act="sell">Sell +${sellValue(t)}${hk("sell")}</button></div>`;
     ui.info.classList.add("open");
     ui.info.querySelectorAll("canvas[data-preview]").forEach(c => {
       if (paint3D(c)) return;
@@ -2723,7 +2757,10 @@
     if (S.command) { // commanding: a tap / click aims; tapping the commanded satellite itself lets go and opens its panel
       const sl = nearestSlot(w.x, w.y, hitRadius(touch));
       if (sl != null && towerAt(sl) === S.command) { endCommand(); tapSlot(sl, touch); return; }
-      S.cmdAim = w; S.cmdPick = null; return;
+      const e = nearestEnemy(w.x, w.y, Math.max(34, hitRadius(touch) * 2.2));
+      if (e) { S.cmdPick = e; S.cmdAim = { x: e.x, y: e.y }; sfx("click"); updateCmdBar(); }
+      else { S.cmdAim = w; S.cmdPick = null; }
+      return;
     }
     const slot = nearestSlot(w.x, w.y, hitRadius(touch));
     if (slot == null && EXP && S.selectedType) { // Own Orbits: tapping a planet or moon picks where to launch from
@@ -2768,7 +2805,7 @@
     if (!ptr) { // plain mouse hover
       if (S && ev.pointerType === "mouse") {
         const w = toWorld(p.x, p.y);
-        if (S.command) { S.cmdAim = w; S.cmdPick = null; S.hover = null; hideTip(); canvas.style.cursor = "crosshair"; return; }
+        if (S.command) { S.cmdHover = nearestEnemy(w.x, w.y, 40 / (scale * zoom)); if (!S.cmdPick) S.cmdAim = w; S.hover = null; hideTip(); canvas.style.cursor = "crosshair"; return; }
         S.hover = nearestSlot(w.x, w.y, hitRadius(false));
         mapTip(ev);
         canvas.style.cursor = S.hover != null ? "pointer" : zoom > 1 ? "grab" : "default";
